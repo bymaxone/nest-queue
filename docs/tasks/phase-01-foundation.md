@@ -1,6 +1,6 @@
 # Phase 1 — Foundation: module, ConnectionResolver & base QueueService
 
-> **Status**: 🔄 In Progress · **Progress**: 0 / 8 tasks · **Last updated**: 2026-06-26
+> **Status**: 🔄 In Progress · **Progress**: 1 / 8 tasks · **Last updated**: 2026-06-26
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 1
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -41,7 +41,7 @@ Phase 1 produces the **first end-to-end usable slice**: a fully-gated project sc
 
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
-| 1.1 | Project scaffold (build chain, configs, budgets) | 📋 ToDo | P0 | M | — |
+| 1.1 | Project scaffold (build chain, configs, budgets) | ✅ Done | P0 | M | — |
 | 1.2 | Shared types & constants (`src/shared/`) | 📋 ToDo | P0 | S | 1.1 |
 | 1.3 | Public server interfaces & contracts | 📋 ToDo | P0 | M | 1.1 |
 | 1.4 | DI tokens, default options & error messages | 📋 ToDo | P0 | S | 1.1, 1.2 |
@@ -56,7 +56,7 @@ Phase 1 produces the **first end-to-end usable slice**: a fully-gated project sc
 
 ### Task 1.1 — Project scaffold (build chain, configs, budgets)
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: —
@@ -67,15 +67,15 @@ Create the project root, the build/test/lint toolchain, and the package contract
 
 #### Acceptance criteria
 
-- [ ] Directory structure created per the spec §3.1 tree (`src/server/`, `src/shared/`, `scripts/`).
-- [ ] `package.json` declares `"type": "module"`, `"sideEffects": false`, `"dependencies": {}`, the 2-subpath `exports` map, peer deps (`@nestjs/common`/`@nestjs/core ^11`, `bullmq ^5.16.0`, `ioredis ^5.0.0`, `reflect-metadata ^0.2.0`, optional `bullmq-otel ^1.0.0` via `peerDependenciesMeta`), `engines.node >=24`, `packageManager pnpm@11`, and `publishConfig` with `provenance: true`.
-- [ ] `tsup.config.ts` declares **2 entries** (`server/index`, `shared/index`), `format: ['esm','cjs']`, `dts: true`, `treeshake: true`, and externals including `bullmq`, `ioredis`, `reflect-metadata`, and `/^@nestjs\//`.
-- [ ] tsconfig variants exist: `tsconfig.json`, `tsconfig.build.json`, `tsconfig.server.json`, `tsconfig.e2e.json`, `tsconfig.jest.json` (TS strict + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`).
-- [ ] Jest variants exist: `jest.config.ts`, `jest.coverage.config.ts` (thresholds `100/100/100/100`), `jest.e2e.config.ts`, `jest.stryker.config.ts`; plus `stryker.config.json` with `thresholds { high: 99, low: 95, break: 95 }`.
-- [ ] `eslint.config.mjs` (flat config v9), `.prettierrc`, `.gitignore`, `.npmignore`, `commitlint.config.cjs` exist.
-- [ ] `scripts/check-size.mjs` enforces brotli budgets: `server ≤ 18432` (18 KiB), `shared ≤ 2500`.
-- [ ] `src/server/index.ts` and `src/shared/index.ts` exist as placeholders (real files, not `.gitkeep`).
-- [ ] `pnpm install && pnpm typecheck && pnpm lint && pnpm build` all pass; `dist/server/` and `dist/shared/` are produced.
+- [x] Directory structure created per the spec §3.1 tree (`src/server/`, `src/shared/`, `scripts/`).
+- [x] `package.json` declares `"type": "module"`, `"sideEffects": false`, `"dependencies": {}`, the 2-subpath `exports` map, peer deps (`@nestjs/common`/`@nestjs/core ^11`, `bullmq ^5.16.0`, `ioredis ^5.0.0`, `reflect-metadata ^0.2.0`, optional `bullmq-otel ^1.0.0` via `peerDependenciesMeta`), `engines.node >=24`, `packageManager pnpm@11`, and `publishConfig` with `provenance: true`.
+- [x] `tsup.config.ts` declares **2 entries** (`server/index`, `shared/index`), `format: ['esm','cjs']`, `dts: true`, `treeshake: true`, and externals including `bullmq`, `ioredis`, `reflect-metadata`, and `/^@nestjs\//`.
+- [x] tsconfig variants exist: `tsconfig.json`, `tsconfig.build.json`, `tsconfig.server.json`, `tsconfig.e2e.json`, `tsconfig.jest.json` (TS strict + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`).
+- [x] Jest variants exist: `jest.config.ts`, `jest.coverage.config.ts` (thresholds `100/100/100/100`), `jest.e2e.config.ts`, `jest.stryker.config.ts`; plus `stryker.config.json` with `thresholds { high: 99, low: 95, break: 95 }`.
+- [x] `eslint.config.mjs` (flat config v9), `.prettierrc`, `.gitignore`, `.npmignore`, `commitlint.config.cjs` exist.
+- [x] `scripts/check-size.mjs` enforces brotli budgets: `server ≤ 18432` (18 KiB), `shared ≤ 2500`.
+- [x] `src/server/index.ts` and `src/shared/index.ts` exist as placeholders (real files, not `.gitkeep`).
+- [x] `pnpm install && pnpm typecheck && pnpm lint && pnpm build` all pass; `dist/server/` and `dist/shared/` are produced.
 
 #### Files to create / modify
 
@@ -971,4 +971,4 @@ Completion Protocol:
 
 > Append-only. One line per completed task: `- <task-id> ✅ YYYY-MM-DD — <one-line summary>`.
 
-<!-- No entries yet. The first completed task appends its line here. -->
+- 1.1 ✅ 2026-06-26 — Project scaffold: 2-subpath build chain (tsup/tsconfig/jest/stryker), eslint flat config, size budgets, five SHA-pinned CI workflows; install/typecheck/lint/build/size all green.

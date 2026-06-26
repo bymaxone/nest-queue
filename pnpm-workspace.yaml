@@ -1,0 +1,8 @@
+onlyBuiltDependencies:
+  - esbuild
+  - msgpackr-extract
+  - unrs-resolver
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true
+  unrs-resolver: true
