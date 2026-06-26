@@ -1,6 +1,6 @@
 # Phase 1 — Foundation: module, ConnectionResolver & base QueueService
 
-> **Status**: 🔄 In Progress · **Progress**: 2 / 8 tasks · **Last updated**: 2026-06-26
+> **Status**: 🔄 In Progress · **Progress**: 3 / 8 tasks · **Last updated**: 2026-06-26
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 1
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -43,7 +43,7 @@ Phase 1 produces the **first end-to-end usable slice**: a fully-gated project sc
 |---|---|---|---|---|---|
 | 1.1 | Project scaffold (build chain, configs, budgets) | ✅ Done | P0 | M | — |
 | 1.2 | Shared types & constants (`src/shared/`) | ✅ Done | P0 | S | 1.1 |
-| 1.3 | Public server interfaces & contracts | 📋 ToDo | P0 | M | 1.1 |
+| 1.3 | Public server interfaces & contracts | ✅ Done | P0 | M | 1.1 |
 | 1.4 | DI tokens, default options & error messages | 📋 ToDo | P0 | S | 1.1, 1.2 |
 | 1.5 | `ConnectionResolver`, `QueueException` & connection utils | 📋 ToDo | P0 | L | 1.3, 1.4 |
 | 1.6 | Resolved options + bootstrap validation | 📋 ToDo | P0 | M | 1.3, 1.4 |
@@ -304,7 +304,7 @@ Completion Protocol:
 
 ### Task 1.3 — Public server interfaces & contracts
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 1.1
@@ -315,13 +315,13 @@ Define every public server-side interface: `BymaxQueueModuleOptions` (including 
 
 #### Acceptance criteria
 
-- [ ] All interface files created per the §2.3 tree, plus a `interfaces/index.ts` barrel with explicit named re-exports.
-- [ ] `QueueConnectionConfig` is the 3-arm union: `{ client: Redis; ownsConnection?: false }` (Mode A) | `{ url: string; options?: Partial<RedisOptions> }` (Mode B url) | `{ options: RedisOptions }` (Mode B options); `QueueConnectionMode = 'mode-a-byo' | 'mode-b-owned'`.
-- [ ] `BymaxQueueModuleOptions` carries `connection` (required), `defaultJobOptions?`, `prefix?`, `queueOptions?`, `flows?`, `metrics?`, `telemetry?: Telemetry` (BullMQ, opt-in OTel), `shutdown?`, `isGlobal?` (mapped to `DynamicModule.global` via `setExtras`), `connectionReadyTimeoutMs?`.
-- [ ] `WorkerOptions` has `concurrency?`, `limiter?`, `autorun?`, `lockDuration?`, `stalledInterval?` and a comment documenting **why there is intentionally no `sandboxed` boolean** (sandboxed = file path, out-of-process, no DI).
-- [ ] `BymaxQueueModuleAsyncOptions` extends `Pick<ModuleMetadata,'imports'>` with `useFactory`/`useClass`/`useExisting`/`inject` (factory typed `(...args: unknown[]) => ...`, never `any`).
-- [ ] `BulkJob<TData = unknown>` = `{ name: string; data: TData; options?: JobsOptions }`.
-- [ ] `readonly` on array members where applicable; `pnpm typecheck` passes; `grep -nE ': any\b|any\[\]' src/server/interfaces/` returns nothing.
+- [x] All interface files created per the §2.3 tree, plus a `interfaces/index.ts` barrel with explicit named re-exports.
+- [x] `QueueConnectionConfig` is the 3-arm union: `{ client: Redis; ownsConnection?: false }` (Mode A) | `{ url: string; options?: Partial<RedisOptions> }` (Mode B url) | `{ options: RedisOptions }` (Mode B options); `QueueConnectionMode = 'mode-a-byo' | 'mode-b-owned'`.
+- [x] `BymaxQueueModuleOptions` carries `connection` (required), `defaultJobOptions?`, `prefix?`, `queueOptions?`, `flows?`, `metrics?`, `telemetry?: Telemetry` (BullMQ, opt-in OTel), `shutdown?`, `isGlobal?` (mapped to `DynamicModule.global` via `setExtras`), `connectionReadyTimeoutMs?`.
+- [x] `WorkerOptions` has `concurrency?`, `limiter?`, `autorun?`, `lockDuration?`, `stalledInterval?` and a comment documenting **why there is intentionally no `sandboxed` boolean** (sandboxed = file path, out-of-process, no DI).
+- [x] `BymaxQueueModuleAsyncOptions` extends `Pick<ModuleMetadata,'imports'>` with `useFactory`/`useClass`/`useExisting`/`inject` (factory typed `(...args: unknown[]) => ...`, never `any`).
+- [x] `BulkJob<TData = unknown>` = `{ name: string; data: TData; options?: JobsOptions }`.
+- [x] `readonly` on array members where applicable; `pnpm typecheck` passes; `grep -nE ': any\b|any\[\]' src/server/interfaces/` returns nothing.
 
 #### Files to create / modify
 
@@ -973,3 +973,4 @@ Completion Protocol:
 
 - 1.1 ✅ 2026-06-26 — Project scaffold: 2-subpath build chain (tsup/tsconfig/jest/stryker), eslint flat config, size budgets, five SHA-pinned CI workflows; install/typecheck/lint/build/size all green.
 - 1.2 ✅ 2026-06-26 — Shared subpath: `JobStatus`, `QueueMetrics`, `JobSchedulerRepeatOptions` types and `JOB_STATUS`/`QUEUE_ERROR_CODES` (14 codes) constants with derived `QueueErrorCode`; zero deps, literal types preserved, shared bundle 406 B brotli.
+- 1.3 ✅ 2026-06-26 — Public server interfaces: dual-mode `QueueConnectionConfig`/`QueueConnectionMode`, `WorkerOptions` (no `sandboxed` boolean), processor metadata, `BulkJob`, and `BymaxQueueModuleOptions`/async options/factory; zero `any`, typecheck and lint clean.
