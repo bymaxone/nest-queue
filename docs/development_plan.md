@@ -61,18 +61,18 @@ The phase order respects the dependency graph (Appendix A): connection before qu
 
 > **Status legend:** 📋 ToDo · 🔄 In Progress · 👀 Review · ✅ Done · ⛔ Blocked · 🟡 Partial
 
-**Overall progress:** 🔄 0 / 5 phases (0%) — 0 / 35 tasks (0%)
-**Active phase:** Phase 1 — Foundation (in progress)
+**Overall progress:** 🔄 1 / 5 phases (20%) — 8 / 35 tasks (23%)
+**Active phase:** Phase 2 — Workers (not started)
 **Blocked:** none
 
 | ID | Phase | Status | Progress | Complexity | Last updated |
 |---|---|---|---|---|---|
-| 1 | [Foundation + ConnectionResolver + base QueueService](./tasks/phase-01-foundation.md) | 🔄 In Progress | 7 / 8 | MEDIUM | 2026-06-26 |
+| 1 | [Foundation + ConnectionResolver + base QueueService](./tasks/phase-01-foundation.md) | ✅ Done | 8 / 8 | MEDIUM | 2026-06-26 |
 | 2 | [Workers — decorators + WorkerRegistry + Discovery](./tasks/phase-02-workers.md) | 📋 ToDo | 0 / 6 | MEDIUM | 2026-06-23 |
 | 3 | [Flows + Job Schedulers + Deduplication/Telemetry + Metrics](./tasks/phase-03-flows-schedulers-metrics.md) | 📋 ToDo | 0 / 6 | MEDIUM | 2026-06-23 |
 | 4 | [forRootAsync + Graceful Shutdown + E2E + Mutation](./tasks/phase-04-async-shutdown-e2e.md) | 📋 ToDo | 0 / 7 | HIGH | 2026-06-23 |
 | 5 | [Release v0.1.0 — docs, CI/CD, supply chain, publish](./tasks/phase-05-release.md) | 📋 ToDo | 0 / 8 | LOW | 2026-06-23 |
-| | **Total** | **📋 0 / 5 phases** | **0 / 35 tasks** | — | — |
+| | **Total** | **✅ 1 / 5 phases** | **8 / 35 tasks** | — | — |
 
 > **No time estimate** — this plan targets execution by **AI agents**, so duration in human days does not apply. Relative complexity per phase is documented above and detailed per sub-step in the [Complexity Matrix in Appendix B](#appendix-b--complexity-matrix); use these signals to prioritize careful human review on HIGH-complexity phases.
 
