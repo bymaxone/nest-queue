@@ -1,6 +1,6 @@
 # Phase 1 — Foundation: module, ConnectionResolver & base QueueService
 
-> **Status**: 🔄 In Progress · **Progress**: 3 / 8 tasks · **Last updated**: 2026-06-26
+> **Status**: 🔄 In Progress · **Progress**: 4 / 8 tasks · **Last updated**: 2026-06-26
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 1
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -44,7 +44,7 @@ Phase 1 produces the **first end-to-end usable slice**: a fully-gated project sc
 | 1.1 | Project scaffold (build chain, configs, budgets) | ✅ Done | P0 | M | — |
 | 1.2 | Shared types & constants (`src/shared/`) | ✅ Done | P0 | S | 1.1 |
 | 1.3 | Public server interfaces & contracts | ✅ Done | P0 | M | 1.1 |
-| 1.4 | DI tokens, default options & error messages | 📋 ToDo | P0 | S | 1.1, 1.2 |
+| 1.4 | DI tokens, default options & error messages | ✅ Done | P0 | S | 1.1, 1.2 |
 | 1.5 | `ConnectionResolver`, `QueueException` & connection utils | 📋 ToDo | P0 | L | 1.3, 1.4 |
 | 1.6 | Resolved options + bootstrap validation | 📋 ToDo | P0 | M | 1.3, 1.4 |
 | 1.7 | Base `QueueService` (cache, enqueue, metrics, control) | 📋 ToDo | P0 | M | 1.3, 1.5, 1.6 |
@@ -426,7 +426,7 @@ Completion Protocol:
 
 ### Task 1.4 — DI tokens, default options & error messages
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 1.1, 1.2
@@ -437,11 +437,11 @@ Define the `Symbol` injection tokens, the default constants (`DEFAULT_JOB_OPTION
 
 #### Acceptance criteria
 
-- [ ] `src/server/bymax-queue.constants.ts` exports the `Symbol` tokens `BYMAX_QUEUE_OPTIONS`, `BYMAX_QUEUE_REDIS_CLIENT`, `BYMAX_QUEUE_CONNECTION_MODE`, `BYMAX_QUEUE_RESOLVED_OPTIONS` (each distinct; `===` reflexive, `!==` cross-token).
-- [ ] `src/server/constants/default-options.ts` exports `DEFAULT_WORKER_CONCURRENCY = 2`, `DEFAULT_JOB_OPTIONS` (`attempts: 3`, exponential backoff `delay: 2000`, `removeOnComplete { age: 24h, count: 1000 }`, `removeOnFail { age: 7d, count: 5000 }`) `as const satisfies JobsOptions`, plus `DEFAULT_CONNECTION_READY_TIMEOUT_MS = 10_000`, `DEFAULT_METRICS_CACHE_TTL_MS = 5_000`, `DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS = 30_000`.
-- [ ] `src/server/constants/error-codes.ts` re-exports `QUEUE_ERROR_CODES`/`QueueErrorCode` from `../../shared/constants/error-codes` and adds `QUEUE_ERROR_MESSAGES: Record<string, string>` covering every code from spec §12.2.
-- [ ] `src/server/constants/index.ts` re-exports the two files above.
-- [ ] `DEFAULT_JOB_OPTIONS satisfies JobsOptions` compiles; `pnpm typecheck` passes.
+- [x] `src/server/bymax-queue.constants.ts` exports the `Symbol` tokens `BYMAX_QUEUE_OPTIONS`, `BYMAX_QUEUE_REDIS_CLIENT`, `BYMAX_QUEUE_CONNECTION_MODE`, `BYMAX_QUEUE_RESOLVED_OPTIONS` (each distinct; `===` reflexive, `!==` cross-token).
+- [x] `src/server/constants/default-options.ts` exports `DEFAULT_WORKER_CONCURRENCY = 2`, `DEFAULT_JOB_OPTIONS` (`attempts: 3`, exponential backoff `delay: 2000`, `removeOnComplete { age: 24h, count: 1000 }`, `removeOnFail { age: 7d, count: 5000 }`) `as const satisfies JobsOptions`, plus `DEFAULT_CONNECTION_READY_TIMEOUT_MS = 10_000`, `DEFAULT_METRICS_CACHE_TTL_MS = 5_000`, `DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS = 30_000`.
+- [x] `src/server/constants/error-codes.ts` re-exports `QUEUE_ERROR_CODES`/`QueueErrorCode` from `../../shared/constants/error-codes` and adds `QUEUE_ERROR_MESSAGES: Record<string, string>` covering every code from spec §12.2.
+- [x] `src/server/constants/index.ts` re-exports the two files above.
+- [x] `DEFAULT_JOB_OPTIONS satisfies JobsOptions` compiles; `pnpm typecheck` passes.
 
 #### Files to create / modify
 
@@ -974,3 +974,4 @@ Completion Protocol:
 - 1.1 ✅ 2026-06-26 — Project scaffold: 2-subpath build chain (tsup/tsconfig/jest/stryker), eslint flat config, size budgets, five SHA-pinned CI workflows; install/typecheck/lint/build/size all green.
 - 1.2 ✅ 2026-06-26 — Shared subpath: `JobStatus`, `QueueMetrics`, `JobSchedulerRepeatOptions` types and `JOB_STATUS`/`QUEUE_ERROR_CODES` (14 codes) constants with derived `QueueErrorCode`; zero deps, literal types preserved, shared bundle 406 B brotli.
 - 1.3 ✅ 2026-06-26 — Public server interfaces: dual-mode `QueueConnectionConfig`/`QueueConnectionMode`, `WorkerOptions` (no `sandboxed` boolean), processor metadata, `BulkJob`, and `BymaxQueueModuleOptions`/async options/factory; zero `any`, typecheck and lint clean.
+- 1.4 ✅ 2026-06-26 — DI tokens (4 distinct Symbols), `DEFAULT_*` constants (`satisfies JobsOptions`), and `QUEUE_ERROR_MESSAGES` covering all 14 codes re-exported alongside `QUEUE_ERROR_CODES`.
