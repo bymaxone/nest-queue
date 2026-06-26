@@ -46,11 +46,11 @@ importers:
         specifier: ^9.1.0
         version: 9.1.2(eslint@9.39.4(jiti@2.6.1))
       ioredis:
-        specifier: ^5.11.1
-        version: 5.11.1
+        specifier: 5.10.1
+        version: 5.10.1
       ioredis-mock:
         specifier: ^8.9.0
-        version: 8.13.1(@types/ioredis-mock@8.2.7(ioredis@5.11.1))(ioredis@5.11.1)
+        version: 8.13.1(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(ioredis@5.10.1)
       jest:
         specifier: ^30.0.0
         version: 30.4.2(@types/node@24.13.2)
@@ -1328,10 +1328,6 @@ packages:
     resolution: {integrity: sha512-BSeNnyus75C4//NQ9gQt1/csTXyo/8Sb+afLAkzAptFuMsod9HFokGNudZpi/oQV73hnVK+sR+5PVRMd+Dr7YQ==}
     engines: {node: '>=12'}
 
-  cluster-key-slot@1.1.1:
-    resolution: {integrity: sha512-rwHwUfXL40Chm1r08yrhU3qpUvdVlgkKNeyeGPOxnW8/SyVDvgRaed/Uz54AqWNaTCAThlj6QAs3TZcKI0xDEw==}
-    engines: {node: '>=0.10.0'}
-
   cluster-key-slot@1.1.2:
     resolution: {integrity: sha512-RMr0FhtfXemyinomL4hrWcYJxmX6deFdCxpJzhDttxgO1+bcCnkk+9drydLVDmAMG7NE6aN/fl4F7ucU/90gAA==}
     engines: {node: '>=0.10.0'}
@@ -1747,10 +1743,6 @@ packages:
 
   ioredis@5.10.1:
     resolution: {integrity: sha512-HuEDBTI70aYdx1v6U97SbNx9F1+svQKBDo30o0b9fw055LMepzpOOd0Ccg9Q6tbqmBSJaMuY0fB7yw9/vjBYCA==}
-    engines: {node: '>=12.22.0'}
-
-  ioredis@5.11.1:
-    resolution: {integrity: sha512-ehuGcf94bQXhfagULNXrJdfnWO38v070jxSx/qE87Kjzmu2fU7ro5EFAb+OPituLqgfyuQaym5DlrNydW2sJ9A==}
     engines: {node: '>=12.22.0'}
 
   is-arrayish@0.2.1:
@@ -3564,9 +3556,9 @@ snapshots:
 
   '@types/estree@1.0.9': {}
 
-  '@types/ioredis-mock@8.2.7(ioredis@5.11.1)':
+  '@types/ioredis-mock@8.2.7(ioredis@5.10.1)':
     dependencies:
-      ioredis: 5.11.1
+      ioredis: 5.10.1
 
   '@types/istanbul-lib-coverage@2.0.6': {}
 
@@ -3962,8 +3954,6 @@ snapshots:
       string-width: 4.2.3
       strip-ansi: 6.0.1
       wrap-ansi: 7.0.0
-
-  cluster-key-slot@1.1.1: {}
 
   cluster-key-slot@1.1.2: {}
 
@@ -4374,14 +4364,14 @@ snapshots:
 
   ini@4.1.1: {}
 
-  ioredis-mock@8.13.1(@types/ioredis-mock@8.2.7(ioredis@5.11.1))(ioredis@5.11.1):
+  ioredis-mock@8.13.1(@types/ioredis-mock@8.2.7(ioredis@5.10.1))(ioredis@5.10.1):
     dependencies:
       '@ioredis/as-callback': 3.0.0
       '@ioredis/commands': 1.10.0
-      '@types/ioredis-mock': 8.2.7(ioredis@5.11.1)
+      '@types/ioredis-mock': 8.2.7(ioredis@5.10.1)
       fengari: 0.1.5
       fengari-interop: 0.1.4(fengari@0.1.5)
-      ioredis: 5.11.1
+      ioredis: 5.10.1
       semver: 7.8.5
 
   ioredis@5.10.1:
@@ -4392,18 +4382,6 @@ snapshots:
       denque: 2.1.0
       lodash.defaults: 4.2.0
       lodash.isarguments: 3.1.0
-      redis-errors: 1.2.0
-      redis-parser: 3.0.0
-      standard-as-callback: 2.1.0
-    transitivePeerDependencies:
-      - supports-color
-
-  ioredis@5.11.1:
-    dependencies:
-      '@ioredis/commands': 1.10.0
-      cluster-key-slot: 1.1.1
-      debug: 4.4.3
-      denque: 2.1.0
       redis-errors: 1.2.0
       redis-parser: 3.0.0
       standard-as-callback: 2.1.0

@@ -1,6 +1,6 @@
 # Phase 1 — Foundation: module, ConnectionResolver & base QueueService
 
-> **Status**: 🔄 In Progress · **Progress**: 6 / 8 tasks · **Last updated**: 2026-06-26
+> **Status**: 🔄 In Progress · **Progress**: 7 / 8 tasks · **Last updated**: 2026-06-26
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 1
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -47,7 +47,7 @@ Phase 1 produces the **first end-to-end usable slice**: a fully-gated project sc
 | 1.4 | DI tokens, default options & error messages | ✅ Done | P0 | S | 1.1, 1.2 |
 | 1.5 | `ConnectionResolver`, `QueueException` & connection utils | ✅ Done | P0 | L | 1.3, 1.4 |
 | 1.6 | Resolved options + bootstrap validation | ✅ Done | P0 | M | 1.3, 1.4 |
-| 1.7 | Base `QueueService` (cache, enqueue, metrics, control) | 📋 ToDo | P0 | M | 1.3, 1.5, 1.6 |
+| 1.7 | Base `QueueService` (cache, enqueue, metrics, control) | ✅ Done | P0 | M | 1.3, 1.5, 1.6 |
 | 1.8 | `BymaxQueueModule.forRoot()`, barrel & unit tests | 📋 ToDo | P0 | L | 1.1–1.7 |
 
 ---
@@ -735,7 +735,7 @@ Completion Protocol:
 
 ### Task 1.7 — Base `QueueService` (cache, enqueue, metrics, control)
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 1.3, 1.5, 1.6
@@ -746,14 +746,14 @@ Implement the base `QueueService`: a per-name `Queue` cache (`getOrCreateQueue`)
 
 #### Acceptance criteria
 
-- [ ] `getOrCreateQueue<TData,TResult>(name, overrides?)` returns a cached `Queue` (second call with the same name returns the same instance), built with `connection: connectionResolver.getClient()`, `prefix`, `defaultJobOptions`, merged `queueOptions` and `overrides`.
-- [ ] `enqueue<TData,TResult>(queue, jobName, data, options?)` delegates to `queue.add(jobName, data, options)` and propagates `TData`/`TResult` typing; native `options.jobId` and `options.deduplication` pass straight through (no custom deduplication code).
-- [ ] `enqueueBulk` delegates to `queue.addBulk`, wrapping any failure in `QueueException(BULK_ENQUEUE_FAILED, 500, { cause })`.
-- [ ] `getJob` returns `null` (not throw) when absent; `getJobs(queue, status, start=0, end=50)` passes `[status]` (array) to `queue.getJobs`.
-- [ ] `getMetrics` returns `{ queue, counts, collectedAt }` via `queue.getJobCounts('waiting','active','completed','failed','delayed','paused')` with an ISO `collectedAt`.
-- [ ] `cleanQueue(queue, gracePeriodMs, limit, status?)` mirrors BullMQ `Queue.clean(grace, limit, type?)` argument order exactly (`limit` required, `0` = no limit) and returns the removed ids.
-- [ ] `getCachedQueues()` returns a `ReadonlyMap`; `onModuleDestroy` closes every cached queue (swallowing per-queue errors) and clears the map.
-- [ ] 100% line/branch coverage (BullMQ `Queue` mocked).
+- [x] `getOrCreateQueue<TData,TResult>(name, overrides?)` returns a cached `Queue` (second call with the same name returns the same instance), built with `connection: connectionResolver.getClient()`, `prefix`, `defaultJobOptions`, merged `queueOptions` and `overrides`.
+- [x] `enqueue<TData,TResult>(queue, jobName, data, options?)` delegates to `queue.add(jobName, data, options)` and propagates `TData`/`TResult` typing; native `options.jobId` and `options.deduplication` pass straight through (no custom deduplication code).
+- [x] `enqueueBulk` delegates to `queue.addBulk`, wrapping any failure in `QueueException(BULK_ENQUEUE_FAILED, 500, { cause })` (and a pre-check rejects batches over the size cap).
+- [x] `getJob` returns `null` (not throw) when absent; `getJobs(queue, status, start=0, end=50)` passes `[status]` (array) to `queue.getJobs`.
+- [x] `getMetrics` returns `{ queue, counts, collectedAt }` via `queue.getJobCounts('waiting','active','completed','failed','delayed','paused')` with an ISO `collectedAt`.
+- [x] `cleanQueue(queue, gracePeriodMs, limit, status?)` mirrors BullMQ `Queue.clean(grace, limit, type?)` argument order exactly (`limit` required, `0` = no limit) and returns the removed ids.
+- [x] `getCachedQueues()` returns a `ReadonlyMap`; `onModuleDestroy` closes every cached queue (swallowing per-queue errors) and clears the map.
+- [x] 100% line/branch coverage (BullMQ `Queue` mocked).
 
 #### Files to create / modify
 
@@ -977,3 +977,4 @@ Completion Protocol:
 - 1.4 ✅ 2026-06-26 — DI tokens (4 distinct Symbols), `DEFAULT_*` constants (`satisfies JobsOptions`), and `QUEUE_ERROR_MESSAGES` covering all 14 codes re-exported alongside `QUEUE_ERROR_CODES`.
 - 1.5 ✅ 2026-06-26 — `QueueException` (masked, scalar-only details), `duplicateConnection`/`assertBlockingConnection`/`isClientUsable`, and the dual-mode `ConnectionResolver` (Mode A probe + per-role null-retries policy, Mode B ready-timeout with listener cleanup); 100% line/branch on resolver, both utils, and the exception.
 - 1.6 ✅ 2026-06-26 — `validateOptions` (fail-fast, distinct reasons), `applyDefaults` (frozen, merged `defaultJobOptions`, conditional telemetry) + `ResolvedQueueOptions`, and the `config/default-options` alias; 100% line/branch on all three.
+- 1.7 ✅ 2026-06-26 — Base `QueueService`: cached `getOrCreateQueue`, typed `enqueue`/`enqueueBulk` (bounded batch), `getJob`/`getJobs([status])`, uncached `getMetrics`, `pauseQueue`/`resumeQueue`/`cleanQueue(grace,limit,status)`, and shutdown close-all; 100% line/branch (ioredis pinned to match bullmq).

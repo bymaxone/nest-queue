@@ -73,7 +73,7 @@
     "bullmq": "^5.79.1",
     "eslint": "^9.13.0",
     "eslint-config-prettier": "^9.1.0",
-    "ioredis": "^5.11.1",
+    "ioredis": "5.10.1",
     "ioredis-mock": "^8.9.0",
     "jest": "^30.0.0",
     "prettier": "^3.3.3",
