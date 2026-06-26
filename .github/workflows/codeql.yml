@@ -41,7 +41,23 @@ jobs:
         with:
           languages: ${{ matrix.language }}
 
+      # Code scanning upload needs GitHub Advanced Security on private repositories.
+      # Gate the upload on visibility so analysis always runs, and results upload
+      # automatically once the repository is public — no workflow change required.
+      - name: Resolve code scanning upload mode
+        id: scanning
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          visibility="$(gh api "repos/${{ github.repository }}" --jq '.visibility')"
+          if [ "$visibility" = "public" ]; then
+            echo 'upload=always' >> "$GITHUB_OUTPUT"
+          else
+            echo 'upload=never' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         with:
           category: '/language:${{ matrix.language }}'
+          upload: ${{ steps.scanning.outputs.upload }}
