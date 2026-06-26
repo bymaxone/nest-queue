@@ -13,7 +13,7 @@ Tasks live **one file per phase** in this folder (`docs/tasks/phase-NN-<slug>.md
 
 | Phase | File | Tasks | Status |
 |---|---|---|---|
-| 1 | [`phase-01-foundation.md`](./phase-01-foundation.md) | 0 / 8 | 📋 ToDo |
+| 1 | [`phase-01-foundation.md`](./phase-01-foundation.md) | 0 / 8 | 🔄 In Progress |
 | 2 | [`phase-02-workers.md`](./phase-02-workers.md) | 0 / 6 | 📋 ToDo |
 | 3 | [`phase-03-flows-schedulers-metrics.md`](./phase-03-flows-schedulers-metrics.md) | 0 / 6 | 📋 ToDo |
 | 4 | [`phase-04-async-shutdown-e2e.md`](./phase-04-async-shutdown-e2e.md) | 0 / 7 | 📋 ToDo |
