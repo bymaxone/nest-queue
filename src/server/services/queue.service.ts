@@ -51,6 +51,10 @@ export class QueueService implements OnModuleDestroy {
     overrides?: Partial<Omit<QueueOptions, 'connection' | 'prefix'>>,
   ): Queue<TData, TResult> {
     const existing = this.queues.get(queueName)
+    // The cache is keyed by name and holds default-generic Queues; the caller
+    // declares the payload generics, which BullMQ's invariant generics cannot
+    // narrow structurally. The cast re-projects the runtime Queue onto the
+    // requested generics (data shape is unchanged at runtime).
     if (existing) return existing as unknown as Queue<TData, TResult>
 
     const queue = new Queue(queueName, {
