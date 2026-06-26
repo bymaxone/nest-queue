@@ -1,6 +1,6 @@
 # Phase 1 — Foundation: module, ConnectionResolver & base QueueService
 
-> **Status**: 🔄 In Progress · **Progress**: 1 / 8 tasks · **Last updated**: 2026-06-26
+> **Status**: 🔄 In Progress · **Progress**: 2 / 8 tasks · **Last updated**: 2026-06-26
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 1
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -42,7 +42,7 @@ Phase 1 produces the **first end-to-end usable slice**: a fully-gated project sc
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
 | 1.1 | Project scaffold (build chain, configs, budgets) | ✅ Done | P0 | M | — |
-| 1.2 | Shared types & constants (`src/shared/`) | 📋 ToDo | P0 | S | 1.1 |
+| 1.2 | Shared types & constants (`src/shared/`) | ✅ Done | P0 | S | 1.1 |
 | 1.3 | Public server interfaces & contracts | 📋 ToDo | P0 | M | 1.1 |
 | 1.4 | DI tokens, default options & error messages | 📋 ToDo | P0 | S | 1.1, 1.2 |
 | 1.5 | `ConnectionResolver`, `QueueException` & connection utils | 📋 ToDo | P0 | L | 1.3, 1.4 |
@@ -204,7 +204,7 @@ Completion Protocol (after you finish):
 
 ### Task 1.2 — Shared types & constants (`src/shared/`)
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 1.1
@@ -215,13 +215,13 @@ Define the dependency-free public type and constant surface for the `./shared` s
 
 #### Acceptance criteria
 
-- [ ] All files created per the §2.2 tree (`types/job-status.types.ts`, `types/queue-metrics.types.ts`, `types/job-scheduler-options.types.ts`, `constants/job-status.ts`, `constants/error-codes.ts`, `index.ts`).
-- [ ] `JobStatus` is the union `'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'paused'`.
-- [ ] `QueueMetrics` matches spec §5.8 / §9.2 (`queue`, `counts` keyed by the 6 statuses, `collectedAt` ISO string).
-- [ ] `JobSchedulerRepeatOptions` is the discriminated union (cron `pattern` branch vs `every` ms branch — never both) per spec §8.2.
-- [ ] `JOB_STATUS` and `QUEUE_ERROR_CODES` use `as const` (literal types preserved in `.d.ts`); `QUEUE_ERROR_CODES` has all 14 codes from spec §12.3; `QueueErrorCode` is derived from it.
-- [ ] JSDoc present on every export; no logic, no runtime dependency.
-- [ ] `pnpm build` produces `dist/shared/index.{mjs,cjs,d.ts}`; `pnpm size` shows `dist/shared/index.mjs` < 2.5 KiB brotli.
+- [x] All files created per the §2.2 tree (`types/job-status.types.ts`, `types/queue-metrics.types.ts`, `types/job-scheduler-options.types.ts`, `constants/job-status.ts`, `constants/error-codes.ts`, `index.ts`).
+- [x] `JobStatus` is the union `'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'paused'`.
+- [x] `QueueMetrics` matches spec §5.8 / §9.2 (`queue`, `counts` keyed by the 6 statuses, `collectedAt` ISO string).
+- [x] `JobSchedulerRepeatOptions` is the discriminated union (cron `pattern` branch vs `every` ms branch — never both) per spec §8.2.
+- [x] `JOB_STATUS` and `QUEUE_ERROR_CODES` use `as const` (literal types preserved in `.d.ts`); `QUEUE_ERROR_CODES` has all 14 codes from spec §12.3; `QueueErrorCode` is derived from it.
+- [x] JSDoc present on every export; no logic, no runtime dependency.
+- [x] `pnpm build` produces `dist/shared/index.{mjs,cjs,d.ts}`; `pnpm size` shows `dist/shared/index.mjs` < 2.5 KiB brotli.
 
 #### Files to create / modify
 
@@ -972,3 +972,4 @@ Completion Protocol:
 > Append-only. One line per completed task: `- <task-id> ✅ YYYY-MM-DD — <one-line summary>`.
 
 - 1.1 ✅ 2026-06-26 — Project scaffold: 2-subpath build chain (tsup/tsconfig/jest/stryker), eslint flat config, size budgets, five SHA-pinned CI workflows; install/typecheck/lint/build/size all green.
+- 1.2 ✅ 2026-06-26 — Shared subpath: `JobStatus`, `QueueMetrics`, `JobSchedulerRepeatOptions` types and `JOB_STATUS`/`QUEUE_ERROR_CODES` (14 codes) constants with derived `QueueErrorCode`; zero deps, literal types preserved, shared bundle 406 B brotli.
