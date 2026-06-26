@@ -1,5 +1,5 @@
 import type { Config } from 'jest'
-import base from './jest.config'
+import base from './jest.config.ts'
 
 /**
  * Coverage gate configuration. Enforces 100% line/branch/function/statement

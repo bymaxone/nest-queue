@@ -1,6 +1,6 @@
 # Phase 1 — Foundation: module, ConnectionResolver & base QueueService
 
-> **Status**: 🔄 In Progress · **Progress**: 7 / 8 tasks · **Last updated**: 2026-06-26
+> **Status**: ✅ Done · **Progress**: 8 / 8 tasks · **Last updated**: 2026-06-26
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 1
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -48,7 +48,7 @@ Phase 1 produces the **first end-to-end usable slice**: a fully-gated project sc
 | 1.5 | `ConnectionResolver`, `QueueException` & connection utils | ✅ Done | P0 | L | 1.3, 1.4 |
 | 1.6 | Resolved options + bootstrap validation | ✅ Done | P0 | M | 1.3, 1.4 |
 | 1.7 | Base `QueueService` (cache, enqueue, metrics, control) | ✅ Done | P0 | M | 1.3, 1.5, 1.6 |
-| 1.8 | `BymaxQueueModule.forRoot()`, barrel & unit tests | 📋 ToDo | P0 | L | 1.1–1.7 |
+| 1.8 | `BymaxQueueModule.forRoot()`, barrel & unit tests | ✅ Done | P0 | L | 1.1–1.7 |
 
 ---
 
@@ -852,7 +852,7 @@ Completion Protocol:
 
 ### Task 1.8 — `BymaxQueueModule.forRoot()`, barrel & unit tests
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: L
 - **Depends on**: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7
@@ -863,12 +863,12 @@ Wire the synchronous `BymaxQueueModule.forRoot()` on `ConfigurableModuleBuilder`
 
 #### Acceptance criteria
 
-- [ ] `src/server/bymax-queue.module.ts` builds the `ConfigurableModuleClass` via `new ConfigurableModuleBuilder<BymaxQueueModuleOptions>({ moduleName: 'BymaxQueue' }).setClassMethodName('forRoot').setExtras({ isGlobal: true }, (def, extras) => ({ ...def, global: extras.isGlobal })).build()`.
-- [ ] `forRoot(options)` calls `validateOptions`, computes `applyDefaults`, extends `super.forRoot(options)` with providers: `{ provide: BYMAX_QUEUE_OPTIONS, useExisting: MODULE_OPTIONS_TOKEN }`, `{ provide: BYMAX_QUEUE_RESOLVED_OPTIONS, useValue: resolved }`, an async-factory `ConnectionResolver` (`useFactory: async (opts) => { const r = new ConnectionResolver(opts); await r.init(); return r }`, `inject: [BYMAX_QUEUE_OPTIONS]`), and `QueueService`; exports `QueueService`, `ConnectionResolver`, and the two tokens.
-- [ ] There is **no** `@Global()` decorator and **no** `forFeature` method anywhere.
-- [ ] `src/server/index.ts` re-exports (explicit, no `export *`): `BymaxQueueModule`; the four `BYMAX_QUEUE_*` tokens; `QueueService`, `ConnectionResolver`; the public interface types; `QueueException`; `DEFAULT_WORKER_CONCURRENCY`/`DEFAULT_JOB_OPTIONS`/`DEFAULT_METRICS_CACHE_TTL_MS`/`DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS`/`QUEUE_ERROR_CODES`; BullMQ convenience type re-exports (`Job`, `JobsOptions`, `Queue`, `Worker`, `QueueEvents`); and the shared re-exports (`JobStatus`, `QueueMetrics`, `JobSchedulerRepeatOptions`, `QueueErrorCode`, `JOB_STATUS`).
-- [ ] Unit specs exist for resolver, queue service, validate-options, resolved-options, validate-connection, and the module; `bymax-queue.module.spec.ts` asserts the returned `DynamicModule.global === true` by default and `false` when `isGlobal: false`, that providers/exports are registered, and that `forRoot({ connection: {} as never })` throws via `validateOptions`.
-- [ ] `pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size` all pass; coverage is `100/100/100/100` on every implemented file; both bundles are within budget (server ≤ 18 KiB brotli).
+- [x] `src/server/bymax-queue.module.ts` builds the `ConfigurableModuleClass` via `new ConfigurableModuleBuilder<BymaxQueueModuleOptions>({ moduleName: 'BymaxQueue' }).setClassMethodName('forRoot').setExtras({ isGlobal: true }, (def, extras) => ({ ...def, global: extras.isGlobal })).build()`.
+- [x] `forRoot(options)` calls `validateOptions`, computes `applyDefaults`, extends `super.forRoot(options)` with providers: `{ provide: BYMAX_QUEUE_OPTIONS, useExisting: MODULE_OPTIONS_TOKEN }`, `{ provide: BYMAX_QUEUE_RESOLVED_OPTIONS, useValue: resolved }`, an async-factory `ConnectionResolver` (`useFactory: async (opts) => { const r = new ConnectionResolver(opts); await r.init(); return r }`, `inject: [BYMAX_QUEUE_OPTIONS]`), and `QueueService`; exports `QueueService`, `ConnectionResolver`, and the two tokens.
+- [x] There is **no** `@Global()` decorator and **no** `forFeature` method anywhere.
+- [x] `src/server/index.ts` re-exports (explicit, no `export *`): `BymaxQueueModule`; the four `BYMAX_QUEUE_*` tokens; `QueueService`, `ConnectionResolver`; the public interface types; `QueueException`; `DEFAULT_WORKER_CONCURRENCY`/`DEFAULT_JOB_OPTIONS`/`DEFAULT_METRICS_CACHE_TTL_MS`/`DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS`/`QUEUE_ERROR_CODES`; BullMQ convenience type re-exports (`Job`, `JobsOptions`, `Queue`, `Worker`, `QueueEvents`); and the shared re-exports (`JobStatus`, `QueueMetrics`, `JobSchedulerRepeatOptions`, `QueueErrorCode`, `JOB_STATUS`).
+- [x] Unit specs exist for resolver, queue service, validate-options, resolved-options, validate-connection, and the module; `bymax-queue.module.spec.ts` asserts the returned `DynamicModule.global === true` by default and `false` when `isGlobal: false`, that providers/exports are registered, and that `forRoot({ connection: {} as never })` throws via `validateOptions`.
+- [x] `pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size` all pass; coverage is `100/100/100/100` on every implemented file; both bundles are within budget (server ≤ 18 KiB brotli).
 
 #### Files to create / modify
 
@@ -978,3 +978,4 @@ Completion Protocol:
 - 1.5 ✅ 2026-06-26 — `QueueException` (masked, scalar-only details), `duplicateConnection`/`assertBlockingConnection`/`isClientUsable`, and the dual-mode `ConnectionResolver` (Mode A probe + per-role null-retries policy, Mode B ready-timeout with listener cleanup); 100% line/branch on resolver, both utils, and the exception.
 - 1.6 ✅ 2026-06-26 — `validateOptions` (fail-fast, distinct reasons), `applyDefaults` (frozen, merged `defaultJobOptions`, conditional telemetry) + `ResolvedQueueOptions`, and the `config/default-options` alias; 100% line/branch on all three.
 - 1.7 ✅ 2026-06-26 — Base `QueueService`: cached `getOrCreateQueue`, typed `enqueue`/`enqueueBulk` (bounded batch), `getJob`/`getJobs([status])`, uncached `getMetrics`, `pauseQueue`/`resumeQueue`/`cleanQueue(grace,limit,status)`, and shutdown close-all; 100% line/branch (ioredis pinned to match bullmq).
+- 1.8 ✅ 2026-06-26 — Synchronous `BymaxQueueModule.forRoot()` on `ConfigurableModuleBuilder` (isGlobal via `setExtras`, no `@Global`/`forFeature`), explicit public barrel, and the full unit suite; phase-wide gates green at 100/100/100/100 with both subpaths built and within budget.
