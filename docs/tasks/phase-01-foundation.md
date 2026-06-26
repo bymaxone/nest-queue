@@ -1,6 +1,6 @@
 # Phase 1 — Foundation: module, ConnectionResolver & base QueueService
 
-> **Status**: 🔄 In Progress · **Progress**: 4 / 8 tasks · **Last updated**: 2026-06-26
+> **Status**: 🔄 In Progress · **Progress**: 5 / 8 tasks · **Last updated**: 2026-06-26
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 1
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -45,7 +45,7 @@ Phase 1 produces the **first end-to-end usable slice**: a fully-gated project sc
 | 1.2 | Shared types & constants (`src/shared/`) | ✅ Done | P0 | S | 1.1 |
 | 1.3 | Public server interfaces & contracts | ✅ Done | P0 | M | 1.1 |
 | 1.4 | DI tokens, default options & error messages | ✅ Done | P0 | S | 1.1, 1.2 |
-| 1.5 | `ConnectionResolver`, `QueueException` & connection utils | 📋 ToDo | P0 | L | 1.3, 1.4 |
+| 1.5 | `ConnectionResolver`, `QueueException` & connection utils | ✅ Done | P0 | L | 1.3, 1.4 |
 | 1.6 | Resolved options + bootstrap validation | 📋 ToDo | P0 | M | 1.3, 1.4 |
 | 1.7 | Base `QueueService` (cache, enqueue, metrics, control) | 📋 ToDo | P0 | M | 1.3, 1.5, 1.6 |
 | 1.8 | `BymaxQueueModule.forRoot()`, barrel & unit tests | 📋 ToDo | P0 | L | 1.1–1.7 |
@@ -534,7 +534,7 @@ Completion Protocol:
 
 ### Task 1.5 — `ConnectionResolver`, `QueueException` & connection utils
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: L
 - **Depends on**: 1.3, 1.4
@@ -545,14 +545,14 @@ Implement the dual-mode `ConnectionResolver` (Mode A: BYO client used as-is for 
 
 #### Acceptance criteria
 
-- [ ] `QueueException extends HttpException` with response shape `{ error: { code, message, details } }`, message resolved from `QUEUE_ERROR_MESSAGES`, default status `500`.
-- [ ] `duplicateConnection(client)` returns `client.duplicate({ maxRetriesPerRequest: null })`.
-- [ ] `assertBlockingConnection(client)` throws `CONNECTION_REQUIRES_NULL_RETRIES` (with `{ actualValue, expectedValue: null }`) when `client.options.maxRetriesPerRequest !== null`.
-- [ ] `isClientUsable(client)` returns true when `status` is `'ready'` or `'connecting'`.
-- [ ] Mode A: a usable client is accepted and used as-is for the Queue role; the lib does **not** require `maxRetriesPerRequest === null` on the received client; it duplicates a probe, asserts the duplicate is `null`, and `disconnect()`s the probe in a `finally`; an `end` client is rejected with `CONNECTION_INVALID`.
-- [ ] Mode B (url) and Mode B (options-only): the lib opens its own `ioredis`, the Queue connection keeps ioredis default retries, and `waitReady` resolves on `ready` or rejects with `CONNECTION_TIMEOUT` after `connectionReadyTimeoutMs` (default 10s); event listeners are cleaned up on resolve/reject/timeout (no leaked handles).
-- [ ] `getClient()`, `getMode()`, `isOwned()` expose state; `onModuleDestroy` calls `quit()` (fallback `disconnect()`) **only** in Mode B and never touches a Mode A client.
-- [ ] 100% line/branch coverage on the resolver and both utils (tests authored in Task 1.8 may live alongside, but coverage must be reachable).
+- [x] `QueueException extends HttpException` with response shape `{ error: { code, message, details } }`, message resolved from `QUEUE_ERROR_MESSAGES`, default status `500`.
+- [x] `duplicateConnection(client)` returns `client.duplicate({ maxRetriesPerRequest: null })`.
+- [x] `assertBlockingConnection(client)` throws `CONNECTION_REQUIRES_NULL_RETRIES` (with `{ actualValue, expectedValue: null }`) when `client.options.maxRetriesPerRequest !== null`.
+- [x] `isClientUsable(client)` returns true when `status` is `'ready'` or `'connecting'`.
+- [x] Mode A: a usable client is accepted and used as-is for the Queue role; the lib does **not** require `maxRetriesPerRequest === null` on the received client; it duplicates a probe, asserts the duplicate is `null`, and `disconnect()`s the probe in a `finally`; an `end` client is rejected with `CONNECTION_INVALID`.
+- [x] Mode B (url) and Mode B (options-only): the lib opens its own `ioredis`, the Queue connection keeps ioredis default retries, and `waitReady` resolves on `ready` or rejects with `CONNECTION_TIMEOUT` after `connectionReadyTimeoutMs` (default 10s); event listeners are cleaned up on resolve/reject/timeout (no leaked handles).
+- [x] `getClient()`, `getMode()`, `isOwned()` expose state; `onModuleDestroy` calls `quit()` (fallback `disconnect()`) **only** in Mode B and never touches a Mode A client.
+- [x] 100% line/branch coverage on the resolver and both utils (tests authored in Task 1.8 may live alongside, but coverage must be reachable).
 
 #### Files to create / modify
 
@@ -975,3 +975,4 @@ Completion Protocol:
 - 1.2 ✅ 2026-06-26 — Shared subpath: `JobStatus`, `QueueMetrics`, `JobSchedulerRepeatOptions` types and `JOB_STATUS`/`QUEUE_ERROR_CODES` (14 codes) constants with derived `QueueErrorCode`; zero deps, literal types preserved, shared bundle 406 B brotli.
 - 1.3 ✅ 2026-06-26 — Public server interfaces: dual-mode `QueueConnectionConfig`/`QueueConnectionMode`, `WorkerOptions` (no `sandboxed` boolean), processor metadata, `BulkJob`, and `BymaxQueueModuleOptions`/async options/factory; zero `any`, typecheck and lint clean.
 - 1.4 ✅ 2026-06-26 — DI tokens (4 distinct Symbols), `DEFAULT_*` constants (`satisfies JobsOptions`), and `QUEUE_ERROR_MESSAGES` covering all 14 codes re-exported alongside `QUEUE_ERROR_CODES`.
+- 1.5 ✅ 2026-06-26 — `QueueException` (masked, scalar-only details), `duplicateConnection`/`assertBlockingConnection`/`isClientUsable`, and the dual-mode `ConnectionResolver` (Mode A probe + per-role null-retries policy, Mode B ready-timeout with listener cleanup); 100% line/branch on resolver, both utils, and the exception.

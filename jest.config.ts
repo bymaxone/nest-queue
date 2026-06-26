@@ -16,7 +16,6 @@ const config: Config = {
       'ts-jest',
       {
         tsconfig: 'tsconfig.jest.json',
-        isolatedModules: true,
       },
     ],
   },
