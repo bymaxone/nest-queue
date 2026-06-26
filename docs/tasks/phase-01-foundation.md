@@ -1,6 +1,6 @@
 # Phase 1 — Foundation: module, ConnectionResolver & base QueueService
 
-> **Status**: 🔄 In Progress · **Progress**: 5 / 8 tasks · **Last updated**: 2026-06-26
+> **Status**: 🔄 In Progress · **Progress**: 6 / 8 tasks · **Last updated**: 2026-06-26
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 1
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -46,7 +46,7 @@ Phase 1 produces the **first end-to-end usable slice**: a fully-gated project sc
 | 1.3 | Public server interfaces & contracts | ✅ Done | P0 | M | 1.1 |
 | 1.4 | DI tokens, default options & error messages | ✅ Done | P0 | S | 1.1, 1.2 |
 | 1.5 | `ConnectionResolver`, `QueueException` & connection utils | ✅ Done | P0 | L | 1.3, 1.4 |
-| 1.6 | Resolved options + bootstrap validation | 📋 ToDo | P0 | M | 1.3, 1.4 |
+| 1.6 | Resolved options + bootstrap validation | ✅ Done | P0 | M | 1.3, 1.4 |
 | 1.7 | Base `QueueService` (cache, enqueue, metrics, control) | 📋 ToDo | P0 | M | 1.3, 1.5, 1.6 |
 | 1.8 | `BymaxQueueModule.forRoot()`, barrel & unit tests | 📋 ToDo | P0 | L | 1.1–1.7 |
 
@@ -628,7 +628,7 @@ Completion Protocol:
 
 ### Task 1.6 — Resolved options + bootstrap validation
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 1.3, 1.4
@@ -639,11 +639,11 @@ Implement `validateOptions` (fail-fast precondition checks in `forRoot()`) and `
 
 #### Acceptance criteria
 
-- [ ] `src/server/config/resolved-options.ts` exports the `ResolvedQueueOptions` interface (every optional field of `BymaxQueueModuleOptions` filled) and `applyDefaults(opts): Readonly<ResolvedQueueOptions>` returning an `Object.freeze`d object.
-- [ ] `applyDefaults` merges `defaultJobOptions` over `DEFAULT_JOB_OPTIONS` (merge, not replace), sets `prefix ?? 'bull'`, `flows.enabled ?? false`, `metrics.enabled ?? false` + `cacheTtlMs ?? DEFAULT_METRICS_CACHE_TTL_MS`, `shutdown.drainTimeoutMs ?? DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS` + `drainOnShutdown ?? false`, passes through `telemetry`, and `connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS`.
-- [ ] `src/server/config/validate-options.ts` exports `validateOptions(opts): void` throwing `INVALID_OPTIONS` on: missing `connection`; a `connection` that specifies none of `client`/`url`/`options`; `client` together with `url`/`options` (mutually exclusive); `shutdown.drainTimeoutMs <= 0`; `metrics.cacheTtlMs < 0`.
-- [ ] `src/server/config/default-options.ts` re-exports the constants from `../constants/default-options` (the `config/` alias referenced by the spec tree).
-- [ ] Mutating the frozen result throws in strict mode; 100% line/branch coverage on both files.
+- [x] `src/server/config/resolved-options.ts` exports the `ResolvedQueueOptions` interface (every optional field of `BymaxQueueModuleOptions` filled) and `applyDefaults(opts): Readonly<ResolvedQueueOptions>` returning an `Object.freeze`d object.
+- [x] `applyDefaults` merges `defaultJobOptions` over `DEFAULT_JOB_OPTIONS` (merge, not replace), sets `prefix ?? 'bull'`, `flows.enabled ?? false`, `metrics.enabled ?? false` + `cacheTtlMs ?? DEFAULT_METRICS_CACHE_TTL_MS`, `shutdown.drainTimeoutMs ?? DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS` + `drainOnShutdown ?? false`, passes through `telemetry`, and `connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS`.
+- [x] `src/server/config/validate-options.ts` exports `validateOptions(opts): void` throwing `INVALID_OPTIONS` on: missing `connection`; a `connection` that specifies none of `client`/`url`/`options`; `client` together with `url`/`options` (mutually exclusive); `shutdown.drainTimeoutMs <= 0`; `metrics.cacheTtlMs < 0`.
+- [x] `src/server/config/default-options.ts` re-exports the constants from `../constants/default-options` (the `config/` alias referenced by the spec tree).
+- [x] Mutating the frozen result throws in strict mode; 100% line/branch coverage on both files.
 
 #### Files to create / modify
 
@@ -976,3 +976,4 @@ Completion Protocol:
 - 1.3 ✅ 2026-06-26 — Public server interfaces: dual-mode `QueueConnectionConfig`/`QueueConnectionMode`, `WorkerOptions` (no `sandboxed` boolean), processor metadata, `BulkJob`, and `BymaxQueueModuleOptions`/async options/factory; zero `any`, typecheck and lint clean.
 - 1.4 ✅ 2026-06-26 — DI tokens (4 distinct Symbols), `DEFAULT_*` constants (`satisfies JobsOptions`), and `QUEUE_ERROR_MESSAGES` covering all 14 codes re-exported alongside `QUEUE_ERROR_CODES`.
 - 1.5 ✅ 2026-06-26 — `QueueException` (masked, scalar-only details), `duplicateConnection`/`assertBlockingConnection`/`isClientUsable`, and the dual-mode `ConnectionResolver` (Mode A probe + per-role null-retries policy, Mode B ready-timeout with listener cleanup); 100% line/branch on resolver, both utils, and the exception.
+- 1.6 ✅ 2026-06-26 — `validateOptions` (fail-fast, distinct reasons), `applyDefaults` (frozen, merged `defaultJobOptions`, conditional telemetry) + `ResolvedQueueOptions`, and the `config/default-options` alias; 100% line/branch on all three.
