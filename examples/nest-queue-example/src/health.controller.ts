@@ -22,6 +22,10 @@ const MONITORED_QUEUES = ['email', 'orders', 'payments'] as const
 /**
  * Exposes queue health information for observability and load-balancer checks.
  *
+ * This endpoint is intentionally unauthenticated for demonstration purposes.
+ * In production, protect it behind an authentication guard (or expose it only on
+ * an internal network), because it reveals queue topology and job throughput.
+ *
  * @example
  * ```
  * GET /health

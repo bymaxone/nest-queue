@@ -57,10 +57,12 @@ jobs:
 
       - name: Extract changelog entry
         id: changelog
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          awk "/^## \[${VERSION}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md \
-            > /tmp/release-notes.md
+          awk -v version="$VERSION" \
+            'index($0, "## [" version "]") == 1 {found=1; next} /^## \[/{if(found) exit} found{print}' \
+            CHANGELOG.md > /tmp/release-notes.md
 
       - name: Create GitHub Release
         uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e # v1.1.4
