@@ -1,6 +1,6 @@
 # Phase 4 — Async config, graceful shutdown, E2E & mutation baseline
 
-> **Status**: 🔄 In Progress · **Progress**: 6 / 7 tasks · **Last updated**: 2026-06-27
+> **Status**: ✅ Done · **Progress**: 7 / 7 tasks · **Last updated**: 2026-06-27
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 4
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -48,7 +48,7 @@ What is still missing is everything that makes the package **production-safe and
 | 4.4 | Dead-letter-queue (DLQ) pattern via `@OnWorkerEvent('failed')` | ✅ Done | P1 | S | 4.3 |
 | 4.5 | E2E suite with Testcontainers Redis (7 scenarios) | ✅ Done | P0 | L | 4.1, 4.2 |
 | 4.6 | Mutation-testing baseline (Stryker `break 95`) | ✅ Done | P1 | M | 4.5 |
-| 4.7 | Phase 4 index exports, lifecycle tests & validation | 📋 ToDo | P0 | M | 4.1–4.6 |
+| 4.7 | Phase 4 index exports, lifecycle tests & validation | ✅ Done | P0 | M | 4.1–4.6 |
 
 > Cross-phase dependencies reference **Phase 1** `1.5` (`ConnectionResolver`), `1.8` (`forRoot` + barrel); **Phase 2** `2.2` (`WorkerRegistry`), `2.3` (`QueueEventsRegistry`); **Phase 3** `3.1` (`FlowService`), `3.5` (`MetricsService`).
 
@@ -792,7 +792,7 @@ Completion Protocol (after you finish):
 
 ### Task 4.7 — Phase 4 index exports, lifecycle tests & validation
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 4.1–4.6
@@ -803,14 +803,14 @@ Close the phase: wire the new symbols into the server barrel (`QueueLifecycle` e
 
 #### Acceptance criteria
 
-- [ ] `src/server/index.ts` exports the Phase 4 additions with no deep barrels (`QueueLifecycle` as a type-only advanced export; `forRootAsync` reachable via `BymaxQueueModule`)
-- [ ] `pnpm typecheck` passes (root + `tsconfig.server.json`)
-- [ ] `pnpm lint` passes with no warnings (no `eslint-disable`)
-- [ ] `pnpm test:cov:all` passes at 100% line/branch on every implemented file (`100/100/100/100`)
-- [ ] `pnpm build` emits `.mjs`/`.cjs`/`.d.ts` for both subpaths (`server`, `shared`)
-- [ ] `pnpm size` is within budget (`server` ≤ 18 KiB brotli)
-- [ ] `pnpm test:e2e` green; mutation score ≥ 95% on critical paths
-- [ ] `/bymax-quality:code-review` run and findings applied; `git status` clean (Conventional Commits)
+- [x] `src/server/index.ts` exports the Phase 4 additions with no deep barrels (`QueueLifecycle` as a type-only advanced export; `forRootAsync` reachable via `BymaxQueueModule`)
+- [x] `pnpm typecheck` passes (root + `tsconfig.server.json`)
+- [x] `pnpm lint` passes with no warnings (no `eslint-disable`)
+- [x] `pnpm test:cov:all` passes at 100% line/branch on every implemented file (`100/100/100/100`)
+- [x] `pnpm build` emits `.mjs`/`.cjs`/`.d.ts` for both subpaths (`server`, `shared`)
+- [x] `pnpm size` is within budget (`server` ≤ 18 KiB brotli — 11881 B; `shared` 406 B)
+- [x] `pnpm test:e2e` green (8/8, deterministic across re-runs); mutation score 98.99% (`break 95`)
+- [x] `/bymax-quality:code-review` run and findings applied; `git status` clean (Conventional Commits)
 
 #### Files to create / modify
 
@@ -895,3 +895,4 @@ Completion Protocol (after you finish):
 - 4.4 ✅ 2026-06-27 — DLQ example fixture (`risky` → `risky-dlq`, public API only, idempotent stable DLQ jobId) + DLQ guidance in `@OnWorkerEvent`; e2e tsconfig path alias.
 - 4.5 ✅ 2026-06-27 — Testcontainers E2E suite (digest-pinned redis): 7 scenarios + DLQ smoke, all green in ~8s; package-name path alias for fixtures; flushed between scenarios.
 - 4.6 ✅ 2026-06-27 — Stryker baseline at **98.99%** (`break 95` passes, exit 0); hardened specs killed every non-equivalent survivor; 6 residual mutants documented as provable equivalents in `docs/mutation_testing_results.md`; `pnpm-workspace.yaml` build-deps acknowledged so script-run dep checks no longer fail.
+- 4.7 ✅ 2026-06-27 — `QueueLifecycle` surfaced as a type-only advanced export in the server barrel; full gate green (typecheck, lint, 100% coverage, build both subpaths, size 11881 B/406 B, E2E 8/8 deterministic, mutation 98.99%); fixed an S1 QueueEvents race (await `waitUntilReady` + short job delay so the `$`-cursor listener never misses `completed`).

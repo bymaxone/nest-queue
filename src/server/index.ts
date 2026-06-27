@@ -24,6 +24,11 @@ export { WorkerRegistry } from './services/worker-registry.service'
 export type { ProgrammaticWorkerConfig, SandboxedWorkerConfig } from './services/worker-registry.service'
 export { QueueEventsRegistry } from './services/queue-events-registry.service'
 
+// Advanced (type-only): the graceful-shutdown orchestrator is registered and run
+// automatically by BymaxQueueModule. It is surfaced as a type for advanced
+// consumers that need to reference it; it is not meant to be constructed directly.
+export type { QueueLifecycle } from './lifecycle/queue-lifecycle.service'
+
 // Processor decorators
 export { Processor } from './decorators/processor.decorator'
 export { Process } from './decorators/process.decorator'

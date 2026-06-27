@@ -14,6 +14,7 @@ import { Redis } from 'ioredis'
 import {
   ConnectionResolver,
   FlowService,
+  QueueEventsRegistry,
   QueueService,
   WorkerRegistry,
 } from '@bymax-one/nest-queue'
@@ -79,7 +80,14 @@ describe('E2E — queue library against real Redis', () => {
     const echo = app.get(EchoProcessor)
     const queues = app.get(QueueService)
 
-    await queues.enqueue('echo', 'echo', { value: 'hello' })
+    // QueueEvents starts reading the events stream from `$` (new events only), so it
+    // must be listening BEFORE the job is enqueued or the `completed` event is missed.
+    // Await its readiness and give the job a brief delay so it completes once the
+    // cross-process listener is actively consuming.
+    const echoEvents = app.get(QueueEventsRegistry).getAll().get('echo')
+    await echoEvents?.waitUntilReady()
+
+    await queues.enqueue('echo', 'echo', { value: 'hello' }, { delay: 150 })
     await waitFor(() => echo.completed.length > 0, 10_000)
 
     expect(normalize(echo.completed[0]?.returnvalue)).toEqual({ echoed: 'hello' })
