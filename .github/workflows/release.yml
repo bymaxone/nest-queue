@@ -17,6 +17,8 @@ jobs:
   publish:
     name: Publish to npm
     runs-on: ubuntu-latest
+    # Only publish from a semver tag — a manual workflow_dispatch on a branch must never publish.
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     permissions:
       contents: write
       id-token: write

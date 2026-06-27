@@ -21,7 +21,7 @@ Before making any change, read these sections (use `Read` with `offset`/`limit` 
 - **TypeScript strict** — `strict: true`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`; zero `any`; no `@ts-ignore`, no `eslint-disable`.
 - **JSDoc on every export** — every `export` (class, function, interface, constant) carries JSDoc with `@example` where applicable.
 - **`@fileoverview` + `@layer` header** on every source file.
-- **English-only, timeless comments** — no language other than English in identifiers, comments, JSDoc, or error messages; no roadmap/phase/task references in committed code.
+- **English-only, timeless comments** — no language other than English in identifiers, comments, JSDoc, or error messages; no roadmap/phase/task references in runtime source, user-facing docs (README/JSDoc), or `.github/**` config. The planning docs under `docs/` (spec, plan, task files) intentionally track phases and are exempt.
 - **Functions ≤ 50 lines, files ≤ 800 lines** — split by responsibility when over the limit.
 - **Conventional Commits** — `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `ci:`. No `Co-Authored-By` or attribution trailers.
 - **No new runtime dependencies** — `package.json` ships `"dependencies": {}`. Everything via peer dep.
