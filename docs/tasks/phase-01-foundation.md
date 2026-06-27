@@ -1,6 +1,6 @@
 # Phase 1 — Foundation: module, ConnectionResolver & base QueueService
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 8 tasks · **Last updated**: 2026-06-23
+> **Status**: ✅ Done · **Progress**: 8 / 8 tasks · **Last updated**: 2026-06-26
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 1
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -41,14 +41,14 @@ Phase 1 produces the **first end-to-end usable slice**: a fully-gated project sc
 
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
-| 1.1 | Project scaffold (build chain, configs, budgets) | 📋 ToDo | P0 | M | — |
-| 1.2 | Shared types & constants (`src/shared/`) | 📋 ToDo | P0 | S | 1.1 |
-| 1.3 | Public server interfaces & contracts | 📋 ToDo | P0 | M | 1.1 |
-| 1.4 | DI tokens, default options & error messages | 📋 ToDo | P0 | S | 1.1, 1.2 |
-| 1.5 | `ConnectionResolver`, `QueueException` & connection utils | 📋 ToDo | P0 | L | 1.3, 1.4 |
-| 1.6 | Resolved options + bootstrap validation | 📋 ToDo | P0 | M | 1.3, 1.4 |
-| 1.7 | Base `QueueService` (cache, enqueue, metrics, control) | 📋 ToDo | P0 | M | 1.3, 1.5, 1.6 |
-| 1.8 | `BymaxQueueModule.forRoot()`, barrel & unit tests | 📋 ToDo | P0 | L | 1.1–1.7 |
+| 1.1 | Project scaffold (build chain, configs, budgets) | ✅ Done | P0 | M | — |
+| 1.2 | Shared types & constants (`src/shared/`) | ✅ Done | P0 | S | 1.1 |
+| 1.3 | Public server interfaces & contracts | ✅ Done | P0 | M | 1.1 |
+| 1.4 | DI tokens, default options & error messages | ✅ Done | P0 | S | 1.1, 1.2 |
+| 1.5 | `ConnectionResolver`, `QueueException` & connection utils | ✅ Done | P0 | L | 1.3, 1.4 |
+| 1.6 | Resolved options + bootstrap validation | ✅ Done | P0 | M | 1.3, 1.4 |
+| 1.7 | Base `QueueService` (cache, enqueue, metrics, control) | ✅ Done | P0 | M | 1.3, 1.5, 1.6 |
+| 1.8 | `BymaxQueueModule.forRoot()`, barrel & unit tests | ✅ Done | P0 | L | 1.1–1.7 |
 
 ---
 
@@ -56,7 +56,7 @@ Phase 1 produces the **first end-to-end usable slice**: a fully-gated project sc
 
 ### Task 1.1 — Project scaffold (build chain, configs, budgets)
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: —
@@ -67,15 +67,15 @@ Create the project root, the build/test/lint toolchain, and the package contract
 
 #### Acceptance criteria
 
-- [ ] Directory structure created per the spec §3.1 tree (`src/server/`, `src/shared/`, `scripts/`).
-- [ ] `package.json` declares `"type": "module"`, `"sideEffects": false`, `"dependencies": {}`, the 2-subpath `exports` map, peer deps (`@nestjs/common`/`@nestjs/core ^11`, `bullmq ^5.16.0`, `ioredis ^5.0.0`, `reflect-metadata ^0.2.0`, optional `bullmq-otel ^1.0.0` via `peerDependenciesMeta`), `engines.node >=24`, `packageManager pnpm@11`, and `publishConfig` with `provenance: true`.
-- [ ] `tsup.config.ts` declares **2 entries** (`server/index`, `shared/index`), `format: ['esm','cjs']`, `dts: true`, `treeshake: true`, and externals including `bullmq`, `ioredis`, `reflect-metadata`, and `/^@nestjs\//`.
-- [ ] tsconfig variants exist: `tsconfig.json`, `tsconfig.build.json`, `tsconfig.server.json`, `tsconfig.e2e.json`, `tsconfig.jest.json` (TS strict + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`).
-- [ ] Jest variants exist: `jest.config.ts`, `jest.coverage.config.ts` (thresholds `100/100/100/100`), `jest.e2e.config.ts`, `jest.stryker.config.ts`; plus `stryker.config.json` with `thresholds { high: 99, low: 95, break: 95 }`.
-- [ ] `eslint.config.mjs` (flat config v9), `.prettierrc`, `.gitignore`, `.npmignore`, `commitlint.config.cjs` exist.
-- [ ] `scripts/check-size.mjs` enforces brotli budgets: `server ≤ 18432` (18 KiB), `shared ≤ 2500`.
-- [ ] `src/server/index.ts` and `src/shared/index.ts` exist as placeholders (real files, not `.gitkeep`).
-- [ ] `pnpm install && pnpm typecheck && pnpm lint && pnpm build` all pass; `dist/server/` and `dist/shared/` are produced.
+- [x] Directory structure created per the spec §3.1 tree (`src/server/`, `src/shared/`, `scripts/`).
+- [x] `package.json` declares `"type": "module"`, `"sideEffects": false`, `"dependencies": {}`, the 2-subpath `exports` map, peer deps (`@nestjs/common`/`@nestjs/core ^11`, `bullmq ^5.16.0`, `ioredis ^5.0.0`, `reflect-metadata ^0.2.0`, optional `bullmq-otel ^1.0.0` via `peerDependenciesMeta`), `engines.node >=24`, `packageManager pnpm@11`, and `publishConfig` with `provenance: true`.
+- [x] `tsup.config.ts` declares **2 entries** (`server/index`, `shared/index`), `format: ['esm','cjs']`, `dts: true`, `treeshake: true`, and externals including `bullmq`, `ioredis`, `reflect-metadata`, and `/^@nestjs\//`.
+- [x] tsconfig variants exist: `tsconfig.json`, `tsconfig.build.json`, `tsconfig.server.json`, `tsconfig.e2e.json`, `tsconfig.jest.json` (TS strict + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`).
+- [x] Jest variants exist: `jest.config.ts`, `jest.coverage.config.ts` (thresholds `100/100/100/100`), `jest.e2e.config.ts`, `jest.stryker.config.ts`; plus `stryker.config.json` with `thresholds { high: 99, low: 95, break: 95 }`.
+- [x] `eslint.config.mjs` (flat config v9), `.prettierrc`, `.gitignore`, `.npmignore`, `commitlint.config.cjs` exist.
+- [x] `scripts/check-size.mjs` enforces brotli budgets: `server ≤ 18432` (18 KiB), `shared ≤ 2500`.
+- [x] `src/server/index.ts` and `src/shared/index.ts` exist as placeholders (real files, not `.gitkeep`).
+- [x] `pnpm install && pnpm typecheck && pnpm lint && pnpm build` all pass; `dist/server/` and `dist/shared/` are produced.
 
 #### Files to create / modify
 
@@ -204,7 +204,7 @@ Completion Protocol (after you finish):
 
 ### Task 1.2 — Shared types & constants (`src/shared/`)
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 1.1
@@ -215,13 +215,13 @@ Define the dependency-free public type and constant surface for the `./shared` s
 
 #### Acceptance criteria
 
-- [ ] All files created per the §2.2 tree (`types/job-status.types.ts`, `types/queue-metrics.types.ts`, `types/job-scheduler-options.types.ts`, `constants/job-status.ts`, `constants/error-codes.ts`, `index.ts`).
-- [ ] `JobStatus` is the union `'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'paused'`.
-- [ ] `QueueMetrics` matches spec §5.8 / §9.2 (`queue`, `counts` keyed by the 6 statuses, `collectedAt` ISO string).
-- [ ] `JobSchedulerRepeatOptions` is the discriminated union (cron `pattern` branch vs `every` ms branch — never both) per spec §8.2.
-- [ ] `JOB_STATUS` and `QUEUE_ERROR_CODES` use `as const` (literal types preserved in `.d.ts`); `QUEUE_ERROR_CODES` has all 14 codes from spec §12.3; `QueueErrorCode` is derived from it.
-- [ ] JSDoc present on every export; no logic, no runtime dependency.
-- [ ] `pnpm build` produces `dist/shared/index.{mjs,cjs,d.ts}`; `pnpm size` shows `dist/shared/index.mjs` < 2.5 KiB brotli.
+- [x] All files created per the §2.2 tree (`types/job-status.types.ts`, `types/queue-metrics.types.ts`, `types/job-scheduler-options.types.ts`, `constants/job-status.ts`, `constants/error-codes.ts`, `index.ts`).
+- [x] `JobStatus` is the union `'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'paused'`.
+- [x] `QueueMetrics` matches spec §5.8 / §9.2 (`queue`, `counts` keyed by the 6 statuses, `collectedAt` ISO string).
+- [x] `JobSchedulerRepeatOptions` is the discriminated union (cron `pattern` branch vs `every` ms branch — never both) per spec §8.2.
+- [x] `JOB_STATUS` and `QUEUE_ERROR_CODES` use `as const` (literal types preserved in `.d.ts`); `QUEUE_ERROR_CODES` has all 14 codes from spec §12.3; `QueueErrorCode` is derived from it.
+- [x] JSDoc present on every export; no logic, no runtime dependency.
+- [x] `pnpm build` produces `dist/shared/index.{mjs,cjs,d.ts}`; `pnpm size` shows `dist/shared/index.mjs` < 2.5 KiB brotli.
 
 #### Files to create / modify
 
@@ -304,7 +304,7 @@ Completion Protocol:
 
 ### Task 1.3 — Public server interfaces & contracts
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 1.1
@@ -315,13 +315,13 @@ Define every public server-side interface: `BymaxQueueModuleOptions` (including 
 
 #### Acceptance criteria
 
-- [ ] All interface files created per the §2.3 tree, plus a `interfaces/index.ts` barrel with explicit named re-exports.
-- [ ] `QueueConnectionConfig` is the 3-arm union: `{ client: Redis; ownsConnection?: false }` (Mode A) | `{ url: string; options?: Partial<RedisOptions> }` (Mode B url) | `{ options: RedisOptions }` (Mode B options); `QueueConnectionMode = 'mode-a-byo' | 'mode-b-owned'`.
-- [ ] `BymaxQueueModuleOptions` carries `connection` (required), `defaultJobOptions?`, `prefix?`, `queueOptions?`, `flows?`, `metrics?`, `telemetry?: Telemetry` (BullMQ, opt-in OTel), `shutdown?`, `isGlobal?` (mapped to `DynamicModule.global` via `setExtras`), `connectionReadyTimeoutMs?`.
-- [ ] `WorkerOptions` has `concurrency?`, `limiter?`, `autorun?`, `lockDuration?`, `stalledInterval?` and a comment documenting **why there is intentionally no `sandboxed` boolean** (sandboxed = file path, out-of-process, no DI).
-- [ ] `BymaxQueueModuleAsyncOptions` extends `Pick<ModuleMetadata,'imports'>` with `useFactory`/`useClass`/`useExisting`/`inject` (factory typed `(...args: unknown[]) => ...`, never `any`).
-- [ ] `BulkJob<TData = unknown>` = `{ name: string; data: TData; options?: JobsOptions }`.
-- [ ] `readonly` on array members where applicable; `pnpm typecheck` passes; `grep -nE ': any\b|any\[\]' src/server/interfaces/` returns nothing.
+- [x] All interface files created per the §2.3 tree, plus a `interfaces/index.ts` barrel with explicit named re-exports.
+- [x] `QueueConnectionConfig` is the 3-arm union: `{ client: Redis; ownsConnection?: false }` (Mode A) | `{ url: string; options?: Partial<RedisOptions> }` (Mode B url) | `{ options: RedisOptions }` (Mode B options); `QueueConnectionMode = 'mode-a-byo' | 'mode-b-owned'`.
+- [x] `BymaxQueueModuleOptions` carries `connection` (required), `defaultJobOptions?`, `prefix?`, `queueOptions?`, `flows?`, `metrics?`, `telemetry?: Telemetry` (BullMQ, opt-in OTel), `shutdown?`, `isGlobal?` (mapped to `DynamicModule.global` via `setExtras`), `connectionReadyTimeoutMs?`.
+- [x] `WorkerOptions` has `concurrency?`, `limiter?`, `autorun?`, `lockDuration?`, `stalledInterval?` and a comment documenting **why there is intentionally no `sandboxed` boolean** (sandboxed = file path, out-of-process, no DI).
+- [x] `BymaxQueueModuleAsyncOptions` extends `Pick<ModuleMetadata,'imports'>` with `useFactory`/`useClass`/`useExisting`/`inject` (factory typed `(...args: unknown[]) => ...`, never `any`).
+- [x] `BulkJob<TData = unknown>` = `{ name: string; data: TData; options?: JobsOptions }`.
+- [x] `readonly` on array members where applicable; `pnpm typecheck` passes; `grep -nE ': any\b|any\[\]' src/server/interfaces/` returns nothing.
 
 #### Files to create / modify
 
@@ -426,7 +426,7 @@ Completion Protocol:
 
 ### Task 1.4 — DI tokens, default options & error messages
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 1.1, 1.2
@@ -437,11 +437,11 @@ Define the `Symbol` injection tokens, the default constants (`DEFAULT_JOB_OPTION
 
 #### Acceptance criteria
 
-- [ ] `src/server/bymax-queue.constants.ts` exports the `Symbol` tokens `BYMAX_QUEUE_OPTIONS`, `BYMAX_QUEUE_REDIS_CLIENT`, `BYMAX_QUEUE_CONNECTION_MODE`, `BYMAX_QUEUE_RESOLVED_OPTIONS` (each distinct; `===` reflexive, `!==` cross-token).
-- [ ] `src/server/constants/default-options.ts` exports `DEFAULT_WORKER_CONCURRENCY = 2`, `DEFAULT_JOB_OPTIONS` (`attempts: 3`, exponential backoff `delay: 2000`, `removeOnComplete { age: 24h, count: 1000 }`, `removeOnFail { age: 7d, count: 5000 }`) `as const satisfies JobsOptions`, plus `DEFAULT_CONNECTION_READY_TIMEOUT_MS = 10_000`, `DEFAULT_METRICS_CACHE_TTL_MS = 5_000`, `DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS = 30_000`.
-- [ ] `src/server/constants/error-codes.ts` re-exports `QUEUE_ERROR_CODES`/`QueueErrorCode` from `../../shared/constants/error-codes` and adds `QUEUE_ERROR_MESSAGES: Record<string, string>` covering every code from spec §12.2.
-- [ ] `src/server/constants/index.ts` re-exports the two files above.
-- [ ] `DEFAULT_JOB_OPTIONS satisfies JobsOptions` compiles; `pnpm typecheck` passes.
+- [x] `src/server/bymax-queue.constants.ts` exports the `Symbol` tokens `BYMAX_QUEUE_OPTIONS`, `BYMAX_QUEUE_REDIS_CLIENT`, `BYMAX_QUEUE_CONNECTION_MODE`, `BYMAX_QUEUE_RESOLVED_OPTIONS` (each distinct; `===` reflexive, `!==` cross-token).
+- [x] `src/server/constants/default-options.ts` exports `DEFAULT_WORKER_CONCURRENCY = 2`, `DEFAULT_JOB_OPTIONS` (`attempts: 3`, exponential backoff `delay: 2000`, `removeOnComplete { age: 24h, count: 1000 }`, `removeOnFail { age: 7d, count: 5000 }`) `as const satisfies JobsOptions`, plus `DEFAULT_CONNECTION_READY_TIMEOUT_MS = 10_000`, `DEFAULT_METRICS_CACHE_TTL_MS = 5_000`, `DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS = 30_000`.
+- [x] `src/server/constants/error-codes.ts` re-exports `QUEUE_ERROR_CODES`/`QueueErrorCode` from `../../shared/constants/error-codes` and adds `QUEUE_ERROR_MESSAGES: Record<string, string>` covering every code from spec §12.2.
+- [x] `src/server/constants/index.ts` re-exports the two files above.
+- [x] `DEFAULT_JOB_OPTIONS satisfies JobsOptions` compiles; `pnpm typecheck` passes.
 
 #### Files to create / modify
 
@@ -534,7 +534,7 @@ Completion Protocol:
 
 ### Task 1.5 — `ConnectionResolver`, `QueueException` & connection utils
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: L
 - **Depends on**: 1.3, 1.4
@@ -545,14 +545,14 @@ Implement the dual-mode `ConnectionResolver` (Mode A: BYO client used as-is for 
 
 #### Acceptance criteria
 
-- [ ] `QueueException extends HttpException` with response shape `{ error: { code, message, details } }`, message resolved from `QUEUE_ERROR_MESSAGES`, default status `500`.
-- [ ] `duplicateConnection(client)` returns `client.duplicate({ maxRetriesPerRequest: null })`.
-- [ ] `assertBlockingConnection(client)` throws `CONNECTION_REQUIRES_NULL_RETRIES` (with `{ actualValue, expectedValue: null }`) when `client.options.maxRetriesPerRequest !== null`.
-- [ ] `isClientUsable(client)` returns true when `status` is `'ready'` or `'connecting'`.
-- [ ] Mode A: a usable client is accepted and used as-is for the Queue role; the lib does **not** require `maxRetriesPerRequest === null` on the received client; it duplicates a probe, asserts the duplicate is `null`, and `disconnect()`s the probe in a `finally`; an `end` client is rejected with `CONNECTION_INVALID`.
-- [ ] Mode B (url) and Mode B (options-only): the lib opens its own `ioredis`, the Queue connection keeps ioredis default retries, and `waitReady` resolves on `ready` or rejects with `CONNECTION_TIMEOUT` after `connectionReadyTimeoutMs` (default 10s); event listeners are cleaned up on resolve/reject/timeout (no leaked handles).
-- [ ] `getClient()`, `getMode()`, `isOwned()` expose state; `onModuleDestroy` calls `quit()` (fallback `disconnect()`) **only** in Mode B and never touches a Mode A client.
-- [ ] 100% line/branch coverage on the resolver and both utils (tests authored in Task 1.8 may live alongside, but coverage must be reachable).
+- [x] `QueueException extends HttpException` with response shape `{ error: { code, message, details } }`, message resolved from `QUEUE_ERROR_MESSAGES`, default status `500`.
+- [x] `duplicateConnection(client)` returns `client.duplicate({ maxRetriesPerRequest: null })`.
+- [x] `assertBlockingConnection(client)` throws `CONNECTION_REQUIRES_NULL_RETRIES` (with `{ actualValue, expectedValue: null }`) when `client.options.maxRetriesPerRequest !== null`.
+- [x] `isClientUsable(client)` returns true when `status` is `'ready'` or `'connecting'`.
+- [x] Mode A: a usable client is accepted and used as-is for the Queue role; the lib does **not** require `maxRetriesPerRequest === null` on the received client; it duplicates a probe, asserts the duplicate is `null`, and `disconnect()`s the probe in a `finally`; an `end` client is rejected with `CONNECTION_INVALID`.
+- [x] Mode B (url) and Mode B (options-only): the lib opens its own `ioredis`, the Queue connection keeps ioredis default retries, and `waitReady` resolves on `ready` or rejects with `CONNECTION_TIMEOUT` after `connectionReadyTimeoutMs` (default 10s); event listeners are cleaned up on resolve/reject/timeout (no leaked handles).
+- [x] `getClient()`, `getMode()`, `isOwned()` expose state; `onModuleDestroy` calls `quit()` (fallback `disconnect()`) **only** in Mode B and never touches a Mode A client.
+- [x] 100% line/branch coverage on the resolver and both utils (tests authored in Task 1.8 may live alongside, but coverage must be reachable).
 
 #### Files to create / modify
 
@@ -628,7 +628,7 @@ Completion Protocol:
 
 ### Task 1.6 — Resolved options + bootstrap validation
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 1.3, 1.4
@@ -639,11 +639,11 @@ Implement `validateOptions` (fail-fast precondition checks in `forRoot()`) and `
 
 #### Acceptance criteria
 
-- [ ] `src/server/config/resolved-options.ts` exports the `ResolvedQueueOptions` interface (every optional field of `BymaxQueueModuleOptions` filled) and `applyDefaults(opts): Readonly<ResolvedQueueOptions>` returning an `Object.freeze`d object.
-- [ ] `applyDefaults` merges `defaultJobOptions` over `DEFAULT_JOB_OPTIONS` (merge, not replace), sets `prefix ?? 'bull'`, `flows.enabled ?? false`, `metrics.enabled ?? false` + `cacheTtlMs ?? DEFAULT_METRICS_CACHE_TTL_MS`, `shutdown.drainTimeoutMs ?? DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS` + `drainOnShutdown ?? false`, passes through `telemetry`, and `connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS`.
-- [ ] `src/server/config/validate-options.ts` exports `validateOptions(opts): void` throwing `INVALID_OPTIONS` on: missing `connection`; a `connection` that specifies none of `client`/`url`/`options`; `client` together with `url`/`options` (mutually exclusive); `shutdown.drainTimeoutMs <= 0`; `metrics.cacheTtlMs < 0`.
-- [ ] `src/server/config/default-options.ts` re-exports the constants from `../constants/default-options` (the `config/` alias referenced by the spec tree).
-- [ ] Mutating the frozen result throws in strict mode; 100% line/branch coverage on both files.
+- [x] `src/server/config/resolved-options.ts` exports the `ResolvedQueueOptions` interface (every optional field of `BymaxQueueModuleOptions` filled) and `applyDefaults(opts): Readonly<ResolvedQueueOptions>` returning an `Object.freeze`d object.
+- [x] `applyDefaults` merges `defaultJobOptions` over `DEFAULT_JOB_OPTIONS` (merge, not replace), sets `prefix ?? 'bull'`, `flows.enabled ?? false`, `metrics.enabled ?? false` + `cacheTtlMs ?? DEFAULT_METRICS_CACHE_TTL_MS`, `shutdown.drainTimeoutMs ?? DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS` + `drainOnShutdown ?? false`, passes through `telemetry`, and `connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS`.
+- [x] `src/server/config/validate-options.ts` exports `validateOptions(opts): void` throwing `INVALID_OPTIONS` on: missing `connection`; a `connection` that specifies none of `client`/`url`/`options`; `client` together with `url`/`options` (mutually exclusive); `shutdown.drainTimeoutMs <= 0`; `metrics.cacheTtlMs < 0`.
+- [x] `src/server/config/default-options.ts` re-exports the constants from `../constants/default-options` (the `config/` alias referenced by the spec tree).
+- [x] Mutating the frozen result throws in strict mode; 100% line/branch coverage on both files.
 
 #### Files to create / modify
 
@@ -735,7 +735,7 @@ Completion Protocol:
 
 ### Task 1.7 — Base `QueueService` (cache, enqueue, metrics, control)
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 1.3, 1.5, 1.6
@@ -746,14 +746,14 @@ Implement the base `QueueService`: a per-name `Queue` cache (`getOrCreateQueue`)
 
 #### Acceptance criteria
 
-- [ ] `getOrCreateQueue<TData,TResult>(name, overrides?)` returns a cached `Queue` (second call with the same name returns the same instance), built with `connection: connectionResolver.getClient()`, `prefix`, `defaultJobOptions`, merged `queueOptions` and `overrides`.
-- [ ] `enqueue<TData,TResult>(queue, jobName, data, options?)` delegates to `queue.add(jobName, data, options)` and propagates `TData`/`TResult` typing; native `options.jobId` and `options.deduplication` pass straight through (no custom deduplication code).
-- [ ] `enqueueBulk` delegates to `queue.addBulk`, wrapping any failure in `QueueException(BULK_ENQUEUE_FAILED, 500, { cause })`.
-- [ ] `getJob` returns `null` (not throw) when absent; `getJobs(queue, status, start=0, end=50)` passes `[status]` (array) to `queue.getJobs`.
-- [ ] `getMetrics` returns `{ queue, counts, collectedAt }` via `queue.getJobCounts('waiting','active','completed','failed','delayed','paused')` with an ISO `collectedAt`.
-- [ ] `cleanQueue(queue, gracePeriodMs, limit, status?)` mirrors BullMQ `Queue.clean(grace, limit, type?)` argument order exactly (`limit` required, `0` = no limit) and returns the removed ids.
-- [ ] `getCachedQueues()` returns a `ReadonlyMap`; `onModuleDestroy` closes every cached queue (swallowing per-queue errors) and clears the map.
-- [ ] 100% line/branch coverage (BullMQ `Queue` mocked).
+- [x] `getOrCreateQueue<TData,TResult>(name, overrides?)` returns a cached `Queue` (second call with the same name returns the same instance), built with `connection: connectionResolver.getClient()`, `prefix`, `defaultJobOptions`, merged `queueOptions` and `overrides`.
+- [x] `enqueue<TData,TResult>(queue, jobName, data, options?)` delegates to `queue.add(jobName, data, options)` and propagates `TData`/`TResult` typing; native `options.jobId` and `options.deduplication` pass straight through (no custom deduplication code).
+- [x] `enqueueBulk` delegates to `queue.addBulk`, wrapping any failure in `QueueException(BULK_ENQUEUE_FAILED, 500, { cause })` (and a pre-check rejects batches over the size cap).
+- [x] `getJob` returns `null` (not throw) when absent; `getJobs(queue, status, start=0, end=50)` passes `[status]` (array) to `queue.getJobs`.
+- [x] `getMetrics` returns `{ queue, counts, collectedAt }` via `queue.getJobCounts('waiting','active','completed','failed','delayed','paused')` with an ISO `collectedAt`.
+- [x] `cleanQueue(queue, gracePeriodMs, limit, status?)` mirrors BullMQ `Queue.clean(grace, limit, type?)` argument order exactly (`limit` required, `0` = no limit) and returns the removed ids.
+- [x] `getCachedQueues()` returns a `ReadonlyMap`; `onModuleDestroy` closes every cached queue (swallowing per-queue errors) and clears the map.
+- [x] 100% line/branch coverage (BullMQ `Queue` mocked).
 
 #### Files to create / modify
 
@@ -852,7 +852,7 @@ Completion Protocol:
 
 ### Task 1.8 — `BymaxQueueModule.forRoot()`, barrel & unit tests
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: L
 - **Depends on**: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7
@@ -863,12 +863,12 @@ Wire the synchronous `BymaxQueueModule.forRoot()` on `ConfigurableModuleBuilder`
 
 #### Acceptance criteria
 
-- [ ] `src/server/bymax-queue.module.ts` builds the `ConfigurableModuleClass` via `new ConfigurableModuleBuilder<BymaxQueueModuleOptions>({ moduleName: 'BymaxQueue' }).setClassMethodName('forRoot').setExtras({ isGlobal: true }, (def, extras) => ({ ...def, global: extras.isGlobal })).build()`.
-- [ ] `forRoot(options)` calls `validateOptions`, computes `applyDefaults`, extends `super.forRoot(options)` with providers: `{ provide: BYMAX_QUEUE_OPTIONS, useExisting: MODULE_OPTIONS_TOKEN }`, `{ provide: BYMAX_QUEUE_RESOLVED_OPTIONS, useValue: resolved }`, an async-factory `ConnectionResolver` (`useFactory: async (opts) => { const r = new ConnectionResolver(opts); await r.init(); return r }`, `inject: [BYMAX_QUEUE_OPTIONS]`), and `QueueService`; exports `QueueService`, `ConnectionResolver`, and the two tokens.
-- [ ] There is **no** `@Global()` decorator and **no** `forFeature` method anywhere.
-- [ ] `src/server/index.ts` re-exports (explicit, no `export *`): `BymaxQueueModule`; the four `BYMAX_QUEUE_*` tokens; `QueueService`, `ConnectionResolver`; the public interface types; `QueueException`; `DEFAULT_WORKER_CONCURRENCY`/`DEFAULT_JOB_OPTIONS`/`DEFAULT_METRICS_CACHE_TTL_MS`/`DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS`/`QUEUE_ERROR_CODES`; BullMQ convenience type re-exports (`Job`, `JobsOptions`, `Queue`, `Worker`, `QueueEvents`); and the shared re-exports (`JobStatus`, `QueueMetrics`, `JobSchedulerRepeatOptions`, `QueueErrorCode`, `JOB_STATUS`).
-- [ ] Unit specs exist for resolver, queue service, validate-options, resolved-options, validate-connection, and the module; `bymax-queue.module.spec.ts` asserts the returned `DynamicModule.global === true` by default and `false` when `isGlobal: false`, that providers/exports are registered, and that `forRoot({ connection: {} as never })` throws via `validateOptions`.
-- [ ] `pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size` all pass; coverage is `100/100/100/100` on every implemented file; both bundles are within budget (server ≤ 18 KiB brotli).
+- [x] `src/server/bymax-queue.module.ts` builds the `ConfigurableModuleClass` via `new ConfigurableModuleBuilder<BymaxQueueModuleOptions>({ moduleName: 'BymaxQueue' }).setClassMethodName('forRoot').setExtras({ isGlobal: true }, (def, extras) => ({ ...def, global: extras.isGlobal })).build()`.
+- [x] `forRoot(options)` calls `validateOptions`, computes `applyDefaults`, extends `super.forRoot(options)` with providers: `{ provide: BYMAX_QUEUE_OPTIONS, useExisting: MODULE_OPTIONS_TOKEN }`, `{ provide: BYMAX_QUEUE_RESOLVED_OPTIONS, useValue: resolved }`, an async-factory `ConnectionResolver` (`useFactory: async (opts) => { const r = new ConnectionResolver(opts); await r.init(); return r }`, `inject: [BYMAX_QUEUE_OPTIONS]`), and `QueueService`; exports `QueueService`, `ConnectionResolver`, and the two tokens.
+- [x] There is **no** `@Global()` decorator and **no** `forFeature` method anywhere.
+- [x] `src/server/index.ts` re-exports (explicit, no `export *`): `BymaxQueueModule`; the four `BYMAX_QUEUE_*` tokens; `QueueService`, `ConnectionResolver`; the public interface types; `QueueException`; `DEFAULT_WORKER_CONCURRENCY`/`DEFAULT_JOB_OPTIONS`/`DEFAULT_METRICS_CACHE_TTL_MS`/`DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS`/`QUEUE_ERROR_CODES`; BullMQ convenience type re-exports (`Job`, `JobsOptions`, `Queue`, `Worker`, `QueueEvents`); and the shared re-exports (`JobStatus`, `QueueMetrics`, `JobSchedulerRepeatOptions`, `QueueErrorCode`, `JOB_STATUS`).
+- [x] Unit specs exist for resolver, queue service, validate-options, resolved-options, validate-connection, and the module; `bymax-queue.module.spec.ts` asserts the returned `DynamicModule.global === true` by default and `false` when `isGlobal: false`, that providers/exports are registered, and that `forRoot({ connection: {} as never })` throws via `validateOptions`.
+- [x] `pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size` all pass; coverage is `100/100/100/100` on every implemented file; both bundles are within budget (server ≤ 18 KiB brotli).
 
 #### Files to create / modify
 
@@ -971,4 +971,11 @@ Completion Protocol:
 
 > Append-only. One line per completed task: `- <task-id> ✅ YYYY-MM-DD — <one-line summary>`.
 
-<!-- No entries yet. The first completed task appends its line here. -->
+- 1.1 ✅ 2026-06-26 — Project scaffold: 2-subpath build chain (tsup/tsconfig/jest/stryker), eslint flat config, size budgets, five SHA-pinned CI workflows; install/typecheck/lint/build/size all green.
+- 1.2 ✅ 2026-06-26 — Shared subpath: `JobStatus`, `QueueMetrics`, `JobSchedulerRepeatOptions` types and `JOB_STATUS`/`QUEUE_ERROR_CODES` (14 codes) constants with derived `QueueErrorCode`; zero deps, literal types preserved, shared bundle 406 B brotli.
+- 1.3 ✅ 2026-06-26 — Public server interfaces: dual-mode `QueueConnectionConfig`/`QueueConnectionMode`, `WorkerOptions` (no `sandboxed` boolean), processor metadata, `BulkJob`, and `BymaxQueueModuleOptions`/async options/factory; zero `any`, typecheck and lint clean.
+- 1.4 ✅ 2026-06-26 — DI tokens (4 distinct Symbols), `DEFAULT_*` constants (`satisfies JobsOptions`), and `QUEUE_ERROR_MESSAGES` covering all 14 codes re-exported alongside `QUEUE_ERROR_CODES`.
+- 1.5 ✅ 2026-06-26 — `QueueException` (masked, scalar-only details), `duplicateConnection`/`assertBlockingConnection`/`isClientUsable`, and the dual-mode `ConnectionResolver` (Mode A probe + per-role null-retries policy, Mode B ready-timeout with listener cleanup); 100% line/branch on resolver, both utils, and the exception.
+- 1.6 ✅ 2026-06-26 — `validateOptions` (fail-fast, distinct reasons), `applyDefaults` (frozen, merged `defaultJobOptions`, conditional telemetry) + `ResolvedQueueOptions`, and the `config/default-options` alias; 100% line/branch on all three.
+- 1.7 ✅ 2026-06-26 — Base `QueueService`: cached `getOrCreateQueue`, typed `enqueue`/`enqueueBulk` (bounded batch), `getJob`/`getJobs([status])`, uncached `getMetrics`, `pauseQueue`/`resumeQueue`/`cleanQueue(grace,limit,status)`, and shutdown close-all; 100% line/branch (ioredis pinned to match bullmq).
+- 1.8 ✅ 2026-06-26 — Synchronous `BymaxQueueModule.forRoot()` on `ConfigurableModuleBuilder` (isGlobal via `setExtras`, no `@Global`/`forFeature`), explicit public barrel, and the full unit suite; phase-wide gates green at 100/100/100/100 with both subpaths built and within budget.

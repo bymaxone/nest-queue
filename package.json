@@ -1,0 +1,112 @@
+{
+  "name": "@bymax-one/nest-queue",
+  "version": "0.1.0-alpha.0",
+  "description": "NestJS dynamic module wrapping BullMQ — typed jobs, flows, job schedulers, deduplication, OpenTelemetry, graceful shutdown",
+  "author": "Bymax One <support@bymax.one>",
+  "license": "MIT",
+  "homepage": "https://github.com/bymaxone/nest-queue#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bymaxone/nest-queue.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bymaxone/nest-queue/issues"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.mjs",
+      "require": "./dist/server/index.cjs"
+    },
+    "./shared": {
+      "types": "./dist/shared/index.d.ts",
+      "import": "./dist/shared/index.mjs",
+      "require": "./dist/shared/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "pnpm clean && tsup",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "test": "jest",
+    "test:cov": "jest --coverage",
+    "test:e2e": "jest --config jest.e2e.config.ts",
+    "test:cov:all": "jest --config jest.coverage.config.ts --coverage",
+    "mutation": "stryker run",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.server.json",
+    "size": "node scripts/check-size.mjs",
+    "clean": "rm -rf dist coverage",
+    "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build",
+    "release": "pnpm publish --provenance"
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "bullmq": "^5.16.0",
+    "bullmq-otel": "^1.0.0",
+    "ioredis": "^5.0.0",
+    "reflect-metadata": "^0.2.0"
+  },
+  "peerDependenciesMeta": {
+    "bullmq-otel": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.5.0",
+    "@commitlint/config-conventional": "^19.5.0",
+    "@eslint/js": "^9.13.0",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/testing": "^11.0.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.0.0",
+    "bullmq": "^5.79.1",
+    "eslint": "^9.13.0",
+    "eslint-config-prettier": "^9.1.0",
+    "ioredis": "5.10.1",
+    "ioredis-mock": "^8.9.0",
+    "jest": "^30.0.0",
+    "prettier": "^3.3.3",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "ts-jest": "^29.2.5",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.12.0"
+  },
+  "keywords": [
+    "nestjs",
+    "bullmq",
+    "queue",
+    "redis",
+    "worker",
+    "flow",
+    "cron",
+    "job-scheduler",
+    "scheduler",
+    "deduplication",
+    "opentelemetry",
+    "otel",
+    "graceful-shutdown",
+    "job"
+  ],
+  "packageManager": "pnpm@11.0.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  }
+}
