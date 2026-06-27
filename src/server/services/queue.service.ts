@@ -79,11 +79,18 @@ export class QueueService implements OnModuleDestroy {
   /**
    * Add a single job to a queue. The queue is created lazily if needed.
    *
+   * Delivery is **at-least-once** — a handler may run more than once for the same
+   * job (worker crash, lock expiry, or a shutdown force-close). Make handlers
+   * idempotent: use an idempotency key on writes, prefer upserts over inserts, or
+   * keep an "already-processed" marker keyed by `job.id`.
+   *
    * `options` surfaces BullMQ natives directly — including `jobId` (idempotent
    * insert: a second add with the same id is a no-op while the first exists) and
    * `deduplication` (windowed deduplication). The library writes no deduplication
    * code; BullMQ owns the behavior. The deduplication key is independent of
-   * `jobId`, so both can be set together or apart.
+   * `jobId`, so both can be set together or apart. Both collapse duplicate
+   * **producers** and do not change the at-least-once guarantee on the
+   * **consumer** side.
    *
    * Deduplication modes (`deduplication: { id, ttl?, extend?, replace?, keepLastIfActive? }`):
    *  - Simple `{ id }` — collapse duplicates until the in-flight job completes or fails.
@@ -116,7 +123,8 @@ export class QueueService implements OnModuleDestroy {
   /**
    * Enqueue multiple jobs in a single Redis roundtrip. The batch is bounded by
    * {@link MAX_BULK_SIZE} to guard against a self-inflicted memory spike; any
-   * failure is wrapped in a `QueueException`.
+   * failure is wrapped in a `QueueException`. Delivery is at-least-once, so every
+   * job's handler must be idempotent (see {@link QueueService.enqueue}).
    *
    * @param queueName - Target queue.
    * @param jobs - Job descriptors (length must not exceed the bulk size cap).

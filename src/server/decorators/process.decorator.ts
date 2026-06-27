@@ -18,6 +18,11 @@ import { PROCESS_HANDLERS_METADATA_KEY } from './metadata-keys.constants'
  * Multiple `@Process` decorators on the same class are supported — each adds
  * an entry to the accumulated metadata array.
  *
+ * Delivery is at-least-once: a handler may run more than once for the same job
+ * (worker crash, lock expiry, or a shutdown force-close). Handlers MUST be
+ * idempotent — use an idempotency key on writes, prefer upserts over inserts, or
+ * keep an "already-processed" marker keyed by `job.id`.
+ *
  * @param jobName - Optional job-name filter. Omit for a catch-all handler.
  *
  * @example

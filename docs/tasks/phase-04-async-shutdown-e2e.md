@@ -1,6 +1,6 @@
 # Phase 4 — Async config, graceful shutdown, E2E & mutation baseline
 
-> **Status**: 🔄 In Progress · **Progress**: 2 / 7 tasks · **Last updated**: 2026-06-27
+> **Status**: 🔄 In Progress · **Progress**: 3 / 7 tasks · **Last updated**: 2026-06-27
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 4
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -44,7 +44,7 @@ What is still missing is everything that makes the package **production-safe and
 |---|---|---|---|---|---|
 | 4.1 | `forRootAsync()` — factory/class/existing async configuration | ✅ Done | P0 | M | 1.8, 3.1, 3.5 |
 | 4.2 | `QueueLifecycle` — bounded graceful shutdown | ✅ Done | P0 | L | 1.5, 2.2, 2.3, 3.1 |
-| 4.3 | At-least-once semantics & handler idempotency documentation | 📋 ToDo | P1 | S | 4.2 |
+| 4.3 | At-least-once semantics & handler idempotency documentation | ✅ Done | P1 | S | 4.2 |
 | 4.4 | Dead-letter-queue (DLQ) pattern via `@OnWorkerEvent('failed')` | 📋 ToDo | P1 | S | 4.3 |
 | 4.5 | E2E suite with Testcontainers Redis (7 scenarios) | 📋 ToDo | P0 | L | 4.1, 4.2 |
 | 4.6 | Mutation-testing baseline (Stryker `break 95`) | 📋 ToDo | P1 | M | 4.5 |
@@ -369,7 +369,7 @@ Completion Protocol (after you finish):
 
 ### Task 4.3 — At-least-once semantics & handler idempotency documentation
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P1
 - **Size**: S
 - **Depends on**: 4.2
@@ -380,11 +380,11 @@ Document the at-least-once delivery contract as a first-class, prominent part of
 
 #### Acceptance criteria
 
-- [ ] `enqueue` JSDoc states at-least-once + handler idempotency, and clearly separates `jobId` (idempotent insert) from `deduplication` (windowed deduplication), noting neither changes the consumer-side guarantee
-- [ ] `@Process` / `@Processor` JSDoc instructs handlers to be idempotent (idempotency key on writes, upserts over inserts, or an "already-processed" marker keyed by `job.id`)
-- [ ] `QueueLifecycle`/`@OnWorkerEvent` JSDoc explains that a force-closed in-flight job becomes `stalled` and is retried (the visible at-least-once path) and that `lockDuration` must exceed worst-case handler runtime
-- [ ] No code claims or implies exactly-once anywhere in the surface
-- [ ] `pnpm typecheck && pnpm lint` clean; coverage unaffected (docs/JSDoc only — no logic added)
+- [x] `enqueue` JSDoc states at-least-once + handler idempotency, and clearly separates `jobId` (idempotent insert) from `deduplication` (windowed deduplication), noting neither changes the consumer-side guarantee
+- [x] `@Process` / `@Processor` JSDoc instructs handlers to be idempotent (idempotency key on writes, upserts over inserts, or an "already-processed" marker keyed by `job.id`)
+- [x] `QueueLifecycle`/`@OnWorkerEvent` JSDoc explains that a force-closed in-flight job becomes `stalled` and is retried (the visible at-least-once path) and that `lockDuration` must exceed worst-case handler runtime
+- [x] No code claims or implies exactly-once anywhere in the surface
+- [x] `pnpm typecheck && pnpm lint` clean; coverage unaffected (docs/JSDoc only — no logic added)
 
 #### Files to create / modify
 
@@ -891,3 +891,4 @@ Completion Protocol (after you finish):
 
 - 4.2 ✅ 2026-06-27 — `QueueLifecycle` ordered bounded-drain shutdown; registries expose duplicated connections and delegate shutdown to the lifecycle (no unbounded self-close).
 - 4.1 ✅ 2026-06-27 — `forRootAsync` (useFactory/useClass/useExisting + inject) with shared core providers; `QueueLifecycle` wired into both paths; `setFactoryMethodName('createQueueOptions')`.
+- 4.3 ✅ 2026-06-27 — At-least-once + idempotency JSDoc on `enqueue`/`enqueueBulk`, `@Process`/`@Processor`, `@OnWorkerEvent`, and the lifecycle (jobId vs deduplication; stalled-retry; lockDuration).
