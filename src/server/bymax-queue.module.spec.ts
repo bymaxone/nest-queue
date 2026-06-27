@@ -14,6 +14,8 @@ import {
 } from './bymax-queue.constants'
 import { ConnectionResolver } from './services/connection-resolver.service'
 import { QueueService } from './services/queue.service'
+import { WorkerRegistry } from './services/worker-registry.service'
+import { QueueEventsRegistry } from './services/queue-events-registry.service'
 import { QueueException } from './errors/queue-exception'
 import type { BymaxQueueModuleOptions } from './interfaces/queue-module-options.interface'
 
@@ -48,6 +50,8 @@ describe('BymaxQueueModule.forRoot', () => {
     expect(dynamic.exports).toEqual([
       QueueService,
       ConnectionResolver,
+      WorkerRegistry,
+      QueueEventsRegistry,
       BYMAX_QUEUE_OPTIONS,
       BYMAX_QUEUE_RESOLVED_OPTIONS,
       BYMAX_QUEUE_REDIS_CLIENT,

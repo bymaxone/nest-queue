@@ -51,6 +51,10 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/unbound-method': 'off',
+      // Decorator-only test classes are intentional — not extraneous in NestJS DI context.
+      '@typescript-eslint/no-extraneous-class': 'off',
+      // Empty method bodies in test processor stubs are intentional placeholders.
+      '@typescript-eslint/no-empty-function': 'off',
     },
   },
   prettier,

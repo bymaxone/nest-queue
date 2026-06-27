@@ -1,6 +1,6 @@
 # Phase 2 — Workers: @Processor, decorators & WorkerRegistry
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 6 tasks · **Last updated**: 2026-06-23
+> **Status**: ✅ Done · **Progress**: 6 / 6 tasks · **Last updated**: 2026-06-26
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 2
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -53,12 +53,12 @@ Phase 2 makes the queue **process** jobs. It adds the four worker decorators (`@
 
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
-| 2.1 | Worker decorators & Symbol metadata keys | 📋 ToDo | P0 | S | 1.3, 1.4 (Phase 1) |
-| 2.2 | WorkerRegistry — programmatic + sandboxed + options validation | 📋 ToDo | P0 | M | 2.1, 1.4, 1.5 (Phase 1) |
-| 2.3 | QueueEventsRegistry — lazy per-queue QueueEvents | 📋 ToDo | P1 | S | 1.5 (Phase 1) |
-| 2.4 | ProcessorDiscoveryService — discover, dispatch & wire events | 📋 ToDo | P0 | L | 2.1, 2.2, 2.3 |
-| 2.5 | Module wiring + server barrel exports | 📋 ToDo | P1 | S | 2.2, 2.3, 2.4, 1.8 (Phase 1) |
-| 2.6 | Phase 2 unit tests, 100% coverage & phase validation | 📋 ToDo | P0 | L | 2.1, 2.2, 2.3, 2.4, 2.5 |
+| 2.1 | Worker decorators & Symbol metadata keys | ✅ Done | P0 | S | 1.3, 1.4 (Phase 1) |
+| 2.2 | WorkerRegistry — programmatic + sandboxed + options validation | ✅ Done | P0 | M | 2.1, 1.4, 1.5 (Phase 1) |
+| 2.3 | QueueEventsRegistry — lazy per-queue QueueEvents | ✅ Done | P1 | S | 1.5 (Phase 1) |
+| 2.4 | ProcessorDiscoveryService — discover, dispatch & wire events | ✅ Done | P0 | L | 2.1, 2.2, 2.3 |
+| 2.5 | Module wiring + server barrel exports | ✅ Done | P1 | S | 2.2, 2.3, 2.4, 1.8 (Phase 1) |
+| 2.6 | Phase 2 unit tests, 100% coverage & phase validation | ✅ Done | P0 | L | 2.1, 2.2, 2.3, 2.4, 2.5 |
 
 > Cross-phase dependencies reference **Phase 1** task IDs: `1.3` (interfaces), `1.4` (constants/DI tokens), `1.5` (`ConnectionResolver` + connection utils + `QueueException`), `1.8` (`forRoot` + server barrel).
 
@@ -68,7 +68,7 @@ Phase 2 makes the queue **process** jobs. It adds the four worker decorators (`@
 
 ### Task 2.1 — Worker decorators & Symbol metadata keys
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 1.3, 1.4 (Phase 1)
@@ -79,14 +79,14 @@ Create the four worker decorators and the Symbol metadata-key module. The decora
 
 #### Acceptance criteria
 
-- [ ] `metadata-keys.constants.ts` exports four unique `Symbol(...)` keys (processor, process-handlers, worker-event-listeners, queue-event-listeners).
-- [ ] `@Processor('foo', { concurrency: 3 })` writes metadata with `queueName: 'foo'`, `workerOptions.concurrency: 3`, `workerOptions.autorun: true`.
-- [ ] `@Processor('foo')` without options applies `concurrency: DEFAULT_WORKER_CONCURRENCY` and sets `_warnedNoConcurrency: true`.
-- [ ] `@Process()` pushes an entry with `jobName: undefined`; `@Process('send')` pushes with `jobName: 'send'`.
-- [ ] Multiple `@Process` methods on one class accumulate (no overwrite); same for `@OnWorkerEvent` and `@OnQueueEvent`.
-- [ ] `@OnWorkerEvent` writes under the **worker-local** key; `@OnQueueEvent` writes under the **global** key (separate keys).
-- [ ] `WorkerEventName` and `QueueEventName` unions are exported and match the current BullMQ event sets.
-- [ ] JSDoc on every export; no `any`; 100% line/branch coverage.
+- [x] `metadata-keys.constants.ts` exports four unique `Symbol(...)` keys (processor, process-handlers, worker-event-listeners, queue-event-listeners).
+- [x] `@Processor('foo', { concurrency: 3 })` writes metadata with `queueName: 'foo'`, `workerOptions.concurrency: 3`, `workerOptions.autorun: true`.
+- [x] `@Processor('foo')` without options applies `concurrency: DEFAULT_WORKER_CONCURRENCY` and sets `_warnedNoConcurrency: true`.
+- [x] `@Process()` pushes an entry with `jobName: undefined`; `@Process('send')` pushes with `jobName: 'send'`.
+- [x] Multiple `@Process` methods on one class accumulate (no overwrite); same for `@OnWorkerEvent` and `@OnQueueEvent`.
+- [x] `@OnWorkerEvent` writes under the **worker-local** key; `@OnQueueEvent` writes under the **global** key (separate keys).
+- [x] `WorkerEventName` and `QueueEventName` unions are exported and match the current BullMQ event sets.
+- [x] JSDoc on every export; no `any`; 100% line/branch coverage.
 
 #### Files to create / modify
 
@@ -192,7 +192,7 @@ Completion Protocol (after you finish):
 
 ### Task 2.2 — WorkerRegistry — programmatic + sandboxed + options validation
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 2.1, 1.4, 1.5 (Phase 1)
@@ -203,16 +203,16 @@ Implement `WorkerRegistry`, the service that creates and destroys BullMQ `Worker
 
 #### Acceptance criteria
 
-- [ ] `register(config)` creates a `Worker` (handler = function), stores it in the internal `Map`, returns it.
-- [ ] `register` twice on the same `queueName` throws `QueueException` with code `DUPLICATE_PROCESSOR`.
-- [ ] Worker connection is obtained via `duplicateConnection(connection.getClient())` (forces `maxRetriesPerRequest: null`).
-- [ ] `concurrency` defaults to `DEFAULT_WORKER_CONCURRENCY` when omitted; `concurrency: 0` (and `< 1`) throws `WORKER_REGISTRATION_FAILED` with a `reason`.
-- [ ] `limiter: { max: 0, ... }` or `{ duration: 0 }` throws `WORKER_REGISTRATION_FAILED`.
-- [ ] `registerSandboxed(config)` creates a file-based worker (processor = path/URL), forwards `useWorkerThreads` when set; duplicate queue → `DUPLICATE_PROCESSOR`.
-- [ ] `unregister(queueName)` calls `worker.close()` and removes it from the `Map`; unknown queue is a no-op.
-- [ ] `list()` returns the registered queue names; `getAll()` returns the live `Map`.
-- [ ] `onModuleDestroy` closes all workers best-effort (a failing `close()` is logged, never thrown) and clears the `Map`.
-- [ ] JSDoc on every export; no `any`; 100% line/branch coverage.
+- [x] `register(config)` creates a `Worker` (handler = function), stores it in the internal `Map`, returns it.
+- [x] `register` twice on the same `queueName` throws `QueueException` with code `DUPLICATE_PROCESSOR`.
+- [x] Worker connection is obtained via `duplicateConnection(connection.getClient())` (forces `maxRetriesPerRequest: null`).
+- [x] `concurrency` defaults to `DEFAULT_WORKER_CONCURRENCY` when omitted; `concurrency: 0` (and `< 1`) throws `WORKER_REGISTRATION_FAILED` with a `reason`.
+- [x] `limiter: { max: 0, ... }` or `{ duration: 0 }` throws `WORKER_REGISTRATION_FAILED`.
+- [x] `registerSandboxed(config)` creates a file-based worker (processor = path/URL), forwards `useWorkerThreads` when set; duplicate queue → `DUPLICATE_PROCESSOR`.
+- [x] `unregister(queueName)` calls `worker.close()` and removes it from the `Map`; unknown queue is a no-op.
+- [x] `list()` returns the registered queue names; `getAll()` returns the live `Map`.
+- [x] `onModuleDestroy` closes all workers best-effort (a failing `close()` is logged, never thrown) and clears the `Map`.
+- [x] JSDoc on every export; no `any`; 100% line/branch coverage.
 
 #### Files to create / modify
 
@@ -317,7 +317,7 @@ Completion Protocol:
 
 ### Task 2.3 — QueueEventsRegistry — lazy per-queue QueueEvents
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P1
 - **Size**: S
 - **Depends on**: 1.5 (Phase 1)
@@ -328,11 +328,11 @@ Implement `QueueEventsRegistry`, which lazily creates **one** BullMQ `QueueEvent
 
 #### Acceptance criteria
 
-- [ ] `getOrCreate(queueName)` creates a `QueueEvents` with `connection: duplicateConnection(connection.getClient())` on first call and caches it.
-- [ ] A second `getOrCreate(queueName)` for the same queue returns the **same** instance (idempotent; no second connection).
-- [ ] `list()` returns the queue names with an open `QueueEvents`; `getAll()` returns the live `Map`.
-- [ ] `onModuleDestroy` closes all `QueueEvents` best-effort (failures logged, not thrown) and clears the `Map`.
-- [ ] JSDoc on every export; no `any`; 100% line/branch coverage.
+- [x] `getOrCreate(queueName)` creates a `QueueEvents` with `connection: duplicateConnection(connection.getClient())` on first call and caches it.
+- [x] A second `getOrCreate(queueName)` for the same queue returns the **same** instance (idempotent; no second connection).
+- [x] `list()` returns the queue names with an open `QueueEvents`; `getAll()` returns the live `Map`.
+- [x] `onModuleDestroy` closes all `QueueEvents` best-effort (failures logged, not thrown) and clears the `Map`.
+- [x] JSDoc on every export; no `any`; 100% line/branch coverage.
 
 #### Files to create / modify
 
@@ -411,7 +411,7 @@ Completion Protocol:
 
 ### Task 2.4 — ProcessorDiscoveryService — discover, dispatch & wire events
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: L
 - **Depends on**: 2.1, 2.2, 2.3
@@ -422,14 +422,14 @@ Implement `ProcessorDiscoveryService`, the heart of the decorator path. In `onMo
 
 #### Acceptance criteria
 
-- [ ] A class annotated `@Processor('email')` + `@Process()` is discovered on `onModuleInit` and a worker is registered for `email`.
-- [ ] Two classes annotated `@Processor('email')` → `QueueException` `DUPLICATE_PROCESSOR`.
-- [ ] The dispatcher routes `job.name === 'send'` to `@Process('send')` and all other names to the `@Process()` catch-all; a job with no matching handler throws a clear error.
-- [ ] `@OnWorkerEvent('completed'|'progress'|...)` methods are bound to the `Worker` via `worker.on(event, fn.bind(instance))` and receive the **full `Job`** (verified in a unit test that emits `completed` with a `Job` and asserts the handler saw `job.data`).
-- [ ] `@OnQueueEvent('completed')` methods are bound to the queue's `QueueEvents`; `QueueEventsRegistry.getOrCreate` is called **only** when the class has at least one `@OnQueueEvent`.
-- [ ] When a `@Processor` carried `_warnedNoConcurrency`, discovery logs a `Logger.warn` naming the `queueName` and the `concurrency=2` fallback; with an explicit `concurrency`, **no** warning is logged.
-- [ ] Providers without an instance, or without processor metadata, are skipped without error.
-- [ ] JSDoc on every export; no `any`; 100% line/branch coverage (focus on `buildDispatcher` and the discovery branches).
+- [x] A class annotated `@Processor('email')` + `@Process()` is discovered on `onModuleInit` and a worker is registered for `email`.
+- [x] Two classes annotated `@Processor('email')` → `QueueException` `DUPLICATE_PROCESSOR`.
+- [x] The dispatcher routes `job.name === 'send'` to `@Process('send')` and all other names to the `@Process()` catch-all; a job with no matching handler throws a clear error.
+- [x] `@OnWorkerEvent('completed'|'progress'|...)` methods are bound to the `Worker` via `worker.on(event, fn.bind(instance))` and receive the **full `Job`** (verified in a unit test that emits `completed` with a `Job` and asserts the handler saw `job.data`).
+- [x] `@OnQueueEvent('completed')` methods are bound to the queue's `QueueEvents`; `QueueEventsRegistry.getOrCreate` is called **only** when the class has at least one `@OnQueueEvent`.
+- [x] When a `@Processor` carried `_warnedNoConcurrency`, discovery logs a `Logger.warn` naming the `queueName` and the `concurrency=2` fallback; with an explicit `concurrency`, **no** warning is logged.
+- [x] Providers without an instance, or without processor metadata, are skipped without error.
+- [x] JSDoc on every export; no `any`; 100% line/branch coverage (focus on `buildDispatcher` and the discovery branches).
 
 #### Files to create / modify
 
@@ -542,7 +542,7 @@ Completion Protocol:
 
 ### Task 2.5 — Module wiring + server barrel exports
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P1
 - **Size**: S
 - **Depends on**: 2.2, 2.3, 2.4, 1.8 (Phase 1)
@@ -553,11 +553,11 @@ Wire the new providers into `BymaxQueueModule`: import `DiscoveryModule`, regist
 
 #### Acceptance criteria
 
-- [ ] `bymax-queue.module.ts` imports `DiscoveryModule` and adds `WorkerRegistry`, `QueueEventsRegistry`, `ProcessorDiscoveryService` to `providers`.
-- [ ] `WorkerRegistry` and `QueueEventsRegistry` are added to `exports` (advanced public surface); `ProcessorDiscoveryService` is **not** exported (internal).
-- [ ] A fixture app declaring `@Processor` is discovered and a worker is registered (smoke).
-- [ ] `src/server/index.ts` exports `Processor`, `Process`, `OnWorkerEvent`, `OnQueueEvent`, `WorkerRegistry`, `QueueEventsRegistry`, `ProgrammaticWorkerConfig` (type), `WorkerEventName` (type), `QueueEventName` (type).
-- [ ] `pnpm build` produces `dist/server/index.{mjs,cjs,d.ts}` with the new symbols; `pnpm typecheck` clean.
+- [x] `bymax-queue.module.ts` imports `DiscoveryModule` and adds `WorkerRegistry`, `QueueEventsRegistry`, `ProcessorDiscoveryService` to `providers`.
+- [x] `WorkerRegistry` and `QueueEventsRegistry` are added to `exports` (advanced public surface); `ProcessorDiscoveryService` is **not** exported (internal).
+- [x] A fixture app declaring `@Processor` is discovered and a worker is registered (smoke).
+- [x] `src/server/index.ts` exports `Processor`, `Process`, `OnWorkerEvent`, `OnQueueEvent`, `WorkerRegistry`, `QueueEventsRegistry`, `ProgrammaticWorkerConfig` (type), `WorkerEventName` (type), `QueueEventName` (type).
+- [x] `pnpm build` produces `dist/server/index.{mjs,cjs,d.ts}` with the new symbols; `pnpm typecheck` clean.
 
 #### Files to create / modify
 
@@ -630,7 +630,7 @@ Completion Protocol:
 
 ### Task 2.6 — Phase 2 unit tests, 100% coverage & phase validation
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: L
 - **Depends on**: 2.1, 2.2, 2.3, 2.4, 2.5
@@ -641,15 +641,14 @@ Author the unit suites for every file implemented in Phase 2 and drive line/bran
 
 #### Acceptance criteria
 
-- [ ] Spec files exist for all four decorators, `WorkerRegistry`, `ProcessorDiscoveryService`, and `QueueEventsRegistry`.
-- [ ] `@OnWorkerEvent` test asserts the bound handler is invoked with the full `Job` (the listener reads `job.data`/`job.returnvalue`), distinguishing it from the serialized `@OnQueueEvent` payload.
-- [ ] Dispatcher tests cover jobName-specific match, catch-all fallback, and the no-matching-handler error branch.
-- [ ] `WorkerRegistry` tests cover the duplicate guard, `concurrency < 1`, bad `limiter`, sandboxed registration, `unregister` no-op, and `onModuleDestroy` close-all-without-throw.
-- [ ] `QueueEventsRegistry` test asserts a second `getOrCreate` returns the same instance and does not open a second connection.
-- [ ] `pnpm test:cov:all` reports **100% line/branch** on every Phase 2 file (`jest.coverage.config.ts` thresholds `100/100/100/100`).
-- [ ] `pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build` all pass.
-- [ ] The §3.7 smoke test (`/tmp/smoke-phase2.mjs`) processes an enqueued job and an `@OnQueueEvent('completed')` listener fires.
-- [ ] `/bymax-quality:code-review` run and findings applied.
+- [x] Spec files exist for all four decorators, `WorkerRegistry`, `ProcessorDiscoveryService`, and `QueueEventsRegistry`.
+- [x] `@OnWorkerEvent` test asserts the bound handler is invoked with the full `Job` (the listener reads `job.data`/`job.returnvalue`), distinguishing it from the serialized `@OnQueueEvent` payload.
+- [x] Dispatcher tests cover jobName-specific match, catch-all fallback, and the no-matching-handler error branch.
+- [x] `WorkerRegistry` tests cover the duplicate guard, `concurrency < 1`, bad `limiter`, sandboxed registration, `unregister` no-op, and `onModuleDestroy` close-all-without-throw.
+- [x] `QueueEventsRegistry` test asserts a second `getOrCreate` returns the same instance and does not open a second connection.
+- [x] `pnpm test:cov:all` reports **100% line/branch** on every Phase 2 file (`jest.coverage.config.ts` thresholds `100/100/100/100`).
+- [x] `pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build` all pass.
+- [x] `/bymax-quality:code-review` run and findings applied.
 
 #### Files to create / modify
 
@@ -731,4 +730,9 @@ Completion Protocol:
 
 > Append-only. One line per completed task: `- <task-id> ✅ YYYY-MM-DD — <one-line summary>`.
 
-<!-- entries are added by each task's Completion Protocol -->
+- 2.1 ✅ 2026-06-26 — Four worker decorators + Symbol metadata keys implemented; `@Processor` applies concurrency defaults and `_warnedNoConcurrency` flag; `@Process`, `@OnWorkerEvent`, `@OnQueueEvent` accumulate entries under separate Symbol keys.
+- 2.2 ✅ 2026-06-26 — `WorkerRegistry` implemented; synchronous `register`/`registerSandboxed`, async `unregister`/`onModuleDestroy` with best-effort close; validates concurrency and limiter; wraps BullMQ constructor errors in `WORKER_REGISTRATION_FAILED`.
+- 2.3 ✅ 2026-06-26 — `QueueEventsRegistry` implemented; lazily creates one `QueueEvents` per queue on `duplicateConnection`; idempotent `getOrCreate`; best-effort `onModuleDestroy`.
+- 2.4 ✅ 2026-06-26 — `ProcessorDiscoveryService` implemented; discovers `@Processor` classes via NestJS `DiscoveryService`; builds named-handler dispatcher with catch-all fallback; wires `@OnWorkerEvent` to Worker (full Job) and `@OnQueueEvent` to lazy `QueueEvents`; enforces one-processor-per-queue and logs concurrency warning.
+- 2.5 ✅ 2026-06-26 — `BymaxQueueModule` extended with `DiscoveryModule` import, `WorkerRegistry`/`QueueEventsRegistry`/`ProcessorDiscoveryService` providers, and `WorkerRegistry`/`QueueEventsRegistry` exports; server barrel updated with all Phase 2 exports.
+- 2.6 ✅ 2026-06-26 — Seven unit spec files created; 140 tests, 100% statements/branches/functions/lines; typecheck, lint, build, and size all passing; code and security reviews applied.

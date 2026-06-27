@@ -18,6 +18,17 @@ export {
 // Public services
 export { QueueService } from './services/queue.service'
 export { ConnectionResolver } from './services/connection-resolver.service'
+export { WorkerRegistry } from './services/worker-registry.service'
+export type { ProgrammaticWorkerConfig, SandboxedWorkerConfig } from './services/worker-registry.service'
+export { QueueEventsRegistry } from './services/queue-events-registry.service'
+
+// Processor decorators
+export { Processor } from './decorators/processor.decorator'
+export { Process } from './decorators/process.decorator'
+export { OnWorkerEvent } from './decorators/on-worker-event.decorator'
+export type { WorkerEventName } from './decorators/on-worker-event.decorator'
+export { OnQueueEvent } from './decorators/on-queue-event.decorator'
+export type { QueueEventName } from './decorators/on-queue-event.decorator'
 
 // Public interface types
 export type {
@@ -43,6 +54,7 @@ export { QUEUE_ERROR_CODES, QUEUE_ERROR_MESSAGES } from './constants/error-codes
 export type { QueueErrorCode } from './constants/error-codes'
 export {
   DEFAULT_WORKER_CONCURRENCY,
+  MAX_WORKER_CONCURRENCY,
   DEFAULT_JOB_OPTIONS,
   DEFAULT_METRICS_CACHE_TTL_MS,
   DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS,

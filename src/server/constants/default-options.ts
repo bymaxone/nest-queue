@@ -9,6 +9,13 @@ import type { JobsOptions } from 'bullmq'
 export const DEFAULT_WORKER_CONCURRENCY = 2 as const
 
 /**
+ * Maximum allowed concurrency per Worker. Values above this ceiling exhaust the
+ * event loop, heap, and lock-renewal timers before providing meaningful throughput
+ * gains. Single-digit hundreds are typical for I/O-bound workloads (BullMQ docs).
+ */
+export const MAX_WORKER_CONCURRENCY = 1_000 as const
+
+/**
  * Default options applied to every job enqueued through the service. The
  * `removeOnFail.count` cap bounds Redis memory growth under failure storms.
  */
