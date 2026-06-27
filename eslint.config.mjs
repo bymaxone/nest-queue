@@ -15,6 +15,7 @@ export default tseslint.config(
       'coverage/**',
       'node_modules/**',
       '.stryker-tmp/**',
+      'examples/**',
       '**/*.mjs',
       '**/*.cjs',
       '*.config.ts',

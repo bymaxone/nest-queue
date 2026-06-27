@@ -17,8 +17,8 @@ Tasks live **one file per phase** in this folder (`docs/tasks/phase-NN-<slug>.md
 | 2 | [`phase-02-workers.md`](./phase-02-workers.md) | 6 / 6 | ✅ Done |
 | 3 | [`phase-03-flows-schedulers-metrics.md`](./phase-03-flows-schedulers-metrics.md) | 6 / 6 | ✅ Done |
 | 4 | [`phase-04-async-shutdown-e2e.md`](./phase-04-async-shutdown-e2e.md) | 7 / 7 | ✅ Done |
-| 5 | [`phase-05-release.md`](./phase-05-release.md) | 0 / 8 | 📋 ToDo |
-| | **Total** | **27 / 35** | ✅ 77% |
+| 5 | [`phase-05-release.md`](./phase-05-release.md) | 8 / 8 | ✅ Done |
+| | **Total** | **35 / 35** | ✅ 100% |
 
 ---
 

@@ -1,0 +1,29 @@
+{
+  "name": "nest-queue-example",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Dogfood example app for @bymax-one/nest-queue",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "eslint src",
+    "start": "node --import reflect-metadata/register --loader ts-node/esm src/main.ts"
+  },
+  "dependencies": {
+    "@bymax-one/nest-queue": "workspace:*",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-fastify": "^11.0.0",
+    "bullmq": "^5.16.0",
+    "ioredis": "^5.0.0",
+    "reflect-metadata": "^0.2.0",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "eslint": "^9.13.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.0"
+  }
+}
