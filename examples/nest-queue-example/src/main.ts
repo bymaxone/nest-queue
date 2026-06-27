@@ -6,7 +6,10 @@
 
 import 'reflect-metadata'
 import { NestFactory } from '@nestjs/core'
+import { Logger } from '@nestjs/common'
 import { AppModule } from './app.module.js'
+
+const logger = new Logger('Bootstrap')
 
 /**
  * Bootstrap the NestJS application.
@@ -16,7 +19,7 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule)
   const port = process.env['PORT'] ? Number(process.env['PORT']) : 3000
   await app.listen(port)
-  console.log(`Application listening on http://localhost:${port}`)
+  logger.log(`Application listening on http://localhost:${port}`)
 }
 
 void bootstrap()

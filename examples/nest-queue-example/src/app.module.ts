@@ -5,7 +5,7 @@
  */
 
 import { Module } from '@nestjs/common'
-import type { Redis } from 'ioredis'
+import { Redis } from 'ioredis'
 import { BymaxQueueModule } from '@bymax-one/nest-queue'
 import { RedisModule, QUEUE_REDIS_CLIENT } from './redis.module.js'
 import { EmailProcessor } from './email.processor.js'
@@ -33,14 +33,18 @@ import { HealthController } from './health.controller.js'
     BymaxQueueModule.forRootAsync({
       inject: [QUEUE_REDIS_CLIENT],
       useFactory: (...args: unknown[]) => {
-        // The injected value is the dedicated ioredis client from RedisModule.
-        const queueRedis = args[0] as Redis
+        const queueRedis = args[0]
+        if (!(queueRedis instanceof Redis)) {
+          throw new TypeError(
+            `Expected Redis instance from QUEUE_REDIS_CLIENT, got ${typeof queueRedis}`,
+          )
+        }
         return {
           connection: { client: queueRedis },
           isGlobal: true,
           flows: { enabled: true },
           metrics: { enabled: true, cacheTtlMs: 5_000 },
-          worker: { drainTimeoutMs: 30_000 },
+          shutdown: { drainTimeoutMs: 30_000 },
         }
       },
     }),

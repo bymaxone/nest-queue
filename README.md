@@ -375,7 +375,7 @@ Tune `drainTimeoutMs` when jobs may run longer than 30 s:
 ```typescript
 BymaxQueueModule.forRoot({
   connection: { url: process.env.REDIS_URL },
-  worker: { drainTimeoutMs: 60_000 },
+  shutdown: { drainTimeoutMs: 60_000 },
 })
 ```
 
