@@ -138,9 +138,10 @@ describe('ProcessorDiscoveryService.onModuleInit', () => {
       svc.onModuleInit()
     } catch (err) {
       const qe = err as QueueException
-      expect((qe.getResponse() as { error: { code: string } }).error.code).toBe(
-        QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR,
-      )
+      const body = qe.getResponse() as { error: { code: string; details: { queueName: string } } }
+      expect(body.error.code).toBe(QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR)
+      // The exception must carry the conflicting queue name so operators can locate it.
+      expect(body.error.details.queueName).toBe('email')
     }
   })
 
@@ -167,6 +168,11 @@ describe('ProcessorDiscoveryService.onModuleInit', () => {
     )
     svc.onModuleInit()
     expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('email'))
+    // The warning must state the fallback value and the production-tuning advice.
+    expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('defaulting to concurrency='))
+    expect(loggerWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('explicit concurrency for production workloads'),
+    )
     loggerWarnSpy.mockRestore()
   })
 
@@ -347,6 +353,20 @@ describe('ProcessorDiscoveryService.buildDispatcher', () => {
     const dispatcher = bareService().buildDispatcher(instance, handlers)
     const job = { name: 'unmatched-job' } as unknown as Job
     await expect(dispatcher(job)).rejects.toThrow(/unmatched-job/)
+  })
+
+  it('does not route an unrelated job name to a named handler (no catch-all)', async () => {
+    // A named handler must fire ONLY for its own job name; a different name with no
+    // catch-all must reject — proving the named branch is not treated as a catch-all.
+    const namedSpy = jest.fn<Promise<void>, [Job]>().mockResolvedValue(undefined)
+    const instance: Record<string | symbol, unknown> = { onSend: namedSpy }
+    const handlers = [{ jobName: 'send', methodKey: 'onSend' }]
+    const dispatcher = bareService().buildDispatcher(instance, handlers)
+    const job = { name: 'other' } as unknown as Job
+
+    // The rejection message must guide the developer to add a matching/catch-all handler.
+    await expect(dispatcher(job)).rejects.toThrow(/add a matching @Process\("name"\) or a catch-all/)
+    expect(namedSpy).not.toHaveBeenCalled()
   })
 
   it('skips a handler entry whose method key is not a function', async () => {

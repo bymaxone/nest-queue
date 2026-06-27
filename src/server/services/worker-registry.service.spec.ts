@@ -252,6 +252,15 @@ describe('WorkerRegistry.registerSandboxed', () => {
     expect(registry.list()).toContain('sandboxed')
   })
 
+  it('stores the worker and its duplicated connection in the registry entry', () => {
+    // A successful sandboxed registration must track BOTH the worker and the
+    // connection it opened, so the shutdown orchestrator can close each of them.
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
+    const worker = registry.registerSandboxed({ queueName: 'sandboxed', processorFile: '/tmp/p.js' })
+    expect(registry.getAll().get('sandboxed')).toBe(worker)
+    expect(registry.getConnections().get('sandboxed')).toBeDefined()
+  })
+
   it('throws DUPLICATE_PROCESSOR for duplicate sandboxed registrations', () => {
     // Duplicate guard applies to sandboxed registrations too.
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())
@@ -631,6 +640,20 @@ describe('WorkerRegistry — validation boundaries and error details', () => {
     const details = detailsOf(() => registry.register({ queueName: 'email', handler: noopHandler }))
     expect(details.queueName).toBe('email')
     expect(details.cause).toBe('boom')
+  })
+
+  it('reports the queue name and cause when the sandboxed Worker constructor fails', () => {
+    // The sandboxed path must surface the same structured diagnostics as register().
+    const { Worker: MockWorker } = jest.requireMock<{ Worker: jest.Mock }>('bullmq')
+    MockWorker.mockImplementationOnce(() => {
+      throw new Error('spawn boom')
+    })
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
+    const details = detailsOf(() =>
+      registry.registerSandboxed({ queueName: 'sb', processorFile: '/tmp/p.js' }),
+    )
+    expect(details.queueName).toBe('sb')
+    expect(details.cause).toBe('spawn boom')
   })
 
   it('accepts every allowed sandboxed extension and rejects others with a reason', () => {

@@ -174,6 +174,19 @@ describe('QueueLifecycle.onModuleDestroy — happy path', () => {
     await expect(lifecycle.onModuleDestroy()).resolves.toBeUndefined()
     expect(connectionDestroy).toHaveBeenCalledTimes(1)
   })
+
+  it('reports the true elapsed time (end minus start) in the completion log', async () => {
+    // The summary measures `Date.now() - start`; with a frozen clock the elapsed
+    // window is exactly 0ms, which a sign/operator flip on the subtraction breaks.
+    jest.useFakeTimers()
+    jest.setSystemTime(1_000)
+    const { lifecycle } = makeLifecycle({})
+
+    await lifecycle.onModuleDestroy()
+
+    expect(logSpy).toHaveBeenCalledWith('Queue shutdown complete in 0ms (forced 0 worker(s))')
+    jest.useRealTimers()
+  })
 })
 
 describe('QueueLifecycle.onModuleDestroy — bounded drain', () => {
@@ -201,9 +214,34 @@ describe('QueueLifecycle.onModuleDestroy — bounded drain', () => {
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining(QUEUE_ERROR_CODES.SHUTDOWN_TIMEOUT_EXCEEDED),
     )
+    // The warning must name the offending worker and quote the elapsed drain budget…
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('"slow"'))
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('5000ms drain budget'))
+    // …and explain the at-least-once consequence (the job stalls and is retried).
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('stalled and is retried'))
     expect(connectionDestroy).toHaveBeenCalledTimes(1)
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('forced 1 worker(s)'))
     jest.useRealTimers()
+  })
+
+  it('clears the drain timer after a graceful close completes', async () => {
+    // The bounded-drain timer must be cleared on the happy path so no stray timer
+    // survives a worker that closed within budget (no leaked handle, no late reject).
+    const setSpy = jest.spyOn(global, 'setTimeout')
+    const clearSpy = jest.spyOn(global, 'clearTimeout')
+    const workerClose = jest.fn<Promise<void>, []>().mockResolvedValue(undefined)
+    const { lifecycle } = makeLifecycle({
+      workers: new Map([['email', makeWorker(workerClose)]]),
+    })
+
+    await lifecycle.onModuleDestroy()
+
+    // Exactly one drain timer is armed; it must be cleared with the same handle.
+    expect(setSpy).toHaveBeenCalledTimes(1)
+    const timer = setSpy.mock.results[0]?.value as ReturnType<typeof setTimeout>
+    expect(clearSpy).toHaveBeenCalledWith(timer)
+    setSpy.mockRestore()
+    clearSpy.mockRestore()
   })
 
   it('treats a rejected graceful close as a forced worker without timing out', async () => {

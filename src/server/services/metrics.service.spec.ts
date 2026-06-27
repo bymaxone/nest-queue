@@ -156,7 +156,7 @@ describe('MetricsService — invalidate', () => {
     await service.get('a')
     await service.get('b')
 
-    const bCalls = qs.getMetrics.mock.calls.filter((c) => c[0] === 'b')
+    const bCalls = qs.getMetrics.mock.calls.filter((c: unknown[]) => c[0] === 'b')
     expect(bCalls).toHaveLength(1)
     expect(qs.getMetrics).toHaveBeenCalledTimes(3)
   })

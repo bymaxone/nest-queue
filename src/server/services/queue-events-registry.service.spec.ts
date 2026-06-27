@@ -50,6 +50,17 @@ describe('QueueEventsRegistry.getOrCreate', () => {
     expect(createdQueueEvents).toHaveLength(1)
   })
 
+  it('constructs QueueEvents with the duplicated connection', () => {
+    // The QueueEvents must be bound to the library-duplicated connection (blocking
+    // SUBSCRIBE needs maxRetriesPerRequest: null), not an empty/default options bag.
+    const { QueueEvents: MockQueueEvents } = jest.requireMock<{ QueueEvents: jest.Mock }>('bullmq')
+    const redis = fakeRedis()
+    const registry = new QueueEventsRegistry(fakeConnection(redis))
+    registry.getOrCreate('email')
+    const dup = (redis.duplicate as jest.Mock).mock.results[0]!.value as unknown
+    expect(MockQueueEvents).toHaveBeenCalledWith('email', { connection: dup })
+  })
+
   it('disconnects the duplicated connection when QueueEvents constructor throws (no leak)', () => {
     // A failed QueueEvents construction must not leave a dangling Redis connection.
     const { QueueEvents: MockQueueEvents } = jest.requireMock<{

@@ -11,8 +11,8 @@ high mutation score on its critical logic.
   (`@stryker-mutator/jest-runner`), driven by `jest.stryker.config.ts`.
 - **Coverage analysis:** `perTest` — only the tests covering a mutant are run,
   keeping the suite fast without losing precision.
-- **Concurrency:** bounded (2 workers) to stay memory-safe; the module graph is
-  duplicated per worker.
+- **Concurrency:** pinned to `1` to stay memory-safe (the module graph is
+  duplicated per worker), with `NODE_OPTIONS=--max-old-space-size=4096` as a guard.
 - **Config:** `stryker.config.json`.
 
 ## Thresholds

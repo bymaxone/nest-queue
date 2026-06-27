@@ -26,6 +26,7 @@ import type {
   BymaxQueueModuleOptions,
   BymaxQueueOptionsFactory,
 } from './interfaces/queue-module-options.interface'
+import type { ResolvedQueueOptions } from './config/resolved-options'
 
 // Booting the module under test must never open a real Redis connection — even
 // when a mutated default flips a flag (e.g. enabling flows). BullMQ and ioredis
@@ -85,6 +86,8 @@ describe('BymaxQueueModule.forRoot', () => {
     expect(findProvider(providers, ConnectionResolver)).toBeDefined()
     expect(findProvider(providers, BYMAX_QUEUE_OPTIONS)).toBeDefined()
     expect(findProvider(providers, BYMAX_QUEUE_RESOLVED_OPTIONS)).toBeDefined()
+    // DiscoveryModule must be imported so processor discovery can scan providers.
+    expect(dynamic.imports).toEqual([DiscoveryModule])
   })
 
   it('exports the public services and tokens', () => {
@@ -200,6 +203,8 @@ describe('BymaxQueueModule.forRoot', () => {
     const dynamic = BymaxQueueModule.forRoot(baseOptions)
 
     expect(findProvider(dynamic.providers ?? [], QueueService)).toBeDefined()
+    // The missing-providers fallback must spread an EMPTY array — never a stray value.
+    expect(dynamic.providers?.some((provider) => typeof provider === 'string')).toBe(false)
     spy.mockRestore()
   })
 })
@@ -277,6 +282,19 @@ describe('BymaxQueueModule.forRootAsync', () => {
     const metrics = findProvider(dynamic.providers ?? [], MetricsService) as FactoryProvider
     expect(flow.inject).toEqual([ConnectionResolver, BYMAX_QUEUE_RESOLVED_OPTIONS])
     expect(metrics.inject).toEqual([QueueService, BYMAX_QUEUE_RESOLVED_OPTIONS])
+
+    // The factories must construct the real services from the injected resolved options,
+    // not collapse to a no-op that returns undefined.
+    const resolved = {
+      flows: { enabled: true },
+      metrics: { enabled: true, cacheTtlMs: 5000 },
+    } as unknown as ResolvedQueueOptions
+    const resolverStub = { getClient: jest.fn() } as unknown as ConnectionResolver
+    const queueServiceStub = {} as unknown as QueueService
+    const flowFactory = flow.useFactory as (c: ConnectionResolver, r: ResolvedQueueOptions) => unknown
+    const metricsFactory = metrics.useFactory as (q: QueueService, r: ResolvedQueueOptions) => unknown
+    expect(flowFactory(resolverStub, resolved)).toBeInstanceOf(FlowService)
+    expect(metricsFactory(queueServiceStub, resolved)).toBeInstanceOf(MetricsService)
   })
 
   it('instantiates the full provider graph from a useFactory', async () => {
@@ -344,6 +362,8 @@ describe('BymaxQueueModule.forRootAsync', () => {
 
     expect(findProvider(dynamic.providers ?? [], QueueService)).toBeDefined()
     expect(dynamic.imports).toEqual([DiscoveryModule])
+    // The missing-providers fallback must spread an EMPTY array — never a stray value.
+    expect(dynamic.providers?.some((provider) => typeof provider === 'string')).toBe(false)
     spy.mockRestore()
   })
 })

@@ -116,6 +116,10 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     })
     expect(resolver.getMode()).toBe('mode-b-owned')
     expect(resolver.isOwned()).toBe(true)
+    // The ready handler resolves the race; cleanup must then detach BOTH listeners
+    // so the unused 'error' subscription is not leaked once the client is ready.
+    expect(client.listenerCount('ready')).toBe(0)
+    expect(client.listenerCount('error')).toBe(0)
   })
 
   it('opens a client from options only', async () => {
@@ -167,6 +171,10 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     client.emit('error', boom)
 
     await expect(init).rejects.toBe(boom)
+    // The error handler rejects the race; cleanup must then detach BOTH listeners
+    // so the unused 'ready' subscription is not leaked once startup has failed.
+    expect(client.listenerCount('ready')).toBe(0)
+    expect(client.listenerCount('error')).toBe(0)
   })
 
   it('quits the owned client on destroy', async () => {

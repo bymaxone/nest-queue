@@ -559,7 +559,9 @@ describe('QueueService — bulk and scheduler hardening', () => {
     service.getOrCreateQueue('email')
     queueInstances[0]?.addBulk.mockResolvedValue([])
     await service.enqueueBulk('email', [{ name: 'b', data: { y: 2 } }])
-    const sent = (queueInstances[0]?.addBulk.mock.calls[0]?.[0] as Record<string, unknown>[])[0]
+    const bulkCalls = (queueInstances[0]?.addBulk.mock.calls ?? []) as [Record<string, unknown>[]][]
+    const sent = bulkCalls[0]?.[0]?.[0]
+    expect(sent).toBeDefined()
     expect(Object.prototype.hasOwnProperty.call(sent, 'opts')).toBe(false)
   })
 

@@ -112,9 +112,9 @@ describe('validateJobSchedulerOptions — error reasons and boundaries', () => {
     expect(reasonOf({} as unknown as JobSchedulerRepeatOptions)).toBe(
       'exactly one of pattern | every is required',
     )
-    expect(
-      reasonOf({ pattern: '0 3 * * *', every: 5000 } as unknown as JobSchedulerRepeatOptions),
-    ).toBe('exactly one of pattern | every is required')
+    expect(reasonOf({ pattern: '0 3 * * *', every: 5000 })).toBe(
+      'exactly one of pattern | every is required',
+    )
   })
 
   it('explains an invalid interval', () => {
