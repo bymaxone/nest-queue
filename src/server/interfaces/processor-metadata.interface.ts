@@ -11,6 +11,14 @@ export interface ProcessorMetadata {
   queueName: string
   /** Worker tuning options for the queue. */
   workerOptions: WorkerOptions
+  /**
+   * Internal flag set when the caller omitted `concurrency` on the decorator.
+   * The discovery service logs a warning (naming the queue and the fallback value)
+   * at bootstrap time; the decorator itself must never log.
+   *
+   * @internal
+   */
+  _warnedNoConcurrency?: boolean
 }
 
 /** Metadata attached by the process-handler decorator on a handler method. */

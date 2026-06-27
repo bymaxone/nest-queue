@@ -1,7 +1,8 @@
 /**
  * @fileoverview The root dynamic module, built on ConfigurableModuleBuilder.
- * Registers the connection resolver, queue service, and option tokens, mapping
- * `isGlobal` to `DynamicModule.global` via `setExtras` (no `@Global`).
+ * Registers the connection resolver, queue service, worker registry, queue-events
+ * registry, and the processor discovery service. Maps `isGlobal` to
+ * `DynamicModule.global` via `setExtras` (no hand-written `@Global`).
  * @layer server/module
  */
 
@@ -11,6 +12,7 @@ import {
   Module,
   type Provider,
 } from '@nestjs/common'
+import { DiscoveryModule } from '@nestjs/core'
 import type { Redis } from 'ioredis'
 import type { BymaxQueueModuleOptions } from './interfaces/queue-module-options.interface'
 import type { QueueConnectionMode } from './interfaces/queue-connection.interface'
@@ -24,6 +26,9 @@ import {
 } from './bymax-queue.constants'
 import { ConnectionResolver } from './services/connection-resolver.service'
 import { QueueService } from './services/queue.service'
+import { WorkerRegistry } from './services/worker-registry.service'
+import { QueueEventsRegistry } from './services/queue-events-registry.service'
+import { ProcessorDiscoveryService } from './services/processor-discovery.service'
 
 /** Generated configurable-module artifacts; `forRoot` is the registration method. */
 export const { ConfigurableModuleClass, MODULE_OPTIONS_TOKEN, OPTIONS_TYPE, ASYNC_OPTIONS_TYPE } =
@@ -45,8 +50,8 @@ export const { ConfigurableModuleClass, MODULE_OPTIONS_TOKEN, OPTIONS_TYPE, ASYN
 export class BymaxQueueModule extends ConfigurableModuleClass {
   /**
    * Synchronous registration. Validates options, resolves defaults, and wires the
-   * connection resolver (initialized via async factory), the queue service, and
-   * the option tokens.
+   * connection resolver (initialized via async factory), the queue service, the
+   * worker registry, the queue-events registry, and the processor discovery service.
    *
    * @param options - Static module options.
    * @returns The configured dynamic module.
@@ -80,14 +85,20 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
         inject: [ConnectionResolver],
       },
       QueueService,
+      WorkerRegistry,
+      QueueEventsRegistry,
+      ProcessorDiscoveryService,
     ]
 
     return {
       ...base,
+      imports: [DiscoveryModule],
       providers,
       exports: [
         QueueService,
         ConnectionResolver,
+        WorkerRegistry,
+        QueueEventsRegistry,
         BYMAX_QUEUE_OPTIONS,
         BYMAX_QUEUE_RESOLVED_OPTIONS,
         BYMAX_QUEUE_REDIS_CLIENT,
