@@ -214,3 +214,64 @@ describe('ConnectionResolver — uninitialized access', () => {
     await expect(resolver.onModuleDestroy()).resolves.toBeUndefined()
   })
 })
+
+/** Read the structured details of a thrown/ rejected QueueException. */
+function detailsOf(err: unknown): Record<string, unknown> {
+  return ((err as QueueException).getResponse() as { error: { details: Record<string, unknown> } })
+    .error.details
+}
+
+describe('ConnectionResolver — exception details', () => {
+  beforeEach(() => {
+    redisConstructor.mockReset()
+  })
+
+  it('reports "not initialized" from getClient and getMode before init', () => {
+    // The defensive accessors carry a precise reason, not a bare error.
+    const resolver = new ConnectionResolver(optionsWith({ url: 'redis://localhost:6379' }))
+    let clientErr: unknown
+    let modeErr: unknown
+    try {
+      resolver.getClient()
+    } catch (err) {
+      clientErr = err
+    }
+    try {
+      resolver.getMode()
+    } catch (err) {
+      modeErr = err
+    }
+    expect(detailsOf(clientErr).reason).toBe('not initialized')
+    expect(detailsOf(modeErr).reason).toBe('not initialized')
+  })
+
+  it('reports the client status when a BYO client is unusable', async () => {
+    // The CONNECTION_INVALID detail surfaces the offending status.
+    const client = new FakeRedis('end', null)
+    const resolver = new ConnectionResolver(optionsWith({ client: asRedis(client) }))
+    try {
+      await resolver.init()
+      throw new Error('expected init to reject')
+    } catch (err) {
+      expect(detailsOf(err).status).toBe('end')
+    }
+  })
+
+  it('reports the configured timeout on CONNECTION_TIMEOUT', async () => {
+    // The timeout detail echoes the configured ready-timeout for diagnosis.
+    jest.useFakeTimers()
+    const client = new FakeRedis('connecting', null)
+    redisConstructor.mockReturnValue(asRedis(client))
+    const resolver = new ConnectionResolver({
+      connection: { url: 'redis://localhost:6379' },
+      connectionReadyTimeoutMs: 1234,
+    })
+    const init = resolver.init()
+    const assertion = init.catch((err: unknown) => {
+      expect(detailsOf(err).timeoutMs).toBe(1234)
+    })
+    jest.advanceTimersByTime(1234)
+    await assertion
+    jest.useRealTimers()
+  })
+})

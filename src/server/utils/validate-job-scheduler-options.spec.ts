@@ -94,3 +94,64 @@ describe('validateJobSchedulerOptions — invalid schedules', () => {
     expect(run({ pattern: '0 3 * * *', endDate: 'not-a-date' })).toThrow(QueueException)
   })
 })
+
+/** Read the failing reason out of a thrown QueueException. */
+function reasonOf(repeat: JobSchedulerRepeatOptions): string {
+  try {
+    validateJobSchedulerOptions(repeat)
+  } catch (err) {
+    return ((err as QueueException).getResponse() as { error: { details: { reason: string } } })
+      .error.details.reason
+  }
+  throw new Error('expected a throw')
+}
+
+describe('validateJobSchedulerOptions — error reasons and boundaries', () => {
+  it('explains a missing or ambiguous schedule', () => {
+    // The reason names the exactly-one-of rule for both shapes.
+    expect(reasonOf({} as unknown as JobSchedulerRepeatOptions)).toBe(
+      'exactly one of pattern | every is required',
+    )
+    expect(
+      reasonOf({ pattern: '0 3 * * *', every: 5000 } as unknown as JobSchedulerRepeatOptions),
+    ).toBe('exactly one of pattern | every is required')
+  })
+
+  it('explains an invalid interval', () => {
+    // A non-positive / non-integer interval reports the positive-integer rule.
+    expect(reasonOf({ every: 0 })).toBe('every must be a positive integer')
+    expect(reasonOf({ every: 1.5 })).toBe('every must be a positive integer')
+  })
+
+  it('explains an invalid endDate', () => {
+    // Both a past and an unparseable endDate report the future-date rule.
+    expect(reasonOf({ every: 5000, endDate: Date.now() - HOUR_MS })).toBe(
+      'endDate must be in the future',
+    )
+    expect(reasonOf({ pattern: '0 3 * * *', endDate: 'not-a-date' })).toBe(
+      'endDate must be in the future',
+    )
+  })
+
+  it('rejects an endDate exactly equal to now (must be strictly in the future)', () => {
+    // The boundary is inclusive of "now" as invalid: endMs <= now must reject.
+    const fixedNow = 1_900_000_000_000
+    const spy = jest.spyOn(Date, 'now').mockReturnValue(fixedNow)
+    try {
+      expect(reasonOf({ every: 5000, endDate: fixedNow })).toBe('endDate must be in the future')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('accepts an endDate one millisecond in the future', () => {
+    // Just past "now" is valid — proving the comparison is not off by one.
+    const fixedNow = 1_900_000_000_000
+    const spy = jest.spyOn(Date, 'now').mockReturnValue(fixedNow)
+    try {
+      expect(run({ every: 5000, endDate: fixedNow + 1 })).not.toThrow()
+    } finally {
+      spy.mockRestore()
+    }
+  })
+})

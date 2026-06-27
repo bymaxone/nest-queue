@@ -27,6 +27,42 @@ import type {
   BymaxQueueOptionsFactory,
 } from './interfaces/queue-module-options.interface'
 
+// Booting the module under test must never open a real Redis connection — even
+// when a mutated default flips a flag (e.g. enabling flows). BullMQ and ioredis
+// are mocked so the provider graph instantiates against inert doubles.
+jest.mock('bullmq', () => ({
+  Queue: jest.fn().mockImplementation(() => ({
+    close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
+  })),
+  Worker: jest.fn().mockImplementation(() => ({
+    close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
+    on: jest.fn(),
+  })),
+  QueueEvents: jest.fn().mockImplementation(() => ({
+    close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
+    on: jest.fn(),
+  })),
+  FlowProducer: jest.fn().mockImplementation(() => ({
+    close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
+  })),
+}))
+
+jest.mock('ioredis', () => ({
+  Redis: jest.fn().mockImplementation(() => ({
+    status: 'ready',
+    options: {},
+    on: jest.fn(),
+    once: jest.fn(),
+    off: jest.fn(),
+    quit: jest.fn<Promise<string>, []>().mockResolvedValue('OK'),
+    disconnect: jest.fn(),
+    duplicate: jest.fn().mockReturnValue({
+      options: { maxRetriesPerRequest: null },
+      disconnect: jest.fn(),
+    }),
+  })),
+}))
+
 /** Test whether a provider targets the given injection token or class. */
 function provides(provider: Provider, token: unknown): boolean {
   return typeof provider === 'function' ? provider === token : provider.provide === token

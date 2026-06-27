@@ -91,6 +91,18 @@ describe('MetricsService — caching', () => {
 
     expect(qs.getMetrics).toHaveBeenCalledTimes(2)
   })
+
+  it('re-fetches at exactly the TTL boundary (expiry is exclusive)', async () => {
+    // At the precise expiry instant the entry is already stale, so it re-fetches.
+    const qs = makeQueueService()
+    const service = makeService(qs)
+
+    await service.get('email')
+    jest.advanceTimersByTime(TTL_MS)
+    await service.get('email')
+
+    expect(qs.getMetrics).toHaveBeenCalledTimes(2)
+  })
 })
 
 describe('MetricsService — getAll', () => {
@@ -131,6 +143,22 @@ describe('MetricsService — invalidate', () => {
     await service.get('reports')
 
     expect(qs.getMetrics).toHaveBeenCalledTimes(4)
+  })
+
+  it('leaves other entries cached when invalidating a single queue', async () => {
+    // invalidate('a') must drop only 'a'; 'b' stays a cache hit.
+    const qs = makeQueueService()
+    const service = makeService(qs)
+
+    await service.get('a')
+    await service.get('b')
+    service.invalidate('a')
+    await service.get('a')
+    await service.get('b')
+
+    const bCalls = qs.getMetrics.mock.calls.filter((c) => c[0] === 'b')
+    expect(bCalls).toHaveLength(1)
+    expect(qs.getMetrics).toHaveBeenCalledTimes(3)
   })
 })
 

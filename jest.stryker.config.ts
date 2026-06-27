@@ -1,5 +1,5 @@
 import type { Config } from 'jest'
-import base from './jest.config'
+import base from './jest.config.ts'
 
 /**
  * Jest configuration consumed by the Stryker mutation-testing runner. Coverage
@@ -9,6 +9,9 @@ const config: Config = {
   ...base,
   collectCoverage: false,
   coverageThreshold: undefined,
+  // Keep a mutated async error (settling after its test) from crashing the
+  // long-lived mutation worker and aborting the run.
+  setupFiles: ['<rootDir>/test/stryker-jest-setup.ts'],
 }
 
 export default config

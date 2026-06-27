@@ -99,10 +99,11 @@ function makeLifecycle(args: {
 }
 
 let warnSpy: jest.SpyInstance
+let logSpy: jest.SpyInstance
 
 beforeEach(() => {
   order.length = 0
-  jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
+  logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined)
   warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
 })
 
@@ -162,6 +163,9 @@ describe('QueueLifecycle.onModuleDestroy — happy path', () => {
     ])
     expect(workerClose).toHaveBeenCalledWith()
     expect(queueDrain).not.toHaveBeenCalled()
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/Queue shutdown complete in .* \(forced 0 worker\(s\)\)/),
+    )
   })
 
   it('is a no-op-safe sweep when nothing was registered', async () => {
@@ -198,6 +202,7 @@ describe('QueueLifecycle.onModuleDestroy — bounded drain', () => {
       expect.stringContaining(QUEUE_ERROR_CODES.SHUTDOWN_TIMEOUT_EXCEEDED),
     )
     expect(connectionDestroy).toHaveBeenCalledTimes(1)
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('forced 1 worker(s)'))
     jest.useRealTimers()
   })
 
