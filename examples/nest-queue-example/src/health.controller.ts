@@ -55,14 +55,14 @@ export class HealthController {
     const allMetrics = await this.metrics.getAll()
 
     const queues: Record<string, QueueMetrics> = {}
-    let totalWaiting = 0
+    let degraded = false
     for (const m of allMetrics) {
       queues[m.queue] = m
-      totalWaiting += m.counts.waiting
+      if (m.counts.waiting > 1_000) degraded = true
     }
 
-    // Consider the service degraded when any queue has more than 1 000 waiting jobs
-    const status: 'ok' | 'degraded' = totalWaiting > 1_000 ? 'degraded' : 'ok'
+    // Consider the service degraded when any single queue has more than 1 000 waiting jobs
+    const status: 'ok' | 'degraded' = degraded ? 'degraded' : 'ok'
 
     return { status, queues }
   }

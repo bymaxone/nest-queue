@@ -1,7 +1,8 @@
 /**
  * @fileoverview Provides a dedicated ioredis client for use with BymaxQueueModule in Mode A.
- * This module creates a Redis connection with `maxRetriesPerRequest: null` so it is compatible
- * with BullMQ worker and queue-events connections that require blocking semantics.
+ * The client keeps ioredis' default retry policy because it serves the Queue/FlowProducer role;
+ * the library duplicates it with `maxRetriesPerRequest: null` only for the blocking
+ * Worker/QueueEvents connections, so enqueues still fail fast during a Redis outage.
  * @layer infrastructure
  */
 
@@ -23,8 +24,9 @@ interface RedisClientOptions {
 
 /**
  * Provides a dedicated ioredis client suitable for BullMQ (Mode A).
- * The client is created with `maxRetriesPerRequest: null` so it satisfies
- * the per-role connection policy required by BullMQ workers.
+ * The client keeps ioredis' default retry policy because it is used for the
+ * Queue/FlowProducer role; the library applies `maxRetriesPerRequest: null`
+ * only on the duplicated Worker/QueueEvents connections.
  *
  * @example
  * ```typescript
@@ -47,12 +49,11 @@ export class RedisModule {
           provide: QUEUE_REDIS_CLIENT,
           useFactory: (): Redis => {
             if (options.url) {
-              return new Redis(options.url, { maxRetriesPerRequest: null })
+              return new Redis(options.url)
             }
             return new Redis({
               host: options.host ?? '127.0.0.1',
               port: options.port ?? 6379,
-              maxRetriesPerRequest: null,
             })
           },
         },
