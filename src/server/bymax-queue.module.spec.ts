@@ -15,6 +15,7 @@ import {
 import { ConnectionResolver } from './services/connection-resolver.service'
 import { QueueService } from './services/queue.service'
 import { FlowService } from './services/flow.service'
+import { MetricsService } from './services/metrics.service'
 import { WorkerRegistry } from './services/worker-registry.service'
 import { QueueEventsRegistry } from './services/queue-events-registry.service'
 import { QueueException } from './errors/queue-exception'
@@ -51,6 +52,7 @@ describe('BymaxQueueModule.forRoot', () => {
     expect(dynamic.exports).toEqual([
       QueueService,
       FlowService,
+      MetricsService,
       ConnectionResolver,
       WorkerRegistry,
       QueueEventsRegistry,
@@ -69,6 +71,16 @@ describe('BymaxQueueModule.forRoot', () => {
 
     expect(provider.inject).toEqual([ConnectionResolver])
     expect(provider.useFactory(resolver)).toBeInstanceOf(FlowService)
+  })
+
+  it('registers the metrics service via a queue-service-bound factory', () => {
+    // MetricsService is always registered (guarded); the factory injects QueueService.
+    const dynamic = BymaxQueueModule.forRoot(baseOptions)
+    const provider = findProvider(dynamic.providers ?? [], MetricsService) as FactoryProvider
+    const queueService = {} as unknown as QueueService
+
+    expect(provider.inject).toEqual([QueueService])
+    expect(provider.useFactory(queueService)).toBeInstanceOf(MetricsService)
   })
 
   it('aliases the options token to the configurable module token', () => {
