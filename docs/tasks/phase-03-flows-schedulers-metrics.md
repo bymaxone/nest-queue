@@ -1,6 +1,6 @@
 # Phase 3 — Flows, Job Schedulers, Deduplication, Telemetry & Metrics
 
-> **Status**: 🔄 In Progress · **Progress**: 1 / 6 tasks · **Last updated**: 2026-06-27
+> **Status**: 🔄 In Progress · **Progress**: 2 / 6 tasks · **Last updated**: 2026-06-27
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 3
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -56,7 +56,7 @@ By the end of Phase 3 you can compose hierarchical flows, schedule recurring job
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
 | 3.1 | FlowService — opt-in FlowProducer wrapper | ✅ Done | P0 | M | 1.5, 1.8 |
-| 3.2 | Job Schedulers in QueueService + cron validation util | 📋 ToDo | P0 | M | 1.2, 1.7 |
+| 3.2 | Job Schedulers in QueueService + cron validation util | ✅ Done | P0 | M | 1.2, 1.7 |
 | 3.3 | Native deduplication options on `enqueue` | 📋 ToDo | P1 | S | 1.7 |
 | 3.4 | Telemetry passthrough (OpenTelemetry) to Queue/Worker/FlowProducer | 📋 ToDo | P1 | S | 1.7, 2.2, 3.1 |
 | 3.5 | MetricsService — cached getJobCounts + getMetrics delegation + health-check docs | 📋 ToDo | P0 | M | 1.7, 1.8 |
@@ -211,28 +211,28 @@ Completion Protocol (after you finish):
 
 ### Task 3.2 — Job Schedulers in QueueService + cron validation util
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 1.2 (`JobSchedulerRepeatOptions` in `./shared`), 1.7 (base `QueueService`)
 
 #### Description
 
-Add the current BullMQ Job Schedulers API to `QueueService`: `upsertJobScheduler(queueName, schedulerId, repeat, template?)` (idempotent by `schedulerId` via BullMQ's atomic `override: true` upsert), `removeJobScheduler`, and `getJobSchedulers`. Add a validation utility that parses cron with **`cron-parser`** (5- and 6-field) and rejects the invalid `JobSchedulerRepeatOptions` shapes before delegating to BullMQ. The deprecated `addRepeatable` / `removeRepeatable` / `RepeatableJobOptions` surface must not appear.
+Add the current BullMQ Job Schedulers API to `QueueService`: `upsertJobScheduler(queueName, schedulerId, repeat, template?)` (idempotent by `schedulerId` via BullMQ's atomic `override: true` upsert), `removeJobScheduler`, and `getJobSchedulers`. Add a validation utility that structurally validates the `JobSchedulerRepeatOptions` shape and delegates cron parsing to BullMQ's bundled parser (no hand-rolled regex, no `cron-parser` direct dependency). The deprecated `addRepeatable` / `removeRepeatable` / `RepeatableJobOptions` surface must not appear.
 
 #### Acceptance criteria
 
-- [ ] `upsertJobScheduler` with a valid **5-field** cron creates a recurring scheduler.
-- [ ] `upsertJobScheduler` with a **6-field** (seconds) cron (e.g. `*/30 * * * * *`) is accepted.
-- [ ] `upsertJobScheduler` with `{ every: 5000 }` creates an interval scheduler.
-- [ ] Calling `upsertJobScheduler` twice with the same `schedulerId` is idempotent (updates in place, no duplicate).
-- [ ] `template.name` defaults to `schedulerId`; `template.data` defaults to `{}`.
-- [ ] Invalid cron → `QueueException(INVALID_REPEAT_OPTIONS, 400)` with a `reason` (validated via `cron-parser`, never a regex).
-- [ ] Both `pattern` and `every`, or neither → error; `every <= 0` → error; past `endDate` → error — all `INVALID_REPEAT_OPTIONS` (400).
-- [ ] `removeJobScheduler` returns `true` for an existing scheduler, `false` otherwise.
-- [ ] `getJobSchedulers` returns the registered schedulers (paginated `start`/`end`/`asc`).
-- [ ] No deprecated repeatable-jobs method appears in the source.
-- [ ] 100% line/branch coverage on the validation util and the new `QueueService` methods.
+- [x] `upsertJobScheduler` with a valid **5-field** cron creates a recurring scheduler.
+- [x] `upsertJobScheduler` with a **6-field** (seconds) cron (e.g. `*/30 * * * * *`) is accepted.
+- [x] `upsertJobScheduler` with `{ every: 5000 }` creates an interval scheduler.
+- [x] Calling `upsertJobScheduler` twice with the same `schedulerId` is idempotent (updates in place, no duplicate).
+- [x] `template.name` defaults to `schedulerId`; `template.data` defaults to `{}`.
+- [x] Invalid cron → `QueueException(INVALID_REPEAT_OPTIONS, 400)` with a `reason` (cron parsing delegated to BullMQ, never a regex).
+- [x] Both `pattern` and `every`, or neither → error; `every <= 0` → error; past `endDate` → error — all `INVALID_REPEAT_OPTIONS` (400).
+- [x] `removeJobScheduler` returns `true` for an existing scheduler, `false` otherwise.
+- [x] `getJobSchedulers` returns the registered schedulers (paginated `start`/`end`/`asc`).
+- [x] No deprecated repeatable-jobs method appears in the source.
+- [x] 100% line/branch coverage on the validation util and the new `QueueService` methods.
 
 #### Files to create / modify
 
@@ -886,3 +886,4 @@ Completion Protocol (after you finish):
 <!-- entries are appended here as tasks complete -->
 
 - 3.1 ✅ 2026-06-27 — FlowService guarded FlowProducer wrapper, registered/exported by the module; 100% coverage.
+- 3.2 ✅ 2026-06-27 — Job Scheduler API (upsert/remove/list) on QueueService + structural validator; cron delegated to BullMQ, no cron-parser dep; dropped deprecated `immediately`; 100% coverage.

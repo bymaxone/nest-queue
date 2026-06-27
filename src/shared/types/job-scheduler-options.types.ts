@@ -28,8 +28,6 @@ export type JobSchedulerRepeatOptions =
       startDate?: number | string
       /** Stop time (epoch ms or ISO string). Must be in the future or BullMQ throws. */
       endDate?: number | string
-      /** Fire the first occurrence immediately at registration. Cron only. */
-      immediately?: boolean
     }
   | {
       /** Interval in milliseconds between runs. */

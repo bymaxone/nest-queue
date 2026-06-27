@@ -11,9 +11,11 @@ import type { ResolvedQueueOptions } from '../config/resolved-options'
 import type { BulkJob } from '../interfaces/queue-job-data.interface'
 import type { JobStatus } from '../../shared/types/job-status.types'
 import type { QueueMetrics } from '../../shared/types/queue-metrics.types'
+import type { JobSchedulerRepeatOptions } from '../../shared/types/job-scheduler-options.types'
 import { ConnectionResolver } from './connection-resolver.service'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
+import { validateJobSchedulerOptions } from '../utils/validate-job-scheduler-options'
 
 /** Maximum number of jobs accepted by a single `enqueueBulk` call. */
 const MAX_BULK_SIZE = 1000
@@ -177,6 +179,85 @@ export class QueueService implements OnModuleDestroy {
       counts: counts as QueueMetrics['counts'],
       collectedAt: new Date().toISOString(),
     }
+  }
+
+  /**
+   * Create or update a Job Scheduler — the current BullMQ recurring-jobs API.
+   * Idempotent by `schedulerId`: BullMQ performs an atomic `override: true`
+   * upsert, so re-registering on every boot updates the schedule in place and
+   * never duplicates it. This supersedes the repeatable-jobs surface removed in
+   * BullMQ v6.
+   *
+   * The schedule is structurally validated first; the cron string itself is
+   * parsed by BullMQ at registration time, and a parse failure is rethrown as
+   * `INVALID_REPEAT_OPTIONS` (400).
+   *
+   * @param queueName - Target queue.
+   * @param schedulerId - Stable, unique scheduler identifier (the upsert key).
+   * @param repeat - Cron `pattern` OR `every` (ms), plus optional tz/limit/start/end.
+   * @param template - Optional job template; `name` defaults to `schedulerId`, `data` to `{}`.
+   * @returns The first scheduled (delayed) job, or `undefined`.
+   * @throws {QueueException} `INVALID_REPEAT_OPTIONS` (400) for an invalid schedule.
+   */
+  async upsertJobScheduler<TData = unknown, TResult = unknown>(
+    queueName: string,
+    schedulerId: string,
+    repeat: JobSchedulerRepeatOptions,
+    template?: { name?: string; data?: TData; opts?: JobsOptions },
+  ): Promise<Job<TData, TResult> | undefined> {
+    validateJobSchedulerOptions(repeat)
+    // The cache holds default-generic queues; the caller declares the payload
+    // generics, which BullMQ's invariant `ExtractDataType` cannot narrow. The
+    // returned job is re-projected onto the requested generics (unchanged at runtime).
+    const queue = this.queueFor(queueName)
+    const jobTemplate = {
+      name: template?.name ?? schedulerId,
+      data: template?.data ?? {},
+      ...(template?.opts === undefined ? {} : { opts: template.opts }),
+    }
+    if ('pattern' in repeat) {
+      try {
+        const job = await queue.upsertJobScheduler(schedulerId, repeat, jobTemplate)
+        return job as Job<TData, TResult>
+      } catch {
+        // BullMQ delegates cron parsing to its bundled parser; an unparseable
+        // pattern surfaces here as a thrown error.
+        throw new QueueException(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS, 400, {
+          reason: 'pattern must be a valid cron expression (5- or 6-field)',
+        })
+      }
+    }
+    const job = await queue.upsertJobScheduler(schedulerId, repeat, jobTemplate)
+    return job as Job<TData, TResult>
+  }
+
+  /**
+   * Remove a Job Scheduler by id.
+   *
+   * @param queueName - Target queue.
+   * @param schedulerId - The scheduler identifier to remove.
+   * @returns `true` when a scheduler was removed, `false` otherwise.
+   */
+  async removeJobScheduler(queueName: string, schedulerId: string): Promise<boolean> {
+    return this.queueFor(queueName).removeJobScheduler(schedulerId)
+  }
+
+  /**
+   * List the Job Schedulers registered on a queue, for inspection or health checks.
+   *
+   * @param queueName - Target queue.
+   * @param start - Page start index (inclusive). Default: 0.
+   * @param end - Page end index (inclusive). Default: 50.
+   * @param asc - Sort ascending by next run time. Default: true.
+   * @returns The registered schedulers in the requested page.
+   */
+  async getJobSchedulers(
+    queueName: string,
+    start = 0,
+    end = 50,
+    asc = true,
+  ): Promise<Awaited<ReturnType<Queue['getJobSchedulers']>>> {
+    return this.queueFor(queueName).getJobSchedulers(start, end, asc)
   }
 
   /** Pause a queue, halting the processing of new jobs. */
