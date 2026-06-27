@@ -286,6 +286,9 @@ export class WorkerRegistry implements OnModuleDestroy {
           reason: 'processorFile URL must use the file: protocol',
         })
       }
+      // A file: URL pathname is always absolute; still enforce the extension allowlist
+      // so a file: URL cannot bypass the arbitrary-file-execution guard string paths get.
+      this.assertProcessorExtension(processorFile.pathname)
       return
     }
     if (!isAbsolute(processorFile)) {
@@ -293,8 +296,19 @@ export class WorkerRegistry implements OnModuleDestroy {
         reason: 'processorFile must be an absolute path',
       })
     }
+    this.assertProcessorExtension(processorFile)
+  }
+
+  /**
+   * Reject a processor path whose extension is not an executable JS module,
+   * the last line of defense against loading an arbitrary file as a worker.
+   *
+   * @param filePath - The filesystem path (or file: URL pathname) to check.
+   * @throws {QueueException} `WORKER_REGISTRATION_FAILED` for a disallowed extension.
+   */
+  private assertProcessorExtension(filePath: string): void {
     const allowedExtensions = new Set<string>(['.js', '.cjs', '.mjs'])
-    if (!allowedExtensions.has(extname(processorFile))) {
+    if (!allowedExtensions.has(extname(filePath))) {
       throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, {
         reason: 'processorFile must have a .js, .cjs, or .mjs extension',
       })

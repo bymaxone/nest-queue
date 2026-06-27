@@ -324,6 +324,17 @@ describe('WorkerRegistry.registerSandboxed', () => {
     })
     expect(worker).toBeDefined()
   })
+
+  it('throws WORKER_REGISTRATION_FAILED when a file: URL has a disallowed extension', () => {
+    // A file: URL must not bypass the extension allowlist that string paths get.
+    const registry = new WorkerRegistry(fakeConnection())
+    expect(() =>
+      registry.registerSandboxed({
+        queueName: 'fileurl-ext',
+        processorFile: new URL('file:///tmp/processor.sh'),
+      }),
+    ).toThrow(QueueException)
+  })
 })
 
 describe('WorkerRegistry.unregister', () => {

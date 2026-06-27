@@ -26,6 +26,7 @@ import type {
 } from '../interfaces/processor-metadata.interface'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
+import { DEFAULT_WORKER_CONCURRENCY } from '../constants/default-options'
 
 /**
  * Minimal event-emitter interface used to attach listeners to BullMQ `Worker`
@@ -78,7 +79,7 @@ export class ProcessorDiscoveryService implements OnModuleInit {
 
       const ctor = (instance as WithConstructor).constructor
 
-      const processorMeta = Reflect.getMetadata(PROCESSOR_METADATA_KEY, ctor) as
+      const processorMeta = Reflect.getOwnMetadata(PROCESSOR_METADATA_KEY, ctor) as
         | ProcessorMetadata
         | undefined
       if (!processorMeta) continue
@@ -148,12 +149,13 @@ export class ProcessorDiscoveryService implements OnModuleInit {
 
     if (_warnedNoConcurrency) {
       this.logger.warn(
-        `Queue "${queueName}": concurrency was not specified — defaulting to concurrency=2. ` +
+        `Queue "${queueName}": concurrency was not specified — ` +
+          `defaulting to concurrency=${String(DEFAULT_WORKER_CONCURRENCY)}. ` +
           'Set an explicit concurrency for production workloads.',
       )
     }
 
-    const handlers = (Reflect.getMetadata(PROCESS_HANDLERS_METADATA_KEY, ctor) ??
+    const handlers = (Reflect.getOwnMetadata(PROCESS_HANDLERS_METADATA_KEY, ctor) ??
       []) as ProcessHandlerMetadata[]
     const dispatcher = this.buildDispatcher(instance, handlers)
 
@@ -163,7 +165,7 @@ export class ProcessorDiscoveryService implements OnModuleInit {
       options: workerOptions,
     })
 
-    const workerListeners = (Reflect.getMetadata(WORKER_EVENT_LISTENERS_METADATA_KEY, ctor) ??
+    const workerListeners = (Reflect.getOwnMetadata(WORKER_EVENT_LISTENERS_METADATA_KEY, ctor) ??
       []) as QueueEventListenerMetadata[]
     const workerEmitter = worker as unknown as GenericEmitter
     for (const { eventName, methodKey } of workerListeners) {
@@ -173,7 +175,7 @@ export class ProcessorDiscoveryService implements OnModuleInit {
       }
     }
 
-    const queueListeners = (Reflect.getMetadata(QUEUE_EVENT_LISTENERS_METADATA_KEY, ctor) ??
+    const queueListeners = (Reflect.getOwnMetadata(QUEUE_EVENT_LISTENERS_METADATA_KEY, ctor) ??
       []) as QueueEventListenerMetadata[]
     if (queueListeners.length > 0) {
       const qe = this.events.getOrCreate(queueName)
