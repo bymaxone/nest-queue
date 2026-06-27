@@ -1,6 +1,6 @@
 # Development Tasks — @bymax-one/nest-queue
 
-> **Last updated:** 2026-06-26
+> **Last updated:** 2026-06-27
 > **Source roadmap:** [`../development_plan.md`](../development_plan.md) (plan rev 2.0.0) · **Spec:** [`../technical_specification.md`](../technical_specification.md) (rev 2.0.0)
 
 Tasks live **one file per phase** in this folder (`docs/tasks/phase-NN-<slug>.md`), following the Bymax task-doc convention (same pattern as `bymax-one/rust-auth`). Each phase file is self-contained: context, rules-of-phase, reference docs, a task index, the tasks (each with an executable **Agent prompt**), and a completion log.
@@ -15,10 +15,10 @@ Tasks live **one file per phase** in this folder (`docs/tasks/phase-NN-<slug>.md
 |---|---|---|---|
 | 1 | [`phase-01-foundation.md`](./phase-01-foundation.md) | 8 / 8 | ✅ Done |
 | 2 | [`phase-02-workers.md`](./phase-02-workers.md) | 6 / 6 | ✅ Done |
-| 3 | [`phase-03-flows-schedulers-metrics.md`](./phase-03-flows-schedulers-metrics.md) | 0 / 6 | 📋 ToDo |
+| 3 | [`phase-03-flows-schedulers-metrics.md`](./phase-03-flows-schedulers-metrics.md) | 6 / 6 | ✅ Done |
 | 4 | [`phase-04-async-shutdown-e2e.md`](./phase-04-async-shutdown-e2e.md) | 0 / 7 | 📋 ToDo |
 | 5 | [`phase-05-release.md`](./phase-05-release.md) | 0 / 8 | 📋 ToDo |
-| | **Total** | **14 / 35** | ✅ 40% |
+| | **Total** | **20 / 35** | ✅ 57% |
 
 ---
 

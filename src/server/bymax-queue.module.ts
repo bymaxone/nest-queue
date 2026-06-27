@@ -26,6 +26,8 @@ import {
 } from './bymax-queue.constants'
 import { ConnectionResolver } from './services/connection-resolver.service'
 import { QueueService } from './services/queue.service'
+import { FlowService } from './services/flow.service'
+import { MetricsService } from './services/metrics.service'
 import { WorkerRegistry } from './services/worker-registry.service'
 import { QueueEventsRegistry } from './services/queue-events-registry.service'
 import { ProcessorDiscoveryService } from './services/processor-discovery.service'
@@ -85,6 +87,18 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
         inject: [ConnectionResolver],
       },
       QueueService,
+      {
+        provide: FlowService,
+        useFactory: (conn: ConnectionResolver): FlowService =>
+          new FlowService(conn, resolved.flows.enabled, resolved.telemetry),
+        inject: [ConnectionResolver],
+      },
+      {
+        provide: MetricsService,
+        useFactory: (qs: QueueService): MetricsService =>
+          new MetricsService(qs, resolved.metrics.enabled, resolved.metrics.cacheTtlMs),
+        inject: [QueueService],
+      },
       WorkerRegistry,
       QueueEventsRegistry,
       ProcessorDiscoveryService,
@@ -96,6 +110,8 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
       providers,
       exports: [
         QueueService,
+        FlowService,
+        MetricsService,
         ConnectionResolver,
         WorkerRegistry,
         QueueEventsRegistry,

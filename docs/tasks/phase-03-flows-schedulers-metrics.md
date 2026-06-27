@@ -1,6 +1,6 @@
 # Phase 3 — Flows, Job Schedulers, Deduplication, Telemetry & Metrics
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 6 tasks · **Last updated**: 2026-06-23
+> **Status**: ✅ Done · **Progress**: 6 / 6 tasks · **Last updated**: 2026-06-27
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 3
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -55,12 +55,12 @@ By the end of Phase 3 you can compose hierarchical flows, schedule recurring job
 
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
-| 3.1 | FlowService — opt-in FlowProducer wrapper | 📋 ToDo | P0 | M | 1.5, 1.8 |
-| 3.2 | Job Schedulers in QueueService + cron validation util | 📋 ToDo | P0 | M | 1.2, 1.7 |
-| 3.3 | Native deduplication options on `enqueue` | 📋 ToDo | P1 | S | 1.7 |
-| 3.4 | Telemetry passthrough (OpenTelemetry) to Queue/Worker/FlowProducer | 📋 ToDo | P1 | S | 1.7, 2.2, 3.1 |
-| 3.5 | MetricsService — cached getJobCounts + getMetrics delegation + health-check docs | 📋 ToDo | P0 | M | 1.7, 1.8 |
-| 3.6 | Index exports + Phase 3 integration tests + validation | 📋 ToDo | P0 | S | 3.1, 3.2, 3.3, 3.4, 3.5 |
+| 3.1 | FlowService — opt-in FlowProducer wrapper | ✅ Done | P0 | M | 1.5, 1.8 |
+| 3.2 | Job Schedulers in QueueService + cron validation util | ✅ Done | P0 | M | 1.2, 1.7 |
+| 3.3 | Native deduplication options on `enqueue` | ✅ Done | P1 | S | 1.7 |
+| 3.4 | Telemetry passthrough (OpenTelemetry) to Queue/Worker/FlowProducer | ✅ Done | P1 | S | 1.7, 2.2, 3.1 |
+| 3.5 | MetricsService — cached getJobCounts + getMetrics delegation + health-check docs | ✅ Done | P0 | M | 1.7, 1.8 |
+| 3.6 | Index exports + Phase 3 integration tests + validation | ✅ Done | P0 | S | 3.1, 3.2, 3.3, 3.4, 3.5 |
 
 > Cross-phase dependencies reference **Phase 1** task IDs: `1.2` (shared types/constants), `1.5` (`ConnectionResolver`), `1.7` (base `QueueService`), `1.8` (`forRoot` + server barrel); and **Phase 2** `2.2` (`WorkerRegistry`).
 
@@ -70,7 +70,7 @@ By the end of Phase 3 you can compose hierarchical flows, schedule recurring job
 
 ### Task 3.1 — FlowService — opt-in FlowProducer wrapper
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 1.5 (ConnectionResolver), 1.8 (sync module `forRoot`)
@@ -81,13 +81,13 @@ Implement `FlowService`, a thin wrapper over the BullMQ `FlowProducer` for hiera
 
 #### Acceptance criteria
 
-- [ ] `FlowService` constructs a `FlowProducer` on the main connection (`ConnectionResolver.getClient()`) only when `enabled === true`.
-- [ ] `add(flow)` calls `producer.add(flow)`; `addBulk(flows)` calls `producer.addBulk(flows)`; `getProducer()` returns the underlying `FlowProducer`.
-- [ ] When `enabled === false`, `add` / `addBulk` / `getProducer` each throw `QueueException` with code `FLOW_DISABLED` (status 503).
-- [ ] `onModuleDestroy` closes the producer when active and is a no-op when inactive (no throw if `close()` rejects).
-- [ ] The module registers `FlowService` via `useFactory` (injecting `ConnectionResolver`) and exports it.
-- [ ] No `any` in the public surface; JSDoc on every export.
-- [ ] 100% line/branch coverage on `flow.service.ts`.
+- [x] `FlowService` constructs a `FlowProducer` on the main connection (`ConnectionResolver.getClient()`) only when `enabled === true`.
+- [x] `add(flow)` calls `producer.add(flow)`; `addBulk(flows)` calls `producer.addBulk(flows)`; `getProducer()` returns the underlying `FlowProducer`.
+- [x] When `enabled === false`, `add` / `addBulk` / `getProducer` each throw `QueueException` with code `FLOW_DISABLED` (status 503).
+- [x] `onModuleDestroy` closes the producer when active and is a no-op when inactive (no throw if `close()` rejects).
+- [x] The module registers `FlowService` via `useFactory` (injecting `ConnectionResolver`) and exports it.
+- [x] No `any` in the public surface; JSDoc on every export.
+- [x] 100% line/branch coverage on `flow.service.ts`.
 
 #### Files to create / modify
 
@@ -211,28 +211,28 @@ Completion Protocol (after you finish):
 
 ### Task 3.2 — Job Schedulers in QueueService + cron validation util
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 1.2 (`JobSchedulerRepeatOptions` in `./shared`), 1.7 (base `QueueService`)
 
 #### Description
 
-Add the current BullMQ Job Schedulers API to `QueueService`: `upsertJobScheduler(queueName, schedulerId, repeat, template?)` (idempotent by `schedulerId` via BullMQ's atomic `override: true` upsert), `removeJobScheduler`, and `getJobSchedulers`. Add a validation utility that parses cron with **`cron-parser`** (5- and 6-field) and rejects the invalid `JobSchedulerRepeatOptions` shapes before delegating to BullMQ. The deprecated `addRepeatable` / `removeRepeatable` / `RepeatableJobOptions` surface must not appear.
+Add the current BullMQ Job Schedulers API to `QueueService`: `upsertJobScheduler(queueName, schedulerId, repeat, template?)` (idempotent by `schedulerId` via BullMQ's atomic `override: true` upsert), `removeJobScheduler`, and `getJobSchedulers`. Add a validation utility that structurally validates the `JobSchedulerRepeatOptions` shape and delegates cron parsing to BullMQ's bundled parser (no hand-rolled regex, no `cron-parser` direct dependency). The deprecated `addRepeatable` / `removeRepeatable` / `RepeatableJobOptions` surface must not appear.
 
 #### Acceptance criteria
 
-- [ ] `upsertJobScheduler` with a valid **5-field** cron creates a recurring scheduler.
-- [ ] `upsertJobScheduler` with a **6-field** (seconds) cron (e.g. `*/30 * * * * *`) is accepted.
-- [ ] `upsertJobScheduler` with `{ every: 5000 }` creates an interval scheduler.
-- [ ] Calling `upsertJobScheduler` twice with the same `schedulerId` is idempotent (updates in place, no duplicate).
-- [ ] `template.name` defaults to `schedulerId`; `template.data` defaults to `{}`.
-- [ ] Invalid cron → `QueueException(INVALID_REPEAT_OPTIONS, 400)` with a `reason` (validated via `cron-parser`, never a regex).
-- [ ] Both `pattern` and `every`, or neither → error; `every <= 0` → error; past `endDate` → error — all `INVALID_REPEAT_OPTIONS` (400).
-- [ ] `removeJobScheduler` returns `true` for an existing scheduler, `false` otherwise.
-- [ ] `getJobSchedulers` returns the registered schedulers (paginated `start`/`end`/`asc`).
-- [ ] No deprecated repeatable-jobs method appears in the source.
-- [ ] 100% line/branch coverage on the validation util and the new `QueueService` methods.
+- [x] `upsertJobScheduler` with a valid **5-field** cron creates a recurring scheduler.
+- [x] `upsertJobScheduler` with a **6-field** (seconds) cron (e.g. `*/30 * * * * *`) is accepted.
+- [x] `upsertJobScheduler` with `{ every: 5000 }` creates an interval scheduler.
+- [x] Calling `upsertJobScheduler` twice with the same `schedulerId` is idempotent (updates in place, no duplicate).
+- [x] `template.name` defaults to `schedulerId`; `template.data` defaults to `{}`.
+- [x] Invalid cron → `QueueException(INVALID_REPEAT_OPTIONS, 400)` with a `reason` (cron parsing delegated to BullMQ, never a regex).
+- [x] Both `pattern` and `every`, or neither → error; `every <= 0` → error; past `endDate` → error — all `INVALID_REPEAT_OPTIONS` (400).
+- [x] `removeJobScheduler` returns `true` for an existing scheduler, `false` otherwise.
+- [x] `getJobSchedulers` returns the registered schedulers (paginated `start`/`end`/`asc`).
+- [x] No deprecated repeatable-jobs method appears in the source.
+- [x] 100% line/branch coverage on the validation util and the new `QueueService` methods.
 
 #### Files to create / modify
 
@@ -385,7 +385,7 @@ Completion Protocol (after you finish):
 
 ### Task 3.3 — Native deduplication options on `enqueue`
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P1
 - **Size**: S
 - **Depends on**: 1.7 (base `QueueService`)
@@ -396,14 +396,14 @@ Completion Protocol (after you finish):
 
 #### Acceptance criteria
 
-- [ ] `enqueue` JSDoc documents the four BullMQ deduplication modes and the `{ id, ttl?, extend?, replace?, keepLastIfActive? }` option shape, with an `@example`.
-- [ ] Test: **Simple** `{ id }` — a second enqueue while the first is in-flight does not create a second job.
-- [ ] Test: **Throttle** `{ id, ttl }` — duplicates within `ttl` are ignored.
-- [ ] Test: **Debounce** `{ id, ttl, extend: true, replace: true }` — only the latest data is kept; the TTL resets per duplicate.
-- [ ] Test: **keep-last-if-active** `{ id, keepLastIfActive: true }` — the latest data is stored while a job is active.
-- [ ] Tests assert that `enqueue` forwards `options.deduplication` to `Queue.add` unchanged (no transformation by the lib).
-- [ ] The deduplication key is shown to be independent of `jobId` (a test sets one without the other).
-- [ ] No custom deduplication logic exists in the lib (verified by inspection).
+- [x] `enqueue` JSDoc documents the four BullMQ deduplication modes and the `{ id, ttl?, extend?, replace?, keepLastIfActive? }` option shape, with an `@example`.
+- [x] Test: **Simple** `{ id }` — a second enqueue while the first is in-flight does not create a second job.
+- [x] Test: **Throttle** `{ id, ttl }` — duplicates within `ttl` are ignored.
+- [x] Test: **Debounce** `{ id, ttl, extend: true, replace: true }` — only the latest data is kept; the TTL resets per duplicate.
+- [x] Test: **keep-last-if-active** `{ id, keepLastIfActive: true }` — the latest data is stored while a job is active.
+- [x] Tests assert that `enqueue` forwards `options.deduplication` to `Queue.add` unchanged (no transformation by the lib).
+- [x] The deduplication key is shown to be independent of `jobId` (a test sets one without the other).
+- [x] No custom deduplication logic exists in the lib (verified by inspection).
 
 #### Files to create / modify
 
@@ -493,7 +493,7 @@ Completion Protocol (after you finish):
 
 ### Task 3.4 — Telemetry passthrough (OpenTelemetry) to Queue/Worker/FlowProducer
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P1
 - **Size**: S
 - **Depends on**: 1.7 (Queue construction in `QueueService`), 2.2 (Worker construction in `WorkerRegistry`), 3.1 (`FlowService`)
@@ -504,13 +504,13 @@ When `options.telemetry` (a BullMQ `Telemetry`, typically `new BullMQOtel(...)` 
 
 #### Acceptance criteria
 
-- [ ] `QueueService.getOrCreateQueue` passes `telemetry` into the `Queue` constructor when `ResolvedQueueOptions.telemetry` is present, and omits the key when absent.
-- [ ] `WorkerRegistry` passes `telemetry` into every `Worker` it constructs when present.
-- [ ] `FlowService` passes `telemetry` into the `FlowProducer` when present.
-- [ ] When `telemetry` is undefined, no `telemetry` key is set on any constructor options (verified by the constructed-options assertion).
-- [ ] `bullmq-otel` remains an **optional** peer dependency in `package.json` (`peerDependenciesMeta.bullmq-otel.optional = true`) and is never imported by the lib.
-- [ ] Tests assert the telemetry instance is forwarded to Queue / Worker / FlowProducer constructors.
-- [ ] 100% line/branch coverage on the touched branches.
+- [x] `QueueService.getOrCreateQueue` passes `telemetry` into the `Queue` constructor when `ResolvedQueueOptions.telemetry` is present, and omits the key when absent.
+- [x] `WorkerRegistry` passes `telemetry` into every `Worker` it constructs when present.
+- [x] `FlowService` passes `telemetry` into the `FlowProducer` when present.
+- [x] When `telemetry` is undefined, no `telemetry` key is set on any constructor options (verified by the constructed-options assertion).
+- [x] `bullmq-otel` remains an **optional** peer dependency in `package.json` (`peerDependenciesMeta.bullmq-otel.optional = true`) and is never imported by the lib.
+- [x] Tests assert the telemetry instance is forwarded to Queue / Worker / FlowProducer constructors.
+- [x] 100% line/branch coverage on the touched branches.
 
 #### Files to create / modify
 
@@ -615,7 +615,7 @@ Completion Protocol (after you finish):
 
 ### Task 3.5 — MetricsService — cached getJobCounts + getMetrics delegation + health-check docs
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 1.7 (`QueueService.getMetrics` + queue cache), 1.8 (sync module `forRoot`)
@@ -626,16 +626,16 @@ Implement `MetricsService`: an in-memory TTL cache over `QueueService.getMetrics
 
 #### Acceptance criteria
 
-- [ ] `get(queueName)` on a cache miss calls `QueueService.getMetrics` and stores the result with `expiresAt = now + ttlMs`.
-- [ ] `get(queueName)` on a cache hit returns the cached value without calling `QueueService`.
-- [ ] After `ttlMs` elapses, the next `get` performs a fresh fetch (validated with fake timers).
-- [ ] `getAll()` returns metrics for every queue currently cached in `QueueService` (via a `getCachedQueues()` accessor on `QueueService`, added if missing).
-- [ ] `invalidate(name)` removes only that entry; `invalidate()` clears the whole cache.
-- [ ] When `enabled === false`, every operation throws `QueueException(METRICS_DISABLED, 503)`.
-- [ ] `QueueService.getMetrics` remains the no-cache source of truth (no circular dependency on `MetricsService`).
-- [ ] `MetricsService` JSDoc includes an `@example` of the consumer-side `HealthIndicator` pattern; `@nestjs/terminus` is not added as a dependency.
-- [ ] The module registers `MetricsService` via `useFactory` (injecting `QueueService`) and exports it.
-- [ ] 100% line/branch coverage on `metrics.service.ts`.
+- [x] `get(queueName)` on a cache miss calls `QueueService.getMetrics` and stores the result with `expiresAt = now + ttlMs`.
+- [x] `get(queueName)` on a cache hit returns the cached value without calling `QueueService`.
+- [x] After `ttlMs` elapses, the next `get` performs a fresh fetch (validated with fake timers).
+- [x] `getAll()` returns metrics for every queue currently cached in `QueueService` (via a `getCachedQueues()` accessor on `QueueService`, added if missing).
+- [x] `invalidate(name)` removes only that entry; `invalidate()` clears the whole cache.
+- [x] When `enabled === false`, every operation throws `QueueException(METRICS_DISABLED, 503)`.
+- [x] `QueueService.getMetrics` remains the no-cache source of truth (no circular dependency on `MetricsService`).
+- [x] `MetricsService` JSDoc includes an `@example` of the consumer-side `HealthIndicator` pattern; `@nestjs/terminus` is not added as a dependency.
+- [x] The module registers `MetricsService` via `useFactory` (injecting `QueueService`) and exports it.
+- [x] 100% line/branch coverage on `metrics.service.ts`.
 
 #### Files to create / modify
 
@@ -780,7 +780,7 @@ Completion Protocol (after you finish):
 
 ### Task 3.6 — Index exports + Phase 3 integration tests + validation
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 3.1, 3.2, 3.3, 3.4, 3.5
@@ -791,12 +791,12 @@ Wire the new opt-in services into the public surface and close the phase: export
 
 #### Acceptance criteria
 
-- [ ] `src/server/index.ts` exports `FlowService` and `MetricsService` (explicit named exports, no deep barrels).
-- [ ] `dist/server/index.mjs` exposes `FlowService` and `MetricsService` after `pnpm build`.
-- [ ] A smoke test exercises `upsertJobScheduler` (cron, idempotent by `schedulerId`) followed by `MetricsService.get`.
-- [ ] `pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size` all pass.
-- [ ] 100% line/branch coverage across every file implemented in Phase 3 (`jest.coverage.config.ts` → `100/100/100/100`).
-- [ ] Bundle stays ≤ 18 KiB brotli (`scripts/check-size.mjs`).
+- [x] `src/server/index.ts` exports `FlowService` and `MetricsService` (explicit named exports, no deep barrels).
+- [x] `dist/server/index.mjs` exposes `FlowService` and `MetricsService` after `pnpm build`.
+- [x] A smoke test exercises `upsertJobScheduler` (cron, idempotent by `schedulerId`) followed by `MetricsService.get`.
+- [x] `pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size` all pass.
+- [x] 100% line/branch coverage across every file implemented in Phase 3 (`jest.coverage.config.ts` → `100/100/100/100`).
+- [x] Bundle stays ≤ 18 KiB brotli (`scripts/check-size.mjs`).
 
 #### Files to create / modify
 
@@ -884,3 +884,10 @@ Completion Protocol (after you finish):
 > Append-only. One line per completed task: `- <task-id> ✅ YYYY-MM-DD — <one-line summary>`.
 
 <!-- entries are appended here as tasks complete -->
+
+- 3.1 ✅ 2026-06-27 — FlowService guarded FlowProducer wrapper, registered/exported by the module; 100% coverage.
+- 3.2 ✅ 2026-06-27 — Job Scheduler API (upsert/remove/list) on QueueService + structural validator; cron delegated to BullMQ, no cron-parser dep; dropped deprecated `immediately`; 100% coverage.
+- 3.3 ✅ 2026-06-27 — Documented the four native deduplication modes on `enqueue` and proved passthrough (incl. jobId/deduplication independence); no custom dedup code.
+- 3.4 ✅ 2026-06-27 — Threaded the configured telemetry into every Queue/Worker/FlowProducer via conditional spread (key omitted when absent); bullmq-otel stays an unimported optional peer.
+- 3.5 ✅ 2026-06-27 — MetricsService TTL cache over QueueService.getMetrics (get/getAll/invalidate), guarded by METRICS_DISABLED; documented terminus HealthIndicator pattern; 100% coverage.
+- 3.6 ✅ 2026-06-27 — Exported FlowService/MetricsService (+ BullMQ flow/scheduler types) from the server barrel; added a scheduler→metrics smoke test; full gate green (typecheck, lint, 100% coverage, build, size 10.2 KiB/18 KiB).

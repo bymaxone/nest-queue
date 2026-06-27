@@ -9,6 +9,7 @@ import { WorkerRegistry } from './worker-registry.service'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import type { ConnectionResolver } from './connection-resolver.service'
+import type { ResolvedQueueOptions } from '../config/resolved-options'
 import type { Redis } from 'ioredis'
 
 /** Minimal mock of the BullMQ Worker instance returned by the mocked constructor. */
@@ -19,18 +20,19 @@ interface MockWorkerInstance {
 
 /** Track instances created by the mocked constructor so tests can inspect them. */
 const createdWorkers: MockWorkerInstance[] = []
+/** Track the constructor arguments so tests can assert the built worker options. */
+const workerConstructorArgs: unknown[][] = []
 
 jest.mock('bullmq', () => ({
-  Worker: jest.fn().mockImplementation(
-    (_name: string, _processor: unknown, _opts: BullWorkerOptions) => {
-      const instance: MockWorkerInstance = {
-        close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
-        on: jest.fn(),
-      }
-      createdWorkers.push(instance)
-      return instance
-    },
-  ),
+  Worker: jest.fn().mockImplementation((...args: unknown[]) => {
+    workerConstructorArgs.push(args)
+    const instance: MockWorkerInstance = {
+      close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
+      on: jest.fn(),
+    }
+    createdWorkers.push(instance)
+    return instance
+  }),
 }))
 
 /** A minimal fake Redis that satisfies `ConnectionResolver.getClient()`. */
@@ -47,6 +49,22 @@ function fakeConnection(redis?: Redis): ConnectionResolver {
   } as unknown as ConnectionResolver
 }
 
+/** Build resolved options for the registry under test, optionally with telemetry. */
+function makeOptions(telemetry?: ResolvedQueueOptions['telemetry']): ResolvedQueueOptions {
+  const base: ResolvedQueueOptions = {
+    connection: { url: 'redis://localhost:6379' },
+    defaultJobOptions: { attempts: 3 },
+    prefix: 'bull',
+    queueOptions: {},
+    flows: { enabled: false },
+    metrics: { enabled: false, cacheTtlMs: 5000 },
+    shutdown: { drainTimeoutMs: 30000, drainOnShutdown: false },
+    connectionReadyTimeoutMs: 10000,
+  }
+  if (telemetry !== undefined) base.telemetry = telemetry
+  return base
+}
+
 /** A minimal job handler used as the process function. */
 function noopHandler(_job: Job): Promise<unknown> {
   return Promise.resolve(undefined)
@@ -54,12 +72,13 @@ function noopHandler(_job: Job): Promise<unknown> {
 
 beforeEach(() => {
   createdWorkers.length = 0
+  workerConstructorArgs.length = 0
 })
 
 describe('WorkerRegistry.register', () => {
   it('creates a Worker and stores it in the internal map', () => {
     // A successful registration must create exactly one Worker and track it.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     const worker = registry.register({ queueName: 'email', handler: noopHandler })
     expect(worker).toBeDefined()
     expect(registry.list()).toContain('email')
@@ -67,7 +86,7 @@ describe('WorkerRegistry.register', () => {
 
   it('throws DUPLICATE_PROCESSOR when the same queue is registered twice', () => {
     // Two processors targeting the same queue is an application-level error.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     registry.register({ queueName: 'email', handler: noopHandler })
     expect(() => registry.register({ queueName: 'email', handler: noopHandler })).toThrow(
       QueueException,
@@ -84,7 +103,7 @@ describe('WorkerRegistry.register', () => {
 
   it('throws WORKER_REGISTRATION_FAILED when concurrency is 0', () => {
     // concurrency < 1 is always invalid — BullMQ would process nothing.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     expect(() =>
       registry.register({ queueName: 'email', handler: noopHandler, options: { concurrency: 0 } }),
     ).toThrow(QueueException)
@@ -92,7 +111,7 @@ describe('WorkerRegistry.register', () => {
 
   it('throws WORKER_REGISTRATION_FAILED when concurrency is negative', () => {
     // Negative concurrency is semantically identical to 0 (invalid).
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     expect(() =>
       registry.register({
         queueName: 'email',
@@ -104,7 +123,7 @@ describe('WorkerRegistry.register', () => {
 
   it('throws WORKER_REGISTRATION_FAILED when concurrency exceeds MAX_WORKER_CONCURRENCY', () => {
     // A ceiling of 1_000 prevents event-loop exhaustion from absurdly high values.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     expect(() =>
       registry.register({
         queueName: 'email',
@@ -116,7 +135,7 @@ describe('WorkerRegistry.register', () => {
 
   it('registers successfully when an explicit concurrency within the valid range is provided', () => {
     // An in-range concurrency value must pass both the lower and upper bound checks.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     const worker = registry.register({
       queueName: 'email',
       handler: noopHandler,
@@ -127,7 +146,7 @@ describe('WorkerRegistry.register', () => {
 
   it('throws WORKER_REGISTRATION_FAILED when limiter.max is 0', () => {
     // A rate limiter with max=0 would block all jobs forever.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     expect(() =>
       registry.register({
         queueName: 'email',
@@ -139,7 +158,7 @@ describe('WorkerRegistry.register', () => {
 
   it('throws WORKER_REGISTRATION_FAILED when limiter.duration is 0', () => {
     // A rate limiter with duration=0 is invalid (division by zero semantics).
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     expect(() =>
       registry.register({
         queueName: 'email',
@@ -157,7 +176,7 @@ describe('WorkerRegistry.register', () => {
     MockWorker.mockImplementationOnce(() => {
       throw new Error('Redis auth failed')
     })
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     expect(() => registry.register({ queueName: 'email', handler: noopHandler })).toThrow(
       QueueException,
     )
@@ -170,7 +189,7 @@ describe('WorkerRegistry.register', () => {
       throw new Error('connection refused')
     })
     const redis = fakeRedis()
-    const registry = new WorkerRegistry(fakeConnection(redis))
+    const registry = new WorkerRegistry(fakeConnection(redis), makeOptions())
     expect(() => registry.register({ queueName: 'email', handler: noopHandler })).toThrow()
     const dupResult = (redis.duplicate as jest.Mock).mock.results[0]!.value as {
       disconnect: jest.Mock
@@ -185,7 +204,7 @@ describe('WorkerRegistry.register', () => {
       const cause: unknown = 'auth_failed' // non-Error primitive
       throw cause
     })
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     expect(() => registry.register({ queueName: 'email', handler: noopHandler })).toThrow(
       QueueException,
     )
@@ -193,7 +212,7 @@ describe('WorkerRegistry.register', () => {
 
   it('forwards lockDuration and stalledInterval when provided', () => {
     // Optional BullMQ options must be forwarded only when explicitly set.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     const worker = registry.register({
       queueName: 'email',
       handler: noopHandler,
@@ -204,7 +223,7 @@ describe('WorkerRegistry.register', () => {
 
   it('forwards a valid limiter through buildBullOptions', () => {
     // A valid limiter (max >=1, duration >=1) must be forwarded without throwing.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     const worker = registry.register({
       queueName: 'email',
       handler: noopHandler,
@@ -217,7 +236,7 @@ describe('WorkerRegistry.register', () => {
 describe('WorkerRegistry.registerSandboxed', () => {
   it('creates a file-based worker with the provided processorFile', () => {
     // Sandboxed workers pass the file path as the processor argument to BullMQ.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     const worker = registry.registerSandboxed({
       queueName: 'sandboxed',
       processorFile: '/tmp/processor.js',
@@ -228,7 +247,7 @@ describe('WorkerRegistry.registerSandboxed', () => {
 
   it('throws DUPLICATE_PROCESSOR for duplicate sandboxed registrations', () => {
     // Duplicate guard applies to sandboxed registrations too.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     registry.registerSandboxed({ queueName: 'sandboxed', processorFile: '/tmp/p.js' })
     expect(() =>
       registry.registerSandboxed({ queueName: 'sandboxed', processorFile: '/tmp/p.js' }),
@@ -237,7 +256,7 @@ describe('WorkerRegistry.registerSandboxed', () => {
 
   it('forwards useWorkerThreads when provided', () => {
     // useWorkerThreads is optional and must only be included when explicitly set.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     registry.registerSandboxed({
       queueName: 'threaded',
       processorFile: '/tmp/p.js',
@@ -252,7 +271,7 @@ describe('WorkerRegistry.registerSandboxed', () => {
     MockWorker.mockImplementationOnce(() => {
       throw new Error('file not found')
     })
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     expect(() =>
       registry.registerSandboxed({ queueName: 'sb', processorFile: '/bad/path.js' }),
     ).toThrow(QueueException)
@@ -265,7 +284,7 @@ describe('WorkerRegistry.registerSandboxed', () => {
       const cause: unknown = 42 // non-Error primitive
       throw cause
     })
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     expect(() =>
       registry.registerSandboxed({ queueName: 'sb', processorFile: '/bad/path.js' }),
     ).toThrow(QueueException)
@@ -278,7 +297,7 @@ describe('WorkerRegistry.registerSandboxed', () => {
       throw new Error('sandbox spawn failed')
     })
     const redis = fakeRedis()
-    const registry = new WorkerRegistry(fakeConnection(redis))
+    const registry = new WorkerRegistry(fakeConnection(redis), makeOptions())
     expect(() =>
       registry.registerSandboxed({ queueName: 'sb', processorFile: '/tmp/p.js' }),
     ).toThrow()
@@ -290,7 +309,7 @@ describe('WorkerRegistry.registerSandboxed', () => {
 
   it('throws WORKER_REGISTRATION_FAILED when processorFile is a relative path', () => {
     // Relative paths may traverse outside the project root — always reject them.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     expect(() =>
       registry.registerSandboxed({ queueName: 'rel', processorFile: './processor.js' }),
     ).toThrow(QueueException)
@@ -298,7 +317,7 @@ describe('WorkerRegistry.registerSandboxed', () => {
 
   it('throws WORKER_REGISTRATION_FAILED when processorFile has a disallowed extension', () => {
     // Only .js, .cjs, and .mjs are accepted — prevent arbitrary file execution.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     expect(() =>
       registry.registerSandboxed({ queueName: 'ext', processorFile: '/tmp/processor.ts' }),
     ).toThrow(QueueException)
@@ -306,7 +325,7 @@ describe('WorkerRegistry.registerSandboxed', () => {
 
   it('throws WORKER_REGISTRATION_FAILED when processorFile URL uses a non-file: protocol', () => {
     // Non-file: URLs (http:, data:) could load remote code — always reject them.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     expect(() =>
       registry.registerSandboxed({
         queueName: 'url',
@@ -317,7 +336,7 @@ describe('WorkerRegistry.registerSandboxed', () => {
 
   it('accepts a file: URL as processorFile', () => {
     // file: URLs are the safe, explicit form for absolute file references.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     const worker = registry.registerSandboxed({
       queueName: 'fileurl',
       processorFile: new URL('file:///tmp/processor.js'),
@@ -327,7 +346,7 @@ describe('WorkerRegistry.registerSandboxed', () => {
 
   it('throws WORKER_REGISTRATION_FAILED when a file: URL has a disallowed extension', () => {
     // A file: URL must not bypass the extension allowlist that string paths get.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     expect(() =>
       registry.registerSandboxed({
         queueName: 'fileurl-ext',
@@ -340,7 +359,7 @@ describe('WorkerRegistry.registerSandboxed', () => {
 describe('WorkerRegistry.unregister', () => {
   it('closes the worker and removes it from the map', async () => {
     // unregister must call close() and remove the queue name from the registry.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     registry.register({ queueName: 'email', handler: noopHandler })
     const [worker] = createdWorkers
     await registry.unregister('email')
@@ -350,7 +369,7 @@ describe('WorkerRegistry.unregister', () => {
 
   it('is a no-op for an unknown queue name', async () => {
     // Unregistering a non-existent queue must not throw.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     await expect(registry.unregister('nonexistent')).resolves.toBeUndefined()
   })
 })
@@ -358,7 +377,7 @@ describe('WorkerRegistry.unregister', () => {
 describe('WorkerRegistry.list / getAll', () => {
   it('list returns all registered queue names', () => {
     // list() is the primary way consumers discover what queues are registered.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     registry.register({ queueName: 'a', handler: noopHandler })
     registry.register({ queueName: 'b', handler: noopHandler })
     expect(registry.list()).toEqual(expect.arrayContaining(['a', 'b']))
@@ -366,7 +385,7 @@ describe('WorkerRegistry.list / getAll', () => {
 
   it('getAll returns a ReadonlyMap of all workers', () => {
     // getAll() is the shutdown orchestrator's entry point.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     registry.register({ queueName: 'x', handler: noopHandler })
     const map = registry.getAll()
     expect(map.size).toBe(1)
@@ -377,7 +396,7 @@ describe('WorkerRegistry.list / getAll', () => {
 describe('WorkerRegistry.onModuleDestroy', () => {
   it('closes all workers without throwing even when close() rejects with an Error', async () => {
     // Shutdown must be best-effort — a failing close must not prevent others from closing.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     registry.register({ queueName: 'a', handler: noopHandler })
     registry.register({ queueName: 'b', handler: noopHandler })
 
@@ -392,7 +411,7 @@ describe('WorkerRegistry.onModuleDestroy', () => {
 
   it('handles a non-Error rejection from close() during onModuleDestroy', async () => {
     // A close() that rejects with a non-Error (string, number) must be swallowed gracefully.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     registry.register({ queueName: 'x', handler: noopHandler })
     const [workerX] = createdWorkers
     workerX?.close.mockRejectedValueOnce('abrupt_close')
@@ -403,9 +422,30 @@ describe('WorkerRegistry.onModuleDestroy', () => {
 
   it('clears the internal map after destroy', async () => {
     // After shutdown, the registry should be empty.
-    const registry = new WorkerRegistry(fakeConnection())
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     registry.register({ queueName: 'email', handler: noopHandler })
     await registry.onModuleDestroy()
     expect(registry.list()).toHaveLength(0)
+  })
+})
+
+describe('WorkerRegistry — telemetry passthrough', () => {
+  it('forwards the configured telemetry instance to the Worker constructor', () => {
+    // The telemetry instance reaches every Worker so spans cross enqueue → handler.
+    const telemetry = { name: 'sentinel-telemetry' } as unknown as ResolvedQueueOptions['telemetry']
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions(telemetry))
+    registry.register({ queueName: 'email', handler: noopHandler })
+
+    const [, , opts] = workerConstructorArgs[0] as [string, unknown, BullWorkerOptions]
+    expect(opts.telemetry).toBe(telemetry)
+  })
+
+  it('omits the telemetry key when telemetry is not configured', () => {
+    // Without telemetry, the constructor options never carry the key.
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
+    registry.register({ queueName: 'email', handler: noopHandler })
+
+    const [, , opts] = workerConstructorArgs[0] as [string, unknown, BullWorkerOptions]
+    expect('telemetry' in opts).toBe(false)
   })
 })

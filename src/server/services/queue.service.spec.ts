@@ -3,9 +3,10 @@
  * @layer server/services
  */
 
-import type { Job } from 'bullmq'
+import type { Job, Telemetry } from 'bullmq'
 import { QueueService } from './queue.service'
 import { QueueException } from '../errors/queue-exception'
+import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import type { ConnectionResolver } from './connection-resolver.service'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import type { BulkJob } from '../interfaces/queue-job-data.interface'
@@ -17,6 +18,9 @@ interface MockQueue {
   getJob: jest.Mock
   getJobs: jest.Mock
   getJobCounts: jest.Mock
+  upsertJobScheduler: jest.Mock
+  removeJobScheduler: jest.Mock
+  getJobSchedulers: jest.Mock
   pause: jest.Mock
   resume: jest.Mock
   clean: jest.Mock
@@ -35,6 +39,9 @@ jest.mock('bullmq', () => ({
       getJob: jest.fn(),
       getJobs: jest.fn(),
       getJobCounts: jest.fn(),
+      upsertJobScheduler: jest.fn(),
+      removeJobScheduler: jest.fn(),
+      getJobSchedulers: jest.fn(),
       pause: jest.fn().mockResolvedValue(undefined),
       resume: jest.fn().mockResolvedValue(undefined),
       clean: jest.fn(),
@@ -110,6 +117,25 @@ describe('QueueService — queue cache', () => {
     const [, opts] = queueConstructorArgs[0] as [string, Record<string, unknown>]
     expect(opts.streams).toEqual({ events: { maxLen: 99 } })
   })
+
+  it('omits the telemetry key when telemetry is not configured', () => {
+    // The default options carry no telemetry, so the Queue options must not set it.
+    const { service } = makeService()
+    service.getOrCreateQueue('email')
+
+    const [, opts] = queueConstructorArgs[0] as [string, Record<string, unknown>]
+    expect('telemetry' in opts).toBe(false)
+  })
+
+  it('passes the configured telemetry instance into the Queue constructor', () => {
+    // A configured telemetry instance reaches every Queue so spans propagate.
+    const telemetry = { name: 'sentinel-telemetry' } as unknown as Telemetry
+    const service = new QueueService(makeConnection(), { ...makeOptions(), telemetry })
+    service.getOrCreateQueue('email')
+
+    const [, opts] = queueConstructorArgs[0] as [string, Record<string, unknown>]
+    expect(opts.telemetry).toBe(telemetry)
+  })
 })
 
 describe('QueueService — enqueue', () => {
@@ -124,6 +150,51 @@ describe('QueueService — enqueue', () => {
 
     expect(queueInstances[0]?.add).toHaveBeenCalledWith('send', { to: 'a@b.com' }, { priority: 5 })
     expect(result).toBe(job)
+  })
+})
+
+describe('QueueService — deduplication passthrough', () => {
+  /** Assert enqueue forwards the given options object to Queue.add unchanged. */
+  async function expectForwarded(options: Parameters<QueueService['enqueue']>[3]): Promise<void> {
+    const { service } = makeService()
+    service.getOrCreateQueue('search')
+    queueInstances[0]?.add.mockResolvedValue({ id: '1' } as Job)
+
+    await service.enqueue('search', 'reindex', { term: 'shoes' }, options)
+
+    expect(queueInstances[0]?.add).toHaveBeenCalledWith('reindex', { term: 'shoes' }, options)
+  }
+
+  it('forwards Simple deduplication unchanged', async () => {
+    // Simple mode: { id } collapses until the in-flight job settles.
+    await expectForwarded({ deduplication: { id: 'reindex:shoes' } })
+  })
+
+  it('forwards Throttle deduplication unchanged', async () => {
+    // Throttle mode: { id, ttl } ignores duplicates within the window.
+    await expectForwarded({ deduplication: { id: 'reindex:shoes', ttl: 5_000 } })
+  })
+
+  it('forwards Debounce deduplication unchanged', async () => {
+    // Debounce mode: keep latest data and reset the TTL per duplicate.
+    await expectForwarded({
+      deduplication: { id: 'reindex:shoes', ttl: 5_000, extend: true, replace: true },
+    })
+  })
+
+  it('forwards keep-last-if-active deduplication unchanged', async () => {
+    // keep-last-if-active: store latest while a job runs, then run one follow-up.
+    await expectForwarded({ deduplication: { id: 'reindex:shoes', keepLastIfActive: true } })
+  })
+
+  it('treats jobId and deduplication as independent options', async () => {
+    // Both can be set together; the library applies no transformation.
+    await expectForwarded({ jobId: 'job-1', deduplication: { id: 'reindex:shoes' } })
+  })
+
+  it('forwards a bare jobId without any deduplication key', async () => {
+    // jobId alone (idempotent insert) does not imply a deduplication key.
+    await expectForwarded({ jobId: 'job-1' })
   })
 })
 
@@ -232,6 +303,133 @@ describe('QueueService — metrics', () => {
     expect(metrics.queue).toBe('email')
     expect(metrics.counts).toEqual(counts)
     expect(() => new Date(metrics.collectedAt).toISOString()).not.toThrow()
+  })
+})
+
+describe('QueueService — job schedulers', () => {
+  it('upserts a cron scheduler with default template name and data', async () => {
+    // A pattern schedule defaults name to the schedulerId and data to {}.
+    const { service } = makeService()
+    service.getOrCreateQueue('cleanup')
+    const job = { id: 'repeat:nightly:1' } as Job
+    queueInstances[0]?.upsertJobScheduler.mockResolvedValue(job)
+
+    const result = await service.upsertJobScheduler('cleanup', 'nightly', { pattern: '0 3 * * *' })
+
+    expect(queueInstances[0]?.upsertJobScheduler).toHaveBeenCalledWith(
+      'nightly',
+      { pattern: '0 3 * * *' },
+      { name: 'nightly', data: {} },
+    )
+    expect(result).toBe(job)
+  })
+
+  it('forwards an explicit template name, data, and opts', async () => {
+    // A provided template overrides the defaults and includes opts when set.
+    const { service } = makeService()
+    service.getOrCreateQueue('cleanup')
+    queueInstances[0]?.upsertJobScheduler.mockResolvedValue(undefined)
+
+    await service.upsertJobScheduler(
+      'cleanup',
+      'nightly',
+      { pattern: '0 3 * * *', tz: 'America/Sao_Paulo' },
+      { name: 'cleanup', data: { mode: 'soft' }, opts: { priority: 5 } },
+    )
+
+    expect(queueInstances[0]?.upsertJobScheduler).toHaveBeenCalledWith(
+      'nightly',
+      { pattern: '0 3 * * *', tz: 'America/Sao_Paulo' },
+      { name: 'cleanup', data: { mode: 'soft' }, opts: { priority: 5 } },
+    )
+  })
+
+  it('upserts an interval scheduler', async () => {
+    // An `every` schedule is forwarded unchanged.
+    const { service } = makeService()
+    service.getOrCreateQueue('monitoring')
+    queueInstances[0]?.upsertJobScheduler.mockResolvedValue(undefined)
+
+    const result = await service.upsertJobScheduler('monitoring', 'heartbeat', { every: 60_000 })
+
+    expect(queueInstances[0]?.upsertJobScheduler).toHaveBeenCalledWith(
+      'heartbeat',
+      { every: 60_000 },
+      { name: 'heartbeat', data: {} },
+    )
+    expect(result).toBeUndefined()
+  })
+
+  it('is idempotent — a second call reuses the same queue', async () => {
+    // Re-registering the same schedulerId hits the cached queue, not a new one.
+    const { service } = makeService()
+    service.getOrCreateQueue('cleanup')
+    queueInstances[0]?.upsertJobScheduler.mockResolvedValue(undefined)
+
+    await service.upsertJobScheduler('cleanup', 'nightly', { every: 1000 })
+    await service.upsertJobScheduler('cleanup', 'nightly', { every: 2000 })
+
+    expect(queueConstructorArgs).toHaveLength(1)
+    expect(queueInstances[0]?.upsertJobScheduler).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects an invalid schedule before touching the queue', async () => {
+    // Structural validation runs first, so BullMQ is never called for a bad schedule.
+    const { service } = makeService()
+    service.getOrCreateQueue('cleanup')
+
+    await expect(
+      service.upsertJobScheduler('cleanup', 'nightly', { every: 0 }),
+    ).rejects.toBeInstanceOf(QueueException)
+    expect(queueInstances[0]?.upsertJobScheduler).not.toHaveBeenCalled()
+  })
+
+  it('rethrows a cron parse failure as INVALID_REPEAT_OPTIONS (400)', async () => {
+    // BullMQ parses the cron string; a parse failure becomes a typed 400.
+    const { service } = makeService()
+    service.getOrCreateQueue('cleanup')
+    queueInstances[0]?.upsertJobScheduler.mockRejectedValue(new Error('Invalid cron expression'))
+
+    await expect(
+      service.upsertJobScheduler('cleanup', 'nightly', { pattern: 'not a cron' }),
+    ).rejects.toBeInstanceOf(QueueException)
+    await service.upsertJobScheduler('cleanup', 'nightly', { pattern: 'not a cron' }).catch((err: unknown) => {
+      const body = (err as QueueException).getResponse() as { error: { code: string } }
+      expect(body.error.code).toBe(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS)
+      expect((err as QueueException).getStatus()).toBe(400)
+    })
+  })
+
+  it('removes a scheduler and returns the boolean result', async () => {
+    // removeJobScheduler forwards to BullMQ and returns its boolean.
+    const { service } = makeService()
+    service.getOrCreateQueue('cleanup')
+    queueInstances[0]?.removeJobScheduler.mockResolvedValue(true)
+
+    await expect(service.removeJobScheduler('cleanup', 'nightly')).resolves.toBe(true)
+    expect(queueInstances[0]?.removeJobScheduler).toHaveBeenCalledWith('nightly')
+  })
+
+  it('lists schedulers with default pagination', async () => {
+    // getJobSchedulers defaults the page window and ascending order.
+    const { service } = makeService()
+    service.getOrCreateQueue('cleanup')
+    queueInstances[0]?.getJobSchedulers.mockResolvedValue([])
+
+    await service.getJobSchedulers('cleanup')
+
+    expect(queueInstances[0]?.getJobSchedulers).toHaveBeenCalledWith(0, 50, true)
+  })
+
+  it('lists schedulers with explicit pagination', async () => {
+    // Explicit pagination and order are forwarded unchanged.
+    const { service } = makeService()
+    service.getOrCreateQueue('cleanup')
+    queueInstances[0]?.getJobSchedulers.mockResolvedValue([])
+
+    await service.getJobSchedulers('cleanup', 5, 25, false)
+
+    expect(queueInstances[0]?.getJobSchedulers).toHaveBeenCalledWith(5, 25, false)
   })
 })
 
