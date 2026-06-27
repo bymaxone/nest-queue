@@ -8,13 +8,15 @@
  */
 
 import { isAbsolute, extname } from 'node:path'
-import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common'
+import { Inject, Injectable, Logger, type OnModuleDestroy } from '@nestjs/common'
 import { Worker } from 'bullmq'
 import type { Job, WorkerOptions as BullWorkerOptions } from 'bullmq'
 import type { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
 import { duplicateConnection } from '../utils/duplicate-connection'
 import type { WorkerOptions } from '../interfaces/worker-options.interface'
+import type { ResolvedQueueOptions } from '../config/resolved-options'
+import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { DEFAULT_WORKER_CONCURRENCY, MAX_WORKER_CONCURRENCY } from '../constants/default-options'
@@ -83,7 +85,10 @@ export class WorkerRegistry implements OnModuleDestroy {
   private readonly logger = new Logger(WorkerRegistry.name)
   private readonly workers = new Map<string, Worker>()
 
-  constructor(private readonly connection: ConnectionResolver) {}
+  constructor(
+    private readonly connection: ConnectionResolver,
+    @Inject(BYMAX_QUEUE_RESOLVED_OPTIONS) private readonly options: ResolvedQueueOptions,
+  ) {}
 
   /**
    * Register an in-process worker with a handler function. The BullMQ `Worker`
@@ -334,6 +339,9 @@ export class WorkerRegistry implements OnModuleDestroy {
     if (opts?.limiter !== undefined) result.limiter = opts.limiter
     if (opts?.lockDuration !== undefined) result.lockDuration = opts.lockDuration
     if (opts?.stalledInterval !== undefined) result.stalledInterval = opts.stalledInterval
+    // Propagate the configured telemetry instance so spans cross from enqueue()
+    // into the worker; the key stays absent when telemetry is not configured.
+    if (this.options.telemetry !== undefined) result.telemetry = this.options.telemetry
     return result
   }
 }

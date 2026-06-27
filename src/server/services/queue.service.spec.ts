@@ -3,7 +3,7 @@
  * @layer server/services
  */
 
-import type { Job } from 'bullmq'
+import type { Job, Telemetry } from 'bullmq'
 import { QueueService } from './queue.service'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
@@ -116,6 +116,25 @@ describe('QueueService — queue cache', () => {
 
     const [, opts] = queueConstructorArgs[0] as [string, Record<string, unknown>]
     expect(opts.streams).toEqual({ events: { maxLen: 99 } })
+  })
+
+  it('omits the telemetry key when telemetry is not configured', () => {
+    // The default options carry no telemetry, so the Queue options must not set it.
+    const { service } = makeService()
+    service.getOrCreateQueue('email')
+
+    const [, opts] = queueConstructorArgs[0] as [string, Record<string, unknown>]
+    expect('telemetry' in opts).toBe(false)
+  })
+
+  it('passes the configured telemetry instance into the Queue constructor', () => {
+    // A configured telemetry instance reaches every Queue so spans propagate.
+    const telemetry = { name: 'sentinel-telemetry' } as unknown as Telemetry
+    const service = new QueueService(makeConnection(), { ...makeOptions(), telemetry })
+    service.getOrCreateQueue('email')
+
+    const [, opts] = queueConstructorArgs[0] as [string, Record<string, unknown>]
+    expect(opts.telemetry).toBe(telemetry)
   })
 })
 

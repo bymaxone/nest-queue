@@ -7,7 +7,7 @@
  */
 
 import { Injectable, type OnModuleDestroy } from '@nestjs/common'
-import { FlowProducer, type FlowJob, type JobNode } from 'bullmq'
+import { FlowProducer, type FlowJob, type JobNode, type Telemetry } from 'bullmq'
 import { ConnectionResolver } from './connection-resolver.service'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
@@ -33,9 +33,12 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 export class FlowService implements OnModuleDestroy {
   private readonly producer?: FlowProducer
 
-  constructor(connection: ConnectionResolver, enabled: boolean) {
+  constructor(connection: ConnectionResolver, enabled: boolean, telemetry?: Telemetry) {
     if (enabled) {
-      this.producer = new FlowProducer({ connection: connection.getClient() })
+      this.producer = new FlowProducer({
+        connection: connection.getClient(),
+        ...(telemetry ? { telemetry } : {}),
+      })
     }
   }
 

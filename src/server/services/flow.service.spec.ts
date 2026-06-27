@@ -4,7 +4,7 @@
  * @layer server/services
  */
 
-import type { FlowJob, JobNode } from 'bullmq'
+import type { FlowJob, JobNode, Telemetry } from 'bullmq'
 import { FlowService } from './flow.service'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
@@ -87,6 +87,23 @@ describe('FlowService — enabled', () => {
     const service = new FlowService(makeConnection(), true)
 
     expect(service.getProducer()).toBe(producerInstances[0])
+  })
+
+  it('passes the configured telemetry into the FlowProducer constructor', () => {
+    // A configured telemetry instance reaches the producer so spans propagate to children.
+    const telemetry = { name: 'sentinel-telemetry' } as unknown as Telemetry
+    new FlowService(makeConnection(), true, telemetry)
+
+    const [opts] = producerConstructorArgs[0] as [{ telemetry?: unknown }]
+    expect(opts.telemetry).toBe(telemetry)
+  })
+
+  it('omits the telemetry key when telemetry is not configured', () => {
+    // Without telemetry, the producer options never carry the key.
+    new FlowService(makeConnection(), true)
+
+    const [opts] = producerConstructorArgs[0] as [Record<string, unknown>]
+    expect('telemetry' in opts).toBe(false)
   })
 })
 

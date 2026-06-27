@@ -89,7 +89,7 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
       {
         provide: FlowService,
         useFactory: (conn: ConnectionResolver): FlowService =>
-          new FlowService(conn, resolved.flows.enabled),
+          new FlowService(conn, resolved.flows.enabled, resolved.telemetry),
         inject: [ConnectionResolver],
       },
       WorkerRegistry,

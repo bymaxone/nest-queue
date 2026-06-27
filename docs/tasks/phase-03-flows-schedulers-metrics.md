@@ -1,6 +1,6 @@
 # Phase 3 — Flows, Job Schedulers, Deduplication, Telemetry & Metrics
 
-> **Status**: 🔄 In Progress · **Progress**: 3 / 6 tasks · **Last updated**: 2026-06-27
+> **Status**: 🔄 In Progress · **Progress**: 4 / 6 tasks · **Last updated**: 2026-06-27
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 3
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -58,7 +58,7 @@ By the end of Phase 3 you can compose hierarchical flows, schedule recurring job
 | 3.1 | FlowService — opt-in FlowProducer wrapper | ✅ Done | P0 | M | 1.5, 1.8 |
 | 3.2 | Job Schedulers in QueueService + cron validation util | ✅ Done | P0 | M | 1.2, 1.7 |
 | 3.3 | Native deduplication options on `enqueue` | ✅ Done | P1 | S | 1.7 |
-| 3.4 | Telemetry passthrough (OpenTelemetry) to Queue/Worker/FlowProducer | 📋 ToDo | P1 | S | 1.7, 2.2, 3.1 |
+| 3.4 | Telemetry passthrough (OpenTelemetry) to Queue/Worker/FlowProducer | ✅ Done | P1 | S | 1.7, 2.2, 3.1 |
 | 3.5 | MetricsService — cached getJobCounts + getMetrics delegation + health-check docs | 📋 ToDo | P0 | M | 1.7, 1.8 |
 | 3.6 | Index exports + Phase 3 integration tests + validation | 📋 ToDo | P0 | S | 3.1, 3.2, 3.3, 3.4, 3.5 |
 
@@ -493,7 +493,7 @@ Completion Protocol (after you finish):
 
 ### Task 3.4 — Telemetry passthrough (OpenTelemetry) to Queue/Worker/FlowProducer
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P1
 - **Size**: S
 - **Depends on**: 1.7 (Queue construction in `QueueService`), 2.2 (Worker construction in `WorkerRegistry`), 3.1 (`FlowService`)
@@ -504,13 +504,13 @@ When `options.telemetry` (a BullMQ `Telemetry`, typically `new BullMQOtel(...)` 
 
 #### Acceptance criteria
 
-- [ ] `QueueService.getOrCreateQueue` passes `telemetry` into the `Queue` constructor when `ResolvedQueueOptions.telemetry` is present, and omits the key when absent.
-- [ ] `WorkerRegistry` passes `telemetry` into every `Worker` it constructs when present.
-- [ ] `FlowService` passes `telemetry` into the `FlowProducer` when present.
-- [ ] When `telemetry` is undefined, no `telemetry` key is set on any constructor options (verified by the constructed-options assertion).
-- [ ] `bullmq-otel` remains an **optional** peer dependency in `package.json` (`peerDependenciesMeta.bullmq-otel.optional = true`) and is never imported by the lib.
-- [ ] Tests assert the telemetry instance is forwarded to Queue / Worker / FlowProducer constructors.
-- [ ] 100% line/branch coverage on the touched branches.
+- [x] `QueueService.getOrCreateQueue` passes `telemetry` into the `Queue` constructor when `ResolvedQueueOptions.telemetry` is present, and omits the key when absent.
+- [x] `WorkerRegistry` passes `telemetry` into every `Worker` it constructs when present.
+- [x] `FlowService` passes `telemetry` into the `FlowProducer` when present.
+- [x] When `telemetry` is undefined, no `telemetry` key is set on any constructor options (verified by the constructed-options assertion).
+- [x] `bullmq-otel` remains an **optional** peer dependency in `package.json` (`peerDependenciesMeta.bullmq-otel.optional = true`) and is never imported by the lib.
+- [x] Tests assert the telemetry instance is forwarded to Queue / Worker / FlowProducer constructors.
+- [x] 100% line/branch coverage on the touched branches.
 
 #### Files to create / modify
 
@@ -888,3 +888,4 @@ Completion Protocol (after you finish):
 - 3.1 ✅ 2026-06-27 — FlowService guarded FlowProducer wrapper, registered/exported by the module; 100% coverage.
 - 3.2 ✅ 2026-06-27 — Job Scheduler API (upsert/remove/list) on QueueService + structural validator; cron delegated to BullMQ, no cron-parser dep; dropped deprecated `immediately`; 100% coverage.
 - 3.3 ✅ 2026-06-27 — Documented the four native deduplication modes on `enqueue` and proved passthrough (incl. jobId/deduplication independence); no custom dedup code.
+- 3.4 ✅ 2026-06-27 — Threaded the configured telemetry into every Queue/Worker/FlowProducer via conditional spread (key omitted when absent); bullmq-otel stays an unimported optional peer.

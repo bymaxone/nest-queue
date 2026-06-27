@@ -64,6 +64,7 @@ export class QueueService implements OnModuleDestroy {
       prefix: this.options.prefix,
       defaultJobOptions: this.options.defaultJobOptions,
       ...this.options.queueOptions,
+      ...(this.options.telemetry ? { telemetry: this.options.telemetry } : {}),
       ...overrides,
     })
     this.queues.set(queueName, queue)
