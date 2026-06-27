@@ -1,6 +1,6 @@
 # Phase 3 — Flows, Job Schedulers, Deduplication, Telemetry & Metrics
 
-> **Status**: 🔄 In Progress · **Progress**: 5 / 6 tasks · **Last updated**: 2026-06-27
+> **Status**: ✅ Done · **Progress**: 6 / 6 tasks · **Last updated**: 2026-06-27
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 3
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -60,7 +60,7 @@ By the end of Phase 3 you can compose hierarchical flows, schedule recurring job
 | 3.3 | Native deduplication options on `enqueue` | ✅ Done | P1 | S | 1.7 |
 | 3.4 | Telemetry passthrough (OpenTelemetry) to Queue/Worker/FlowProducer | ✅ Done | P1 | S | 1.7, 2.2, 3.1 |
 | 3.5 | MetricsService — cached getJobCounts + getMetrics delegation + health-check docs | ✅ Done | P0 | M | 1.7, 1.8 |
-| 3.6 | Index exports + Phase 3 integration tests + validation | 📋 ToDo | P0 | S | 3.1, 3.2, 3.3, 3.4, 3.5 |
+| 3.6 | Index exports + Phase 3 integration tests + validation | ✅ Done | P0 | S | 3.1, 3.2, 3.3, 3.4, 3.5 |
 
 > Cross-phase dependencies reference **Phase 1** task IDs: `1.2` (shared types/constants), `1.5` (`ConnectionResolver`), `1.7` (base `QueueService`), `1.8` (`forRoot` + server barrel); and **Phase 2** `2.2` (`WorkerRegistry`).
 
@@ -780,7 +780,7 @@ Completion Protocol (after you finish):
 
 ### Task 3.6 — Index exports + Phase 3 integration tests + validation
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 3.1, 3.2, 3.3, 3.4, 3.5
@@ -791,12 +791,12 @@ Wire the new opt-in services into the public surface and close the phase: export
 
 #### Acceptance criteria
 
-- [ ] `src/server/index.ts` exports `FlowService` and `MetricsService` (explicit named exports, no deep barrels).
-- [ ] `dist/server/index.mjs` exposes `FlowService` and `MetricsService` after `pnpm build`.
-- [ ] A smoke test exercises `upsertJobScheduler` (cron, idempotent by `schedulerId`) followed by `MetricsService.get`.
-- [ ] `pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size` all pass.
-- [ ] 100% line/branch coverage across every file implemented in Phase 3 (`jest.coverage.config.ts` → `100/100/100/100`).
-- [ ] Bundle stays ≤ 18 KiB brotli (`scripts/check-size.mjs`).
+- [x] `src/server/index.ts` exports `FlowService` and `MetricsService` (explicit named exports, no deep barrels).
+- [x] `dist/server/index.mjs` exposes `FlowService` and `MetricsService` after `pnpm build`.
+- [x] A smoke test exercises `upsertJobScheduler` (cron, idempotent by `schedulerId`) followed by `MetricsService.get`.
+- [x] `pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size` all pass.
+- [x] 100% line/branch coverage across every file implemented in Phase 3 (`jest.coverage.config.ts` → `100/100/100/100`).
+- [x] Bundle stays ≤ 18 KiB brotli (`scripts/check-size.mjs`).
 
 #### Files to create / modify
 
@@ -890,3 +890,4 @@ Completion Protocol (after you finish):
 - 3.3 ✅ 2026-06-27 — Documented the four native deduplication modes on `enqueue` and proved passthrough (incl. jobId/deduplication independence); no custom dedup code.
 - 3.4 ✅ 2026-06-27 — Threaded the configured telemetry into every Queue/Worker/FlowProducer via conditional spread (key omitted when absent); bullmq-otel stays an unimported optional peer.
 - 3.5 ✅ 2026-06-27 — MetricsService TTL cache over QueueService.getMetrics (get/getAll/invalidate), guarded by METRICS_DISABLED; documented terminus HealthIndicator pattern; 100% coverage.
+- 3.6 ✅ 2026-06-27 — Exported FlowService/MetricsService (+ BullMQ flow/scheduler types) from the server barrel; added a scheduler→metrics smoke test; full gate green (typecheck, lint, 100% coverage, build, size 10.2 KiB/18 KiB).

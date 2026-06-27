@@ -17,6 +17,8 @@ export {
 
 // Public services
 export { QueueService } from './services/queue.service'
+export { FlowService } from './services/flow.service'
+export { MetricsService } from './services/metrics.service'
 export { ConnectionResolver } from './services/connection-resolver.service'
 export { WorkerRegistry } from './services/worker-registry.service'
 export type { ProgrammaticWorkerConfig, SandboxedWorkerConfig } from './services/worker-registry.service'
@@ -61,7 +63,19 @@ export {
 } from './constants/default-options'
 
 // BullMQ convenience type re-exports
-export type { Job, JobsOptions, Queue, Worker, QueueEvents } from 'bullmq'
+export type {
+  Job,
+  JobsOptions,
+  Queue,
+  Worker,
+  QueueEvents,
+  FlowProducer,
+  FlowJob,
+  JobNode,
+  JobSchedulerJson,
+  Telemetry,
+  SandboxedJob,
+} from 'bullmq'
 
 // Shared re-exports
 export type { JobStatus } from '../shared/types/job-status.types'
