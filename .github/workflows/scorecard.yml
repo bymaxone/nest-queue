@@ -11,8 +11,41 @@ permissions:
   contents: read
 
 jobs:
+  # OpenSSF Scorecard requires a public repository — its checkout cannot authenticate
+  # against a private repo. Gate the analysis on visibility so the workflow stays green
+  # (the analysis job is skipped) while the repository is private, and runs automatically
+  # once the repository becomes public — no workflow change required.
+  gate:
+    name: Resolve repository visibility
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      public: ${{ steps.vis.outputs.public }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Determine visibility
+        id: vis
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Fail safe: any API/CLI error defaults to private, so a transient gh failure
+          # skips the analysis (run stays green) instead of failing the whole workflow.
+          if visibility="$(gh api "repos/${{ github.repository }}" --jq '.visibility' 2>/dev/null)" \
+            && [ "$visibility" = "public" ]; then
+            echo 'public=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'public=false' >> "$GITHUB_OUTPUT"
+          fi
+
   analysis:
     name: Scorecard analysis
+    needs: gate
+    if: ${{ needs.gate.outputs.public == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       security-events: write
