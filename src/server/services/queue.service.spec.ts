@@ -505,3 +505,89 @@ describe('QueueService — cache view and shutdown', () => {
     expect(service.getCachedQueues().size).toBe(0)
   })
 })
+
+/** Read the structured details of a thrown/rejected QueueException. */
+function detailsOf(err: unknown): Record<string, unknown> {
+  return ((err as QueueException).getResponse() as { error: { details: Record<string, unknown> } })
+    .error.details
+}
+
+describe('QueueService — bulk and scheduler hardening', () => {
+  it('accepts a batch of exactly the size cap (boundary inclusive)', async () => {
+    // 1000 jobs is the largest valid batch; only 1001+ is rejected.
+    const { service } = makeService()
+    service.getOrCreateQueue('email')
+    queueInstances[0]?.addBulk.mockResolvedValue([])
+    const jobs: BulkJob[] = Array.from({ length: 1000 }, () => ({ name: 'a', data: {} }))
+
+    await expect(service.enqueueBulk('email', jobs)).resolves.toEqual([])
+    expect(queueInstances[0]?.addBulk).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports the limit and received count when the batch is too large', async () => {
+    // The size-cap error carries actionable diagnostics.
+    const { service } = makeService()
+    const jobs: BulkJob[] = Array.from({ length: 1001 }, () => ({ name: 'a', data: {} }))
+    try {
+      await service.enqueueBulk('email', jobs)
+      throw new Error('expected a throw')
+    } catch (err) {
+      expect(detailsOf(err)).toEqual({
+        reason: 'batch size exceeds limit',
+        limit: 1000,
+        received: 1001,
+      })
+    }
+  })
+
+  it('reports the underlying cause when addBulk fails', async () => {
+    // A BullMQ failure is wrapped with its message under details.cause.
+    const { service } = makeService()
+    service.getOrCreateQueue('email')
+    queueInstances[0]?.addBulk.mockRejectedValue(new Error('redis down'))
+    try {
+      await service.enqueueBulk('email', [{ name: 'a', data: {} }])
+      throw new Error('expected a throw')
+    } catch (err) {
+      expect(detailsOf(err).cause).toBe('redis down')
+    }
+  })
+
+  it('omits the opts key for a bulk job without options', async () => {
+    // A job without options must not carry an `opts` key at all.
+    const { service } = makeService()
+    service.getOrCreateQueue('email')
+    queueInstances[0]?.addBulk.mockResolvedValue([])
+    await service.enqueueBulk('email', [{ name: 'b', data: { y: 2 } }])
+    const bulkCalls = (queueInstances[0]?.addBulk.mock.calls ?? []) as [Record<string, unknown>[]][]
+    const sent = bulkCalls[0]?.[0]?.[0]
+    expect(sent).toBeDefined()
+    expect(Object.prototype.hasOwnProperty.call(sent, 'opts')).toBe(false)
+  })
+
+  it('lets a non-cron (interval) scheduler failure propagate unwrapped', async () => {
+    // Only the pattern path maps failures to INVALID_REPEAT_OPTIONS; the interval
+    // path lets the raw error through, proving the branch is taken correctly.
+    const { service } = makeService()
+    service.getOrCreateQueue('monitoring')
+    const raw = new Error('redis unavailable')
+    queueInstances[0]?.upsertJobScheduler.mockRejectedValue(raw)
+
+    await expect(
+      service.upsertJobScheduler('monitoring', 'heartbeat', { every: 1000 }),
+    ).rejects.toBe(raw)
+  })
+
+  it('reports a cron-pattern reason on parse failure', async () => {
+    // The pattern path wraps a parse failure with a descriptive reason.
+    const { service } = makeService()
+    service.getOrCreateQueue('cleanup')
+    queueInstances[0]?.upsertJobScheduler.mockRejectedValue(new Error('bad cron'))
+    try {
+      await service.upsertJobScheduler('cleanup', 'nightly', { pattern: 'not a cron' })
+      throw new Error('expected a throw')
+    } catch (err) {
+      expect(String(detailsOf(err).reason)).toContain('cron')
+    }
+  })
+})

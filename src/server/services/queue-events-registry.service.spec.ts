@@ -50,6 +50,17 @@ describe('QueueEventsRegistry.getOrCreate', () => {
     expect(createdQueueEvents).toHaveLength(1)
   })
 
+  it('constructs QueueEvents with the duplicated connection', () => {
+    // The QueueEvents must be bound to the library-duplicated connection (blocking
+    // SUBSCRIBE needs maxRetriesPerRequest: null), not an empty/default options bag.
+    const { QueueEvents: MockQueueEvents } = jest.requireMock<{ QueueEvents: jest.Mock }>('bullmq')
+    const redis = fakeRedis()
+    const registry = new QueueEventsRegistry(fakeConnection(redis))
+    registry.getOrCreate('email')
+    const dup = (redis.duplicate as jest.Mock).mock.results[0]!.value as unknown
+    expect(MockQueueEvents).toHaveBeenCalledWith('email', { connection: dup })
+  })
+
   it('disconnects the duplicated connection when QueueEvents constructor throws (no leak)', () => {
     // A failed QueueEvents construction must not leave a dangling Redis connection.
     const { QueueEvents: MockQueueEvents } = jest.requireMock<{
@@ -105,43 +116,21 @@ describe('QueueEventsRegistry.list / getAll', () => {
   })
 })
 
-describe('QueueEventsRegistry.onModuleDestroy', () => {
-  it('closes all QueueEvents best-effort without throwing on failure', async () => {
-    // Shutdown must be resilient — a failing close must not block others.
+describe('QueueEventsRegistry.getConnections', () => {
+  it('exposes the duplicated connection opened per queue', () => {
+    // The shutdown orchestrator closes exactly these library-created connections.
     const registry = new QueueEventsRegistry(fakeConnection())
     registry.getOrCreate('email')
     registry.getOrCreate('sms')
-
-    const [emailQe] = createdQueueEvents
-    emailQe?.close.mockRejectedValueOnce(new Error('close failed'))
-
-    await expect(registry.onModuleDestroy()).resolves.toBeUndefined()
-    expect(createdQueueEvents[0]?.close).toHaveBeenCalledTimes(1)
-    expect(createdQueueEvents[1]?.close).toHaveBeenCalledTimes(1)
+    const connections = registry.getConnections()
+    expect(connections.size).toBe(2)
+    expect(connections.has('email')).toBe(true)
+    expect(connections.has('sms')).toBe(true)
   })
 
-  it('clears the internal map after destroy', async () => {
-    // After shutdown the registry must be empty.
+  it('returns an empty map before any QueueEvents are created', () => {
+    // With nothing observed there are no library-created connections to close.
     const registry = new QueueEventsRegistry(fakeConnection())
-    registry.getOrCreate('email')
-    await registry.onModuleDestroy()
-    expect(registry.list()).toHaveLength(0)
-    expect(registry.getAll().size).toBe(0)
-  })
-
-  it('is a no-op when no QueueEvents have been created', async () => {
-    // Destroying an empty registry must not throw.
-    const registry = new QueueEventsRegistry(fakeConnection())
-    await expect(registry.onModuleDestroy()).resolves.toBeUndefined()
-  })
-
-  it('handles a non-Error rejection from close() without throwing', async () => {
-    // A close() that rejects with a non-Error value must be swallowed gracefully.
-    const registry = new QueueEventsRegistry(fakeConnection())
-    registry.getOrCreate('email')
-    const [qe] = createdQueueEvents
-    qe?.close.mockRejectedValueOnce('abrupt_close')
-
-    await expect(registry.onModuleDestroy()).resolves.toBeUndefined()
+    expect(registry.getConnections().size).toBe(0)
   })
 })

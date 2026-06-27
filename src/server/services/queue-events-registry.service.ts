@@ -2,12 +2,14 @@
  * @fileoverview `QueueEventsRegistry` — lazily creates and caches one BullMQ
  * `QueueEvents` instance per queue. A `QueueEvents` connection is opened only
  * when at least one `@OnQueueEvent` listener is registered for that queue,
- * avoiding unnecessary Redis connections.
+ * avoiding unnecessary Redis connections. Each duplicated connection is tracked
+ * so the shutdown orchestrator can close exactly what the library opened.
  * @layer server/services
  */
 
-import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { QueueEvents } from 'bullmq'
+import type { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
 import { duplicateConnection } from '../utils/duplicate-connection'
 
@@ -19,16 +21,18 @@ import { duplicateConnection } from '../utils/duplicate-connection'
  *
  * A single `QueueEvents` is shared across all `@OnQueueEvent` listeners for
  * the same queue. Connections are opened on demand — only when
- * `getOrCreate(queueName)` is first called for a given queue.
+ * `getOrCreate(queueName)` is first called for a given queue. Shutdown is
+ * orchestrated centrally by the queue lifecycle service, which closes each
+ * `QueueEvents` and then releases the duplicated connection exposed here.
  *
  * @example
  * const qe = registry.getOrCreate('email')
  * qe.on('completed', ({ jobId }) => console.log(jobId))
  */
 @Injectable()
-export class QueueEventsRegistry implements OnModuleDestroy {
-  private readonly logger = new Logger(QueueEventsRegistry.name)
+export class QueueEventsRegistry {
   private readonly events = new Map<string, QueueEvents>()
+  private readonly connections = new Map<string, Redis>()
 
   constructor(private readonly connection: ConnectionResolver) {}
 
@@ -53,6 +57,7 @@ export class QueueEventsRegistry implements OnModuleDestroy {
       throw err
     }
     this.events.set(queueName, qe)
+    this.connections.set(queueName, conn)
     return qe
   }
 
@@ -75,23 +80,14 @@ export class QueueEventsRegistry implements OnModuleDestroy {
   }
 
   /**
-   * Best-effort close of all `QueueEvents` connections. Failures are logged and
-   * swallowed — the module must not throw during shutdown.
+   * Returns a read-only view of the duplicated connections the library opened
+   * for its `QueueEvents`, keyed by queue name. Intended for the shutdown
+   * orchestrator so it can close exactly the connections the library created
+   * (Mode A never exposes the consumer's shared client here).
+   *
+   * @returns A read-only map of queue name to duplicated connection.
    */
-  async onModuleDestroy(): Promise<void> {
-    const entries = Array.from(this.events.entries())
-    await Promise.allSettled(
-      entries.map(async ([queueName, qe]) => {
-        try {
-          await qe.close()
-        } catch (err) {
-          this.logger.error(
-            `Failed to close QueueEvents for queue "${queueName}" during shutdown`,
-            err instanceof Error ? err.stack : String(err),
-          )
-        }
-      }),
-    )
-    this.events.clear()
+  getConnections(): ReadonlyMap<string, Redis> {
+    return this.connections
   }
 }

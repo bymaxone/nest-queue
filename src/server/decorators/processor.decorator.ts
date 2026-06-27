@@ -20,6 +20,12 @@ import { PROCESSOR_METADATA_KEY } from './metadata-keys.constants'
  * {@link DEFAULT_WORKER_CONCURRENCY} and emits a `Logger.warn` at discovery
  * time (not here — the decorator itself is side-effect-free).
  *
+ * Delivery is at-least-once: every `@Process` handler on the class MUST be
+ * idempotent (idempotency key on writes, upserts over inserts, or an
+ * "already-processed" marker keyed by `job.id`). Set `lockDuration` comfortably
+ * above the worst-case handler runtime so healthy long jobs are never treated as
+ * stalled.
+ *
  * @param queueName - The BullMQ queue this class processes.
  * @param options - Optional worker tuning overrides.
  *

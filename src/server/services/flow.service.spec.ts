@@ -143,7 +143,7 @@ describe('FlowService — disabled', () => {
 
 describe('FlowService — onModuleDestroy', () => {
   it('closes the producer when active', async () => {
-    // Shutdown closes the active producer exactly once.
+    // Shutdown closes the active producer a single time.
     const service = new FlowService(makeConnection(), true)
 
     await service.onModuleDestroy()

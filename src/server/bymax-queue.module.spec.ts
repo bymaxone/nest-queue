@@ -3,7 +3,10 @@
  * @layer server/module
  */
 
+import { Injectable, Module } from '@nestjs/common'
 import type { FactoryProvider, Provider, ValueProvider } from '@nestjs/common'
+import { Test } from '@nestjs/testing'
+import { DiscoveryModule } from '@nestjs/core'
 import type { Redis } from 'ioredis'
 import { BymaxQueueModule, MODULE_OPTIONS_TOKEN } from './bymax-queue.module'
 import {
@@ -19,7 +22,47 @@ import { MetricsService } from './services/metrics.service'
 import { WorkerRegistry } from './services/worker-registry.service'
 import { QueueEventsRegistry } from './services/queue-events-registry.service'
 import { QueueException } from './errors/queue-exception'
-import type { BymaxQueueModuleOptions } from './interfaces/queue-module-options.interface'
+import type {
+  BymaxQueueModuleOptions,
+  BymaxQueueOptionsFactory,
+} from './interfaces/queue-module-options.interface'
+import type { ResolvedQueueOptions } from './config/resolved-options'
+
+// Booting the module under test must never open a real Redis connection — even
+// when a mutated default flips a flag (e.g. enabling flows). BullMQ and ioredis
+// are mocked so the provider graph instantiates against inert doubles.
+jest.mock('bullmq', () => ({
+  Queue: jest.fn().mockImplementation(() => ({
+    close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
+  })),
+  Worker: jest.fn().mockImplementation(() => ({
+    close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
+    on: jest.fn(),
+  })),
+  QueueEvents: jest.fn().mockImplementation(() => ({
+    close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
+    on: jest.fn(),
+  })),
+  FlowProducer: jest.fn().mockImplementation(() => ({
+    close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
+  })),
+}))
+
+jest.mock('ioredis', () => ({
+  Redis: jest.fn().mockImplementation(() => ({
+    status: 'ready',
+    options: {},
+    on: jest.fn(),
+    once: jest.fn(),
+    off: jest.fn(),
+    quit: jest.fn<Promise<string>, []>().mockResolvedValue('OK'),
+    disconnect: jest.fn(),
+    duplicate: jest.fn().mockReturnValue({
+      options: { maxRetriesPerRequest: null },
+      disconnect: jest.fn(),
+    }),
+  })),
+}))
 
 /** Test whether a provider targets the given injection token or class. */
 function provides(provider: Provider, token: unknown): boolean {
@@ -43,6 +86,8 @@ describe('BymaxQueueModule.forRoot', () => {
     expect(findProvider(providers, ConnectionResolver)).toBeDefined()
     expect(findProvider(providers, BYMAX_QUEUE_OPTIONS)).toBeDefined()
     expect(findProvider(providers, BYMAX_QUEUE_RESOLVED_OPTIONS)).toBeDefined()
+    // DiscoveryModule must be imported so processor discovery can scan providers.
+    expect(dynamic.imports).toEqual([DiscoveryModule])
   })
 
   it('exports the public services and tokens', () => {
@@ -158,6 +203,167 @@ describe('BymaxQueueModule.forRoot', () => {
     const dynamic = BymaxQueueModule.forRoot(baseOptions)
 
     expect(findProvider(dynamic.providers ?? [], QueueService)).toBeDefined()
+    // The missing-providers fallback must spread an EMPTY array — never a stray value.
+    expect(dynamic.providers?.some((provider) => typeof provider === 'string')).toBe(false)
+    spy.mockRestore()
+  })
+})
+
+/** A factory class for the `useClass`/`useExisting` async-registration paths. */
+@Injectable()
+class TestOptionsFactory implements BymaxQueueOptionsFactory {
+  createQueueOptions(): BymaxQueueModuleOptions {
+    return { connection: { client: makeReadyClient() } }
+  }
+}
+
+/** A module that exports the factory so `useExisting` can resolve it. */
+@Module({ providers: [TestOptionsFactory], exports: [TestOptionsFactory] })
+class OptionsFactoryModule {}
+
+/** Token for an externally-provided Mode-A client, used by the inject test. */
+const INJECTED_CLIENT = Symbol('INJECTED_CLIENT')
+
+/** A module that supplies a pre-built Mode-A client for the inject test. */
+@Module({
+  providers: [{ provide: INJECTED_CLIENT, useFactory: (): Redis => makeReadyClient() }],
+  exports: [INJECTED_CLIENT],
+})
+class InjectedClientModule {}
+
+describe('BymaxQueueModule.forRootAsync', () => {
+  it('marks the module global by default', () => {
+    // isGlobal defaults to true on the async path too.
+    const dynamic = BymaxQueueModule.forRootAsync({ useFactory: () => baseOptionsClientMode() })
+    expect(dynamic.global).toBe(true)
+  })
+
+  it('respects isGlobal: false', () => {
+    // The async path honors an explicit opt-out from global registration.
+    const dynamic = BymaxQueueModule.forRootAsync({
+      isGlobal: false,
+      useFactory: () => baseOptionsClientMode(),
+    })
+    expect(dynamic.global).toBe(false)
+  })
+
+  it('exports the same public services and tokens as forRoot', () => {
+    // The observable export surface must match across both registration paths.
+    const dynamic = BymaxQueueModule.forRootAsync({ useFactory: () => baseOptionsClientMode() })
+    expect(dynamic.exports).toEqual(BymaxQueueModule.forRoot(baseOptionsClientMode()).exports)
+  })
+
+  it('aliases the options token to the configurable module token', () => {
+    // BYMAX_QUEUE_OPTIONS is a useExisting alias of the generated token.
+    const dynamic = BymaxQueueModule.forRootAsync({ useFactory: () => baseOptionsClientMode() })
+    const provider = findProvider(dynamic.providers ?? [], BYMAX_QUEUE_OPTIONS) as {
+      useExisting: unknown
+    }
+    expect(provider.useExisting).toBe(MODULE_OPTIONS_TOKEN)
+  })
+
+  it('derives resolved options from a factory injecting the options token', () => {
+    // The resolved-options provider validates then applies defaults at runtime.
+    const dynamic = BymaxQueueModule.forRootAsync({ useFactory: () => baseOptionsClientMode() })
+    const provider = findProvider(
+      dynamic.providers ?? [],
+      BYMAX_QUEUE_RESOLVED_OPTIONS,
+    ) as FactoryProvider
+    expect(provider.inject).toEqual([MODULE_OPTIONS_TOKEN])
+    const resolved = provider.useFactory(baseOptionsClientMode()) as { prefix: string }
+    expect(Object.isFrozen(resolved)).toBe(true)
+    expect(resolved.prefix).toBe('bull')
+  })
+
+  it('registers FlowService and MetricsService as resolved-aware factories', () => {
+    // The async path injects the resolved options into the conditional providers.
+    const dynamic = BymaxQueueModule.forRootAsync({ useFactory: () => baseOptionsClientMode() })
+    const flow = findProvider(dynamic.providers ?? [], FlowService) as FactoryProvider
+    const metrics = findProvider(dynamic.providers ?? [], MetricsService) as FactoryProvider
+    expect(flow.inject).toEqual([ConnectionResolver, BYMAX_QUEUE_RESOLVED_OPTIONS])
+    expect(metrics.inject).toEqual([QueueService, BYMAX_QUEUE_RESOLVED_OPTIONS])
+
+    // The factories must construct the real services from the injected resolved options,
+    // not collapse to a no-op that returns undefined.
+    const resolved = {
+      flows: { enabled: true },
+      metrics: { enabled: true, cacheTtlMs: 5000 },
+    } as unknown as ResolvedQueueOptions
+    const resolverStub = { getClient: jest.fn() } as unknown as ConnectionResolver
+    const queueServiceStub = {} as unknown as QueueService
+    const flowFactory = flow.useFactory as (c: ConnectionResolver, r: ResolvedQueueOptions) => unknown
+    const metricsFactory = metrics.useFactory as (q: QueueService, r: ResolvedQueueOptions) => unknown
+    expect(flowFactory(resolverStub, resolved)).toBeInstanceOf(FlowService)
+    expect(metricsFactory(queueServiceStub, resolved)).toBeInstanceOf(MetricsService)
+  })
+
+  it('instantiates the full provider graph from a useFactory', async () => {
+    // useFactory with no inject resolves the module and exposes QueueService.
+    const moduleRef = await Test.createTestingModule({
+      imports: [BymaxQueueModule.forRootAsync({ useFactory: () => baseOptionsClientMode() })],
+    }).compile()
+    expect(moduleRef.get(QueueService)).toBeInstanceOf(QueueService)
+    await moduleRef.close()
+  })
+
+  it('integrates an external module via imports + inject', async () => {
+    // The factory receives the injected dependency from an imported module.
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        BymaxQueueModule.forRootAsync({
+          imports: [InjectedClientModule],
+          inject: [INJECTED_CLIENT],
+          useFactory: (client: unknown) => ({ connection: { client: client as Redis } }),
+        }),
+      ],
+    }).compile()
+    expect(moduleRef.get(ConnectionResolver).getMode()).toBe('mode-a-byo')
+    await moduleRef.close()
+  })
+
+  it('registers options through a useClass factory', async () => {
+    // useClass instantiates the factory and calls its createQueueOptions method.
+    const moduleRef = await Test.createTestingModule({
+      imports: [BymaxQueueModule.forRootAsync({ useClass: TestOptionsFactory })],
+    }).compile()
+    expect(moduleRef.get(QueueService)).toBeInstanceOf(QueueService)
+    await moduleRef.close()
+  })
+
+  it('reuses an existing factory provider via useExisting', async () => {
+    // useExisting resolves the factory from an imported module that exports it.
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        BymaxQueueModule.forRootAsync({
+          imports: [OptionsFactoryModule],
+          useExisting: TestOptionsFactory,
+        }),
+      ],
+    }).compile()
+    expect(moduleRef.get(QueueService)).toBeInstanceOf(QueueService)
+    await moduleRef.close()
+  })
+
+  it('rejects async options with no factory, class, or existing provider', async () => {
+    // ConfigurableModuleBuilder cannot resolve options without one of the three.
+    const build = async (): Promise<unknown> =>
+      Test.createTestingModule({ imports: [BymaxQueueModule.forRootAsync({})] }).compile()
+    await expect(build()).rejects.toThrow()
+  })
+
+  it('tolerates a base definition without providers or imports', () => {
+    // Defensive fallback when the configurable base omits the providers/imports arrays.
+    const parent = Object.getPrototypeOf(BymaxQueueModule) as {
+      forRootAsync: (o: unknown) => unknown
+    }
+    const spy = jest.spyOn(parent, 'forRootAsync').mockReturnValue({ module: BymaxQueueModule })
+
+    const dynamic = BymaxQueueModule.forRootAsync({ useFactory: () => baseOptionsClientMode() })
+
+    expect(findProvider(dynamic.providers ?? [], QueueService)).toBeDefined()
+    expect(dynamic.imports).toEqual([DiscoveryModule])
+    // The missing-providers fallback must spread an EMPTY array — never a stray value.
+    expect(dynamic.providers?.some((provider) => typeof provider === 'string')).toBe(false)
     spy.mockRestore()
   })
 })

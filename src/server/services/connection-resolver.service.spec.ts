@@ -116,6 +116,10 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     })
     expect(resolver.getMode()).toBe('mode-b-owned')
     expect(resolver.isOwned()).toBe(true)
+    // The ready handler resolves the race; cleanup must then detach BOTH listeners
+    // so the unused 'error' subscription is not leaked once the client is ready.
+    expect(client.listenerCount('ready')).toBe(0)
+    expect(client.listenerCount('error')).toBe(0)
   })
 
   it('opens a client from options only', async () => {
@@ -167,6 +171,10 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     client.emit('error', boom)
 
     await expect(init).rejects.toBe(boom)
+    // The error handler rejects the race; cleanup must then detach BOTH listeners
+    // so the unused 'ready' subscription is not leaked once startup has failed.
+    expect(client.listenerCount('ready')).toBe(0)
+    expect(client.listenerCount('error')).toBe(0)
   })
 
   it('quits the owned client on destroy', async () => {
@@ -212,5 +220,66 @@ describe('ConnectionResolver — uninitialized access', () => {
     // Destroying an uninitialized resolver is a safe no-op.
     const resolver = new ConnectionResolver(optionsWith({ url: 'redis://localhost:6379' }))
     await expect(resolver.onModuleDestroy()).resolves.toBeUndefined()
+  })
+})
+
+/** Read the structured details of a thrown/ rejected QueueException. */
+function detailsOf(err: unknown): Record<string, unknown> {
+  return ((err as QueueException).getResponse() as { error: { details: Record<string, unknown> } })
+    .error.details
+}
+
+describe('ConnectionResolver — exception details', () => {
+  beforeEach(() => {
+    redisConstructor.mockReset()
+  })
+
+  it('reports "not initialized" from getClient and getMode before init', () => {
+    // The defensive accessors carry a precise reason, not a bare error.
+    const resolver = new ConnectionResolver(optionsWith({ url: 'redis://localhost:6379' }))
+    let clientErr: unknown
+    let modeErr: unknown
+    try {
+      resolver.getClient()
+    } catch (err) {
+      clientErr = err
+    }
+    try {
+      resolver.getMode()
+    } catch (err) {
+      modeErr = err
+    }
+    expect(detailsOf(clientErr).reason).toBe('not initialized')
+    expect(detailsOf(modeErr).reason).toBe('not initialized')
+  })
+
+  it('reports the client status when a BYO client is unusable', async () => {
+    // The CONNECTION_INVALID detail surfaces the offending status.
+    const client = new FakeRedis('end', null)
+    const resolver = new ConnectionResolver(optionsWith({ client: asRedis(client) }))
+    try {
+      await resolver.init()
+      throw new Error('expected init to reject')
+    } catch (err) {
+      expect(detailsOf(err).status).toBe('end')
+    }
+  })
+
+  it('reports the configured timeout on CONNECTION_TIMEOUT', async () => {
+    // The timeout detail echoes the configured ready-timeout for diagnosis.
+    jest.useFakeTimers()
+    const client = new FakeRedis('connecting', null)
+    redisConstructor.mockReturnValue(asRedis(client))
+    const resolver = new ConnectionResolver({
+      connection: { url: 'redis://localhost:6379' },
+      connectionReadyTimeoutMs: 1234,
+    })
+    const init = resolver.init()
+    const assertion = init.catch((err: unknown) => {
+      expect(detailsOf(err).timeoutMs).toBe(1234)
+    })
+    jest.advanceTimersByTime(1234)
+    await assertion
+    jest.useRealTimers()
   })
 })

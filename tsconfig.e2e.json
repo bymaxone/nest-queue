@@ -3,8 +3,14 @@
   "compilerOptions": {
     "noEmit": true,
     "rootDir": ".",
-    "noUnusedParameters": false
+    "noUnusedParameters": false,
+    "baseUrl": ".",
+    "types": ["node", "jest", "reflect-metadata"],
+    "paths": {
+      "@bymax-one/nest-queue": ["./src/server/index.ts"],
+      "@bymax-one/nest-queue/shared": ["./src/shared/index.ts"]
+    }
   },
-  "include": ["src/**/*.ts", "test/e2e/**/*.ts"],
+  "include": ["test/e2e/**/*.ts"],
   "exclude": ["node_modules", "dist", "coverage"]
 }

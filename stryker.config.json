@@ -2,21 +2,27 @@
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "packageManager": "pnpm",
   "testRunner": "jest",
+  "plugins": ["@stryker-mutator/jest-runner"],
   "jest": {
     "projectType": "custom",
     "configFile": "jest.stryker.config.ts"
   },
-  "reporters": ["html", "clear-text", "progress"],
+  "reporters": ["clear-text", "progress", "json"],
   "coverageAnalysis": "perTest",
+  "timeoutMS": 15000,
   "mutate": [
-    "src/**/*.ts",
+    "src/server/**/*.ts",
     "!src/**/*.spec.ts",
-    "!src/**/index.ts"
+    "!src/**/index.ts",
+    "!src/server/interfaces/**",
+    "!src/server/constants/**",
+    "!src/server/bymax-queue.constants.ts",
+    "!src/server/decorators/**"
   ],
   "thresholds": {
     "high": 99,
     "low": 95,
     "break": 95
   },
-  "concurrency": 2
+  "concurrency": 1
 }
