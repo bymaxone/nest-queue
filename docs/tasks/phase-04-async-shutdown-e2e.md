@@ -1,6 +1,6 @@
 # Phase 4 — Async config, graceful shutdown, E2E & mutation baseline
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 7 tasks · **Last updated**: 2026-06-23
+> **Status**: 🔄 In Progress · **Progress**: 1 / 7 tasks · **Last updated**: 2026-06-27
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 4
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -43,7 +43,7 @@ What is still missing is everything that makes the package **production-safe and
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
 | 4.1 | `forRootAsync()` — factory/class/existing async configuration | 📋 ToDo | P0 | M | 1.8, 3.1, 3.5 |
-| 4.2 | `QueueLifecycle` — bounded graceful shutdown | 📋 ToDo | P0 | L | 1.5, 2.2, 2.3, 3.1 |
+| 4.2 | `QueueLifecycle` — bounded graceful shutdown | ✅ Done | P0 | L | 1.5, 2.2, 2.3, 3.1 |
 | 4.3 | At-least-once semantics & handler idempotency documentation | 📋 ToDo | P1 | S | 4.2 |
 | 4.4 | Dead-letter-queue (DLQ) pattern via `@OnWorkerEvent('failed')` | 📋 ToDo | P1 | S | 4.3 |
 | 4.5 | E2E suite with Testcontainers Redis (7 scenarios) | 📋 ToDo | P0 | L | 4.1, 4.2 |
@@ -207,7 +207,7 @@ Completion Protocol (after you finish):
 
 ### Task 4.2 — `QueueLifecycle` — bounded graceful shutdown
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: L
 - **Depends on**: 1.5 (`ConnectionResolver`), 2.2 (`WorkerRegistry`), 2.3 (`QueueEventsRegistry`), 3.1 (`FlowService`) — the resources `QueueLifecycle` must close on shutdown
@@ -218,14 +218,14 @@ Implement the shutdown protocol from spec §10.2 in a single `OnModuleDestroy` s
 
 #### Acceptance criteria
 
-- [ ] `onModuleDestroy` runs the ordered sequence: workers → QueueEvents → (optional) drain → FlowProducer → queues → connection teardown
-- [ ] Each worker is closed via `Promise.race([worker.close(), timeout])`; a worker that exceeds `drainTimeoutMs` is force-closed via `worker.close(true)` and a structured warning carrying `queue.shutdown_timeout_exceeded` is logged
-- [ ] A timed-out/forced worker does **not** block the remaining teardown steps
-- [ ] `drainOnShutdown: true` calls `queue.drain()` on every cached queue; `drainOnShutdown: false` (default) does **not**
-- [ ] Mode B: `connection.onModuleDestroy` (which `quit()`s) runs; Mode A: it runs but is a no-op for the shared client (only duplicated connections are closed)
-- [ ] Teardown steps swallow individual errors so one failure never aborts the rest
-- [ ] The shutdown log includes total elapsed ms and the drained/forced worker count
-- [ ] 100% line/branch coverage (timeout branch, `drainOnShutdown` branch, swallowed-error branches)
+- [x] `onModuleDestroy` runs the ordered sequence: workers → QueueEvents → (optional) drain → FlowProducer → queues → connection teardown
+- [x] Each worker is closed via `Promise.race([worker.close(), timeout])`; a worker that exceeds `drainTimeoutMs` is force-closed via `worker.close(true)` and a structured warning carrying `queue.shutdown_timeout_exceeded` is logged
+- [x] A timed-out/forced worker does **not** block the remaining teardown steps
+- [x] `drainOnShutdown: true` calls `queue.drain()` on every cached queue; `drainOnShutdown: false` (default) does **not**
+- [x] Mode B: `connection.onModuleDestroy` (which `quit()`s) runs; Mode A: it runs but is a no-op for the shared client (only duplicated connections are closed)
+- [x] Teardown steps swallow individual errors so one failure never aborts the rest
+- [x] The shutdown log includes total elapsed ms and the drained/forced worker count
+- [x] 100% line/branch coverage (timeout branch, `drainOnShutdown` branch, swallowed-error branches)
 
 #### Files to create / modify
 
@@ -888,3 +888,5 @@ Completion Protocol (after you finish):
 > Append-only. One line per completed task: `- <task-id> ✅ YYYY-MM-DD — <one-line summary>`.
 
 <!-- entries appended as tasks complete -->
+
+- 4.2 ✅ 2026-06-27 — `QueueLifecycle` ordered bounded-drain shutdown; registries expose duplicated connections and delegate shutdown to the lifecycle (no unbounded self-close).

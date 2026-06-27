@@ -35,10 +35,16 @@ jest.mock('bullmq', () => ({
   }),
 }))
 
-/** A minimal fake Redis that satisfies `ConnectionResolver.getClient()`. */
+/** A minimal fake Redis that satisfies `ConnectionResolver.getClient()`. Each
+ * `duplicate()` returns a fresh stub with `quit`/`disconnect` so the registry's
+ * connection cleanup can be asserted. */
 function fakeRedis(): Redis {
   return {
-    duplicate: jest.fn().mockReturnValue({ status: 'ready', disconnect: jest.fn() }),
+    duplicate: jest.fn().mockImplementation(() => ({
+      status: 'ready',
+      disconnect: jest.fn(),
+      quit: jest.fn<Promise<string>, []>().mockResolvedValue('OK'),
+    })),
   } as unknown as Redis
 }
 
@@ -357,14 +363,32 @@ describe('WorkerRegistry.registerSandboxed', () => {
 })
 
 describe('WorkerRegistry.unregister', () => {
-  it('closes the worker and removes it from the map', async () => {
-    // unregister must call close() and remove the queue name from the registry.
+  it('closes the worker, releases its connection, and removes it from the map', async () => {
+    // unregister must close(), quit the duplicated connection, and drop the entry.
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     registry.register({ queueName: 'email', handler: noopHandler })
     const [worker] = createdWorkers
+    const conn = registry.getConnections().get('email') as unknown as { quit: jest.Mock }
     await registry.unregister('email')
     expect(worker?.close).toHaveBeenCalledTimes(1)
+    expect(conn.quit).toHaveBeenCalledTimes(1)
     expect(registry.list()).not.toContain('email')
+    expect(registry.getConnections().has('email')).toBe(false)
+  })
+
+  it('hard-disconnects the connection when its quit handshake fails', async () => {
+    // A failed graceful quit must fall back to disconnect so a socket never leaks.
+    const failingConn = {
+      status: 'ready',
+      quit: jest.fn<Promise<string>, []>().mockRejectedValue(new Error('quit failed')),
+      disconnect: jest.fn(),
+    }
+    const redis = { duplicate: jest.fn().mockReturnValue(failingConn) } as unknown as Redis
+    const registry = new WorkerRegistry(fakeConnection(redis), makeOptions())
+    registry.register({ queueName: 'email', handler: noopHandler })
+    await registry.unregister('email')
+    expect(failingConn.quit).toHaveBeenCalledTimes(1)
+    expect(failingConn.disconnect).toHaveBeenCalledTimes(1)
   })
 
   it('is a no-op for an unknown queue name', async () => {
@@ -393,39 +417,22 @@ describe('WorkerRegistry.list / getAll', () => {
   })
 })
 
-describe('WorkerRegistry.onModuleDestroy', () => {
-  it('closes all workers without throwing even when close() rejects with an Error', async () => {
-    // Shutdown must be best-effort — a failing close must not prevent others from closing.
+describe('WorkerRegistry.getConnections', () => {
+  it('exposes the duplicated connection the library opened per worker', () => {
+    // The shutdown orchestrator closes exactly these library-created connections.
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     registry.register({ queueName: 'a', handler: noopHandler })
     registry.register({ queueName: 'b', handler: noopHandler })
-
-    const [workerA, workerB] = createdWorkers
-    workerA?.close.mockRejectedValueOnce(new Error('close failed'))
-
-    await expect(registry.onModuleDestroy()).resolves.toBeUndefined()
-    expect(workerA?.close).toHaveBeenCalledTimes(1)
-    expect(workerB?.close).toHaveBeenCalledTimes(1)
-    expect(registry.list()).toHaveLength(0)
+    const connections = registry.getConnections()
+    expect(connections.size).toBe(2)
+    expect(connections.has('a')).toBe(true)
+    expect(connections.has('b')).toBe(true)
   })
 
-  it('handles a non-Error rejection from close() during onModuleDestroy', async () => {
-    // A close() that rejects with a non-Error (string, number) must be swallowed gracefully.
+  it('returns an empty map when no workers are registered', () => {
+    // With nothing registered there are no library-created connections to close.
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())
-    registry.register({ queueName: 'x', handler: noopHandler })
-    const [workerX] = createdWorkers
-    workerX?.close.mockRejectedValueOnce('abrupt_close')
-
-    await expect(registry.onModuleDestroy()).resolves.toBeUndefined()
-    expect(workerX?.close).toHaveBeenCalledTimes(1)
-  })
-
-  it('clears the internal map after destroy', async () => {
-    // After shutdown, the registry should be empty.
-    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
-    registry.register({ queueName: 'email', handler: noopHandler })
-    await registry.onModuleDestroy()
-    expect(registry.list()).toHaveLength(0)
+    expect(registry.getConnections().size).toBe(0)
   })
 })
 

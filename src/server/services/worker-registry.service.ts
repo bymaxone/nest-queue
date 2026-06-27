@@ -3,12 +3,14 @@
  * `Worker` instances. Provides both an in-process path (handler function, NestJS
  * DI available) and a file-based sandboxed path (no NestJS DI). Every worker
  * connection is a duplicate of the Queue-role client with
- * `maxRetriesPerRequest: null`, as required by BullMQ blocking commands.
+ * `maxRetriesPerRequest: null`, as required by BullMQ blocking commands. The
+ * duplicated connection is tracked alongside the worker so the shutdown
+ * orchestrator can close exactly the connections the library opened.
  * @layer server/services
  */
 
 import { isAbsolute, extname } from 'node:path'
-import { Inject, Injectable, Logger, type OnModuleDestroy } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
 import { Worker } from 'bullmq'
 import type { Job, WorkerOptions as BullWorkerOptions } from 'bullmq'
 import type { Redis } from 'ioredis'
@@ -59,6 +61,18 @@ export interface SandboxedWorkerConfig {
 }
 
 /**
+ * A registered worker paired with the duplicated connection the library opened
+ * for it. Pairing them lets the shutdown orchestrator close the worker and then
+ * release its connection without a separate lookup.
+ */
+interface WorkerEntry {
+  /** The BullMQ worker instance. */
+  worker: Worker
+  /** The duplicated ioredis connection the library created for this worker. */
+  connection: Redis
+}
+
+/**
  * Creates and lifecycle-manages BullMQ `Worker` instances on behalf of the
  * module. Supports two registration paths:
  *
@@ -81,9 +95,8 @@ export interface SandboxedWorkerConfig {
  * })
  */
 @Injectable()
-export class WorkerRegistry implements OnModuleDestroy {
-  private readonly logger = new Logger(WorkerRegistry.name)
-  private readonly workers = new Map<string, Worker>()
+export class WorkerRegistry {
+  private readonly entries = new Map<string, WorkerEntry>()
 
   constructor(
     private readonly connection: ConnectionResolver,
@@ -125,7 +138,7 @@ export class WorkerRegistry implements OnModuleDestroy {
       })
     }
 
-    this.workers.set(queueName, worker)
+    this.entries.set(queueName, { worker, connection: conn })
     return worker
   }
 
@@ -168,21 +181,23 @@ export class WorkerRegistry implements OnModuleDestroy {
       })
     }
 
-    this.workers.set(queueName, worker)
+    this.entries.set(queueName, { worker, connection: conn })
     return worker
   }
 
   /**
-   * Stop and remove the worker for the given queue. If no worker exists for
-   * `queueName` this is a no-op.
+   * Stop and remove the worker for the given queue, releasing the duplicated
+   * connection the library opened for it. If no worker exists for `queueName`
+   * this is a no-op.
    *
    * @param queueName - The queue whose worker should be removed.
    */
   async unregister(queueName: string): Promise<void> {
-    const worker = this.workers.get(queueName)
-    if (!worker) return
-    await worker.close()
-    this.workers.delete(queueName)
+    const entry = this.entries.get(queueName)
+    if (!entry) return
+    await entry.worker.close()
+    await this.closeConnection(entry.connection)
+    this.entries.delete(queueName)
   }
 
   /**
@@ -191,37 +206,47 @@ export class WorkerRegistry implements OnModuleDestroy {
    * @returns An immutable array of queue names.
    */
   list(): readonly string[] {
-    return Array.from(this.workers.keys())
+    return Array.from(this.entries.keys())
   }
 
   /**
-   * Returns the live worker map. Intended for the shutdown orchestrator only.
+   * Returns a read-only view of the registered workers keyed by queue name.
+   * Intended for the shutdown orchestrator only.
    *
-   * @returns A read-only view of the internal worker map.
+   * @returns A read-only map of queue name to worker.
    */
   getAll(): ReadonlyMap<string, Worker> {
-    return this.workers
+    return new Map(
+      Array.from(this.entries, ([name, entry]): [string, Worker] => [name, entry.worker]),
+    )
   }
 
   /**
-   * Best-effort close of all registered workers. Failures are logged and
-   * swallowed — the module must not throw during shutdown.
+   * Returns a read-only view of the duplicated connections the library opened
+   * for its workers, keyed by queue name. Intended for the shutdown orchestrator
+   * so it can close exactly the connections the library created (Mode A never
+   * exposes the consumer's shared client here).
+   *
+   * @returns A read-only map of queue name to duplicated connection.
    */
-  async onModuleDestroy(): Promise<void> {
-    const entries = Array.from(this.workers.entries())
-    await Promise.allSettled(
-      entries.map(async ([queueName, worker]) => {
-        try {
-          await worker.close()
-        } catch (err) {
-          this.logger.error(
-            `Failed to close worker for queue "${queueName}" during shutdown`,
-            err instanceof Error ? err.stack : String(err),
-          )
-        }
-      }),
+  getConnections(): ReadonlyMap<string, Redis> {
+    return new Map(
+      Array.from(this.entries, ([name, entry]): [string, Redis] => [name, entry.connection]),
     )
-    this.workers.clear()
+  }
+
+  /**
+   * Gracefully quit a duplicated connection, falling back to a hard disconnect
+   * if the quit handshake fails so a socket is never leaked.
+   *
+   * @param connection - The duplicated connection to release.
+   */
+  private async closeConnection(connection: Redis): Promise<void> {
+    try {
+      await connection.quit()
+    } catch {
+      connection.disconnect()
+    }
   }
 
   /**
@@ -231,7 +256,7 @@ export class WorkerRegistry implements OnModuleDestroy {
    * @throws {QueueException} `DUPLICATE_PROCESSOR` if the queue is already registered.
    */
   private guardDuplicate(queueName: string): void {
-    if (this.workers.has(queueName)) {
+    if (this.entries.has(queueName)) {
       throw new QueueException(QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR, 500, { queueName })
     }
   }
