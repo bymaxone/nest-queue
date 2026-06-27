@@ -61,8 +61,8 @@ The phase order respects the dependency graph (Appendix A): connection before qu
 
 > **Status legend:** 📋 ToDo · 🔄 In Progress · 👀 Review · ✅ Done · ⛔ Blocked · 🟡 Partial
 
-**Overall progress:** ✅ 3 / 5 phases (60%) — 20 / 35 tasks (57%)
-**Active phase:** Phase 4 — forRootAsync + Graceful Shutdown + E2E + Mutation
+**Overall progress:** ✅ 4 / 5 phases (80%) — 27 / 35 tasks (77%)
+**Active phase:** Phase 5 — Release v0.1.0
 **Blocked:** none
 
 | ID | Phase | Status | Progress | Complexity | Last updated |
@@ -70,9 +70,9 @@ The phase order respects the dependency graph (Appendix A): connection before qu
 | 1 | [Foundation + ConnectionResolver + base QueueService](./tasks/phase-01-foundation.md) | ✅ Done | 8 / 8 | MEDIUM | 2026-06-26 |
 | 2 | [Workers — decorators + WorkerRegistry + Discovery](./tasks/phase-02-workers.md) | ✅ Done | 6 / 6 | MEDIUM | 2026-06-26 |
 | 3 | [Flows + Job Schedulers + Deduplication/Telemetry + Metrics](./tasks/phase-03-flows-schedulers-metrics.md) | ✅ Done | 6 / 6 | MEDIUM | 2026-06-27 |
-| 4 | [forRootAsync + Graceful Shutdown + E2E + Mutation](./tasks/phase-04-async-shutdown-e2e.md) | 🔄 In Progress | 5 / 7 | HIGH | 2026-06-27 |
+| 4 | [forRootAsync + Graceful Shutdown + E2E + Mutation](./tasks/phase-04-async-shutdown-e2e.md) | ✅ Done | 7 / 7 | HIGH | 2026-06-27 |
 | 5 | [Release v0.1.0 — docs, CI/CD, supply chain, publish](./tasks/phase-05-release.md) | 📋 ToDo | 0 / 8 | LOW | 2026-06-23 |
-| | **Total** | **✅ 3 / 5 phases** | **20 / 35 tasks** | — | — |
+| | **Total** | **✅ 4 / 5 phases** | **27 / 35 tasks** | — | — |
 
 > **No time estimate** — this plan targets execution by **AI agents**, so duration in human days does not apply. Relative complexity per phase is documented above and detailed per sub-step in the [Complexity Matrix in Appendix B](#appendix-b--complexity-matrix); use these signals to prioritize careful human review on HIGH-complexity phases.
 
