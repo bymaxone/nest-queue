@@ -1,6 +1,6 @@
 # Phase 3 — Flows, Job Schedulers, Deduplication, Telemetry & Metrics
 
-> **Status**: 🔄 In Progress · **Progress**: 0 / 6 tasks · **Last updated**: 2026-06-27
+> **Status**: 🔄 In Progress · **Progress**: 1 / 6 tasks · **Last updated**: 2026-06-27
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 3
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -55,7 +55,7 @@ By the end of Phase 3 you can compose hierarchical flows, schedule recurring job
 
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
-| 3.1 | FlowService — opt-in FlowProducer wrapper | 📋 ToDo | P0 | M | 1.5, 1.8 |
+| 3.1 | FlowService — opt-in FlowProducer wrapper | ✅ Done | P0 | M | 1.5, 1.8 |
 | 3.2 | Job Schedulers in QueueService + cron validation util | 📋 ToDo | P0 | M | 1.2, 1.7 |
 | 3.3 | Native deduplication options on `enqueue` | 📋 ToDo | P1 | S | 1.7 |
 | 3.4 | Telemetry passthrough (OpenTelemetry) to Queue/Worker/FlowProducer | 📋 ToDo | P1 | S | 1.7, 2.2, 3.1 |
@@ -70,7 +70,7 @@ By the end of Phase 3 you can compose hierarchical flows, schedule recurring job
 
 ### Task 3.1 — FlowService — opt-in FlowProducer wrapper
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 1.5 (ConnectionResolver), 1.8 (sync module `forRoot`)
@@ -81,13 +81,13 @@ Implement `FlowService`, a thin wrapper over the BullMQ `FlowProducer` for hiera
 
 #### Acceptance criteria
 
-- [ ] `FlowService` constructs a `FlowProducer` on the main connection (`ConnectionResolver.getClient()`) only when `enabled === true`.
-- [ ] `add(flow)` calls `producer.add(flow)`; `addBulk(flows)` calls `producer.addBulk(flows)`; `getProducer()` returns the underlying `FlowProducer`.
-- [ ] When `enabled === false`, `add` / `addBulk` / `getProducer` each throw `QueueException` with code `FLOW_DISABLED` (status 503).
-- [ ] `onModuleDestroy` closes the producer when active and is a no-op when inactive (no throw if `close()` rejects).
-- [ ] The module registers `FlowService` via `useFactory` (injecting `ConnectionResolver`) and exports it.
-- [ ] No `any` in the public surface; JSDoc on every export.
-- [ ] 100% line/branch coverage on `flow.service.ts`.
+- [x] `FlowService` constructs a `FlowProducer` on the main connection (`ConnectionResolver.getClient()`) only when `enabled === true`.
+- [x] `add(flow)` calls `producer.add(flow)`; `addBulk(flows)` calls `producer.addBulk(flows)`; `getProducer()` returns the underlying `FlowProducer`.
+- [x] When `enabled === false`, `add` / `addBulk` / `getProducer` each throw `QueueException` with code `FLOW_DISABLED` (status 503).
+- [x] `onModuleDestroy` closes the producer when active and is a no-op when inactive (no throw if `close()` rejects).
+- [x] The module registers `FlowService` via `useFactory` (injecting `ConnectionResolver`) and exports it.
+- [x] No `any` in the public surface; JSDoc on every export.
+- [x] 100% line/branch coverage on `flow.service.ts`.
 
 #### Files to create / modify
 
@@ -884,3 +884,5 @@ Completion Protocol (after you finish):
 > Append-only. One line per completed task: `- <task-id> ✅ YYYY-MM-DD — <one-line summary>`.
 
 <!-- entries are appended here as tasks complete -->
+
+- 3.1 ✅ 2026-06-27 — FlowService guarded FlowProducer wrapper, registered/exported by the module; 100% coverage.

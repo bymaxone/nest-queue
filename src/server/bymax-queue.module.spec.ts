@@ -14,6 +14,7 @@ import {
 } from './bymax-queue.constants'
 import { ConnectionResolver } from './services/connection-resolver.service'
 import { QueueService } from './services/queue.service'
+import { FlowService } from './services/flow.service'
 import { WorkerRegistry } from './services/worker-registry.service'
 import { QueueEventsRegistry } from './services/queue-events-registry.service'
 import { QueueException } from './errors/queue-exception'
@@ -49,6 +50,7 @@ describe('BymaxQueueModule.forRoot', () => {
 
     expect(dynamic.exports).toEqual([
       QueueService,
+      FlowService,
       ConnectionResolver,
       WorkerRegistry,
       QueueEventsRegistry,
@@ -57,6 +59,16 @@ describe('BymaxQueueModule.forRoot', () => {
       BYMAX_QUEUE_REDIS_CLIENT,
       BYMAX_QUEUE_CONNECTION_MODE,
     ])
+  })
+
+  it('registers the flow service via a resolver-bound factory', () => {
+    // FlowService is always registered (guarded); the factory injects the resolver.
+    const dynamic = BymaxQueueModule.forRoot(baseOptions)
+    const provider = findProvider(dynamic.providers ?? [], FlowService) as FactoryProvider
+    const resolver = { getClient: jest.fn() } as unknown as ConnectionResolver
+
+    expect(provider.inject).toEqual([ConnectionResolver])
+    expect(provider.useFactory(resolver)).toBeInstanceOf(FlowService)
   })
 
   it('aliases the options token to the configurable module token', () => {
