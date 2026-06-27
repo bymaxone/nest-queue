@@ -3,7 +3,7 @@
  * @layer server/interfaces
  */
 
-import type { JobsOptions } from 'bullmq'
+import type { BulkJobOptions } from 'bullmq'
 
 /**
  * A single job descriptor used by `enqueueBulk`.
@@ -17,5 +17,5 @@ export interface BulkJob<TData = unknown> {
   /** Typed job payload. */
   data: TData
   /** Per-job BullMQ options (priority, delay, jobId, deduplication, ...). */
-  options?: JobsOptions
+  options?: BulkJobOptions
 }

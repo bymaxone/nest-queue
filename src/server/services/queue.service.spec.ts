@@ -128,20 +128,23 @@ describe('QueueService — enqueue', () => {
 })
 
 describe('QueueService — enqueueBulk', () => {
-  it('delegates to Queue.addBulk with a materialized array', async () => {
-    // The readonly input is materialized before handing it to BullMQ.
+  it('delegates to Queue.addBulk mapping per-job options to BullMQ `opts`', async () => {
+    // Each descriptor is forwarded with its options under the `opts` key BullMQ reads.
     const { service } = makeService()
     const created = [{ id: '1' }, { id: '2' }] as Job[]
     service.getOrCreateQueue('email')
     queueInstances[0]?.addBulk.mockResolvedValue(created)
     const jobs: BulkJob[] = [
-      { name: 'a', data: {} },
-      { name: 'b', data: {} },
+      { name: 'a', data: { x: 1 }, options: { priority: 5 } },
+      { name: 'b', data: { y: 2 } },
     ]
 
     const result = await service.enqueueBulk('email', jobs)
 
-    expect(queueInstances[0]?.addBulk).toHaveBeenCalledWith(jobs)
+    expect(queueInstances[0]?.addBulk).toHaveBeenCalledWith([
+      { name: 'a', data: { x: 1 }, opts: { priority: 5 } },
+      { name: 'b', data: { y: 2 } },
+    ])
     expect(result).toBe(created)
   })
 

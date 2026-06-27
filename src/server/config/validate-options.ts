@@ -20,8 +20,10 @@ function invalid(reason: string): never {
  * @throws QueueException with code `INVALID_OPTIONS` on any violation.
  */
 export function validateOptions(opts: BymaxQueueModuleOptions): void {
-  const cfg = (opts as { connection?: Record<string, unknown> }).connection
-  if (!cfg) invalid('connection is required')
+  const cfg = (opts as { connection?: unknown }).connection
+  if (cfg === null || typeof cfg !== 'object') {
+    invalid('connection is required')
+  }
 
   const hasClient = 'client' in cfg
   const hasUrl = 'url' in cfg

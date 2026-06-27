@@ -35,6 +35,22 @@ describe('validateOptions', () => {
     })).toBe('connection is required')
   })
 
+  it('throws when connection is explicitly null', () => {
+    // A null connection is treated as missing, not dereferenced.
+    const opts = { connection: null } as unknown as BymaxQueueModuleOptions
+    expect(reasonOf(() => {
+      validateOptions(opts)
+    })).toBe('connection is required')
+  })
+
+  it('throws a typed exception (not a raw TypeError) for a primitive connection', () => {
+    // A misconfigured connection string must yield INVALID_OPTIONS, never a TypeError from `in`.
+    const opts = { connection: 'redis://localhost:6379' } as unknown as BymaxQueueModuleOptions
+    expect(reasonOf(() => {
+      validateOptions(opts)
+    })).toBe('connection is required')
+  })
+
   it('throws when connection specifies none of client/url/options', () => {
     // An empty connection object cannot be resolved into a client.
     const opts = { connection: {} as never }

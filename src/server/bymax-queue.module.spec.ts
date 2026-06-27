@@ -6,7 +6,12 @@
 import type { FactoryProvider, Provider, ValueProvider } from '@nestjs/common'
 import type { Redis } from 'ioredis'
 import { BymaxQueueModule, MODULE_OPTIONS_TOKEN } from './bymax-queue.module'
-import { BYMAX_QUEUE_OPTIONS, BYMAX_QUEUE_RESOLVED_OPTIONS } from './bymax-queue.constants'
+import {
+  BYMAX_QUEUE_OPTIONS,
+  BYMAX_QUEUE_RESOLVED_OPTIONS,
+  BYMAX_QUEUE_REDIS_CLIENT,
+  BYMAX_QUEUE_CONNECTION_MODE,
+} from './bymax-queue.constants'
 import { ConnectionResolver } from './services/connection-resolver.service'
 import { QueueService } from './services/queue.service'
 import { QueueException } from './errors/queue-exception'
@@ -45,6 +50,8 @@ describe('BymaxQueueModule.forRoot', () => {
       ConnectionResolver,
       BYMAX_QUEUE_OPTIONS,
       BYMAX_QUEUE_RESOLVED_OPTIONS,
+      BYMAX_QUEUE_REDIS_CLIENT,
+      BYMAX_QUEUE_CONNECTION_MODE,
     ])
   })
 
@@ -75,6 +82,27 @@ describe('BymaxQueueModule.forRoot', () => {
     const resolver = (await provider.useFactory(baseOptionsClientMode())) as ConnectionResolver
     expect(resolver).toBeInstanceOf(ConnectionResolver)
     expect(provider.inject).toEqual([BYMAX_QUEUE_OPTIONS])
+  })
+
+  it('exposes the resolved Redis client through a resolver-bound factory', () => {
+    // The client token resolves to the resolver's Queue-role client so consumers can inject it.
+    const dynamic = BymaxQueueModule.forRoot(baseOptions)
+    const provider = findProvider(dynamic.providers ?? [], BYMAX_QUEUE_REDIS_CLIENT) as FactoryProvider
+    const fakeClient = {} as Redis
+    const resolver = { getClient: jest.fn().mockReturnValue(fakeClient) } as unknown as ConnectionResolver
+
+    expect(provider.inject).toEqual([ConnectionResolver])
+    expect(provider.useFactory(resolver)).toBe(fakeClient)
+  })
+
+  it('exposes the connection mode through a resolver-bound factory', () => {
+    // The mode token resolves to the resolver's detected mode.
+    const dynamic = BymaxQueueModule.forRoot(baseOptions)
+    const provider = findProvider(dynamic.providers ?? [], BYMAX_QUEUE_CONNECTION_MODE) as FactoryProvider
+    const resolver = { getMode: jest.fn().mockReturnValue('mode-b-owned') } as unknown as ConnectionResolver
+
+    expect(provider.inject).toEqual([ConnectionResolver])
+    expect(provider.useFactory(resolver)).toBe('mode-b-owned')
   })
 
   it('marks the module global by default', () => {

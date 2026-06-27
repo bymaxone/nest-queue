@@ -111,7 +111,13 @@ export class QueueService implements OnModuleDestroy {
       })
     }
     try {
-      const created = await this.queueFor(queueName).addBulk([...jobs])
+      const created = await this.queueFor(queueName).addBulk(
+        jobs.map((job) => ({
+          name: job.name,
+          data: job.data,
+          ...(job.options === undefined ? {} : { opts: job.options }),
+        })),
+      )
       return created
     } catch (err) {
       throw new QueueException(QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED, 500, {

@@ -11,10 +11,17 @@ import {
   Module,
   type Provider,
 } from '@nestjs/common'
+import type { Redis } from 'ioredis'
 import type { BymaxQueueModuleOptions } from './interfaces/queue-module-options.interface'
+import type { QueueConnectionMode } from './interfaces/queue-connection.interface'
 import { validateOptions } from './config/validate-options'
 import { applyDefaults } from './config/resolved-options'
-import { BYMAX_QUEUE_OPTIONS, BYMAX_QUEUE_RESOLVED_OPTIONS } from './bymax-queue.constants'
+import {
+  BYMAX_QUEUE_OPTIONS,
+  BYMAX_QUEUE_RESOLVED_OPTIONS,
+  BYMAX_QUEUE_REDIS_CLIENT,
+  BYMAX_QUEUE_CONNECTION_MODE,
+} from './bymax-queue.constants'
 import { ConnectionResolver } from './services/connection-resolver.service'
 import { QueueService } from './services/queue.service'
 
@@ -62,13 +69,30 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
         },
         inject: [BYMAX_QUEUE_OPTIONS],
       },
+      {
+        provide: BYMAX_QUEUE_REDIS_CLIENT,
+        useFactory: (resolver: ConnectionResolver): Redis => resolver.getClient(),
+        inject: [ConnectionResolver],
+      },
+      {
+        provide: BYMAX_QUEUE_CONNECTION_MODE,
+        useFactory: (resolver: ConnectionResolver): QueueConnectionMode => resolver.getMode(),
+        inject: [ConnectionResolver],
+      },
       QueueService,
     ]
 
     return {
       ...base,
       providers,
-      exports: [QueueService, ConnectionResolver, BYMAX_QUEUE_OPTIONS, BYMAX_QUEUE_RESOLVED_OPTIONS],
+      exports: [
+        QueueService,
+        ConnectionResolver,
+        BYMAX_QUEUE_OPTIONS,
+        BYMAX_QUEUE_RESOLVED_OPTIONS,
+        BYMAX_QUEUE_REDIS_CLIENT,
+        BYMAX_QUEUE_CONNECTION_MODE,
+      ],
     }
   }
 }
