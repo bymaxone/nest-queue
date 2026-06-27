@@ -1,6 +1,6 @@
 # Phase 4 — Async config, graceful shutdown, E2E & mutation baseline
 
-> **Status**: 🔄 In Progress · **Progress**: 4 / 7 tasks · **Last updated**: 2026-06-27
+> **Status**: 🔄 In Progress · **Progress**: 5 / 7 tasks · **Last updated**: 2026-06-27
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 4
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -46,7 +46,7 @@ What is still missing is everything that makes the package **production-safe and
 | 4.2 | `QueueLifecycle` — bounded graceful shutdown | ✅ Done | P0 | L | 1.5, 2.2, 2.3, 3.1 |
 | 4.3 | At-least-once semantics & handler idempotency documentation | ✅ Done | P1 | S | 4.2 |
 | 4.4 | Dead-letter-queue (DLQ) pattern via `@OnWorkerEvent('failed')` | ✅ Done | P1 | S | 4.3 |
-| 4.5 | E2E suite with Testcontainers Redis (7 scenarios) | 📋 ToDo | P0 | L | 4.1, 4.2 |
+| 4.5 | E2E suite with Testcontainers Redis (7 scenarios) | ✅ Done | P0 | L | 4.1, 4.2 |
 | 4.6 | Mutation-testing baseline (Stryker `break 95`) | 📋 ToDo | P1 | M | 4.5 |
 | 4.7 | Phase 4 index exports, lifecycle tests & validation | 📋 ToDo | P0 | M | 4.1–4.6 |
 
@@ -583,7 +583,7 @@ Completion Protocol (after you finish):
 
 ### Task 4.5 — E2E suite with Testcontainers Redis (7 scenarios)
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: L
 - **Depends on**: 4.1 (`forRootAsync`), 4.2 (`QueueLifecycle`)
@@ -594,15 +594,15 @@ Build a `test/e2e/` suite that boots real Redis via `@testcontainers/redis` (or 
 
 #### Acceptance criteria
 
-- [ ] Scenario 1 — enqueue → process → typed result (assert the handler's `TResult` via `@OnQueueEvent('completed')` capture)
-- [ ] Scenario 2 — graceful shutdown finishes an in-flight job before the context closes (enqueue a slow job, trigger `app.close()`, assert it completed)
-- [ ] Scenario 3 — a 3-level flow completes all descendants before the root
-- [ ] Scenario 4 — `upsertJobScheduler` (interval `every`) fires twice within ~10s; re-upserting the same `schedulerId` does not create a second scheduler (`getJobSchedulers` length stays 1)
-- [ ] Scenario 5 — failure → exponential retry → eventual success (handler fails twice then succeeds; assert 3 attempts)
-- [ ] Scenario 6 — deduplication collapses N rapid same-`deduplication.id` enqueues into one processed job
-- [ ] Scenario 7 — the Mode-A worker connection is coerced to `maxRetriesPerRequest: null` while the Queue connection keeps ioredis defaults (inspect both)
-- [ ] `pnpm test:e2e` completes in < 90s (60s container-boot timeout); queues are obliterated between scenarios; Nest/BullMQ logs are silenced
-- [ ] The suite exercises the Task 4.4 DLQ fixture at least as a smoke check (exhausted job lands on `*-dlq`)
+- [x] Scenario 1 — enqueue → process → typed result (assert the handler's `TResult` via `@OnQueueEvent('completed')` capture)
+- [x] Scenario 2 — graceful shutdown finishes an in-flight job before the context closes (enqueue a slow job, trigger `app.close()`, assert it completed)
+- [x] Scenario 3 — a 3-level flow completes all descendants before the root
+- [x] Scenario 4 — `upsertJobScheduler` (interval `every`) fires twice within ~10s; re-upserting the same `schedulerId` does not create a second scheduler (`getJobSchedulers` length stays 1)
+- [x] Scenario 5 — failure → exponential retry → eventual success (handler fails twice then succeeds; assert 3 attempts)
+- [x] Scenario 6 — deduplication collapses N rapid same-`deduplication.id` enqueues into one processed job
+- [x] Scenario 7 — the Mode-A worker connection is coerced to `maxRetriesPerRequest: null` while the Queue connection keeps ioredis defaults (inspect both)
+- [x] `pnpm test:e2e` completes in < 90s (60s container-boot timeout); Redis is flushed between scenarios; Nest/BullMQ logs are silenced
+- [x] The suite exercises the Task 4.4 DLQ fixture at least as a smoke check (exhausted job lands on `*-dlq`)
 
 #### Files to create / modify
 
@@ -893,3 +893,4 @@ Completion Protocol (after you finish):
 - 4.1 ✅ 2026-06-27 — `forRootAsync` (useFactory/useClass/useExisting + inject) with shared core providers; `QueueLifecycle` wired into both paths; `setFactoryMethodName('createQueueOptions')`.
 - 4.3 ✅ 2026-06-27 — At-least-once + idempotency JSDoc on `enqueue`/`enqueueBulk`, `@Process`/`@Processor`, `@OnWorkerEvent`, and the lifecycle (jobId vs deduplication; stalled-retry; lockDuration).
 - 4.4 ✅ 2026-06-27 — DLQ example fixture (`risky` → `risky-dlq`, public API only, idempotent stable DLQ jobId) + DLQ guidance in `@OnWorkerEvent`; e2e tsconfig path alias.
+- 4.5 ✅ 2026-06-27 — Testcontainers E2E suite (digest-pinned redis): 7 scenarios + DLQ smoke, all green in ~8s; package-name path alias for fixtures; flushed between scenarios.

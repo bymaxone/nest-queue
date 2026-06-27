@@ -63,7 +63,7 @@ export class DlqProcessor {
         attemptsMade: job.attemptsMade,
         jobId: job.id,
       },
-      { jobId: `dlq:${job.id ?? 'unknown'}` },
+      { jobId: `dlq-${job.id ?? 'unknown'}` },
     )
   }
 }

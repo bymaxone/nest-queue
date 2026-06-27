@@ -57,8 +57,8 @@ export type WorkerEventName =
  * the endorsed pattern is a `'failed'` listener that, once retries are exhausted
  * (`job.attemptsMade >= (job.opts.attempts ?? 1)`), re-enqueues the payload plus
  * failure metadata onto a `<queue>-dlq` queue via `QueueService.enqueue`. Use a
- * stable DLQ `jobId` (e.g. `dlq:${job.id}`) so a redelivered `'failed'` event is
- * idempotent and never double-inserts.
+ * stable DLQ `jobId` (e.g. `dlq-${job.id}`) so a redelivered `'failed'` event is
+ * idempotent and never double-inserts (a custom BullMQ job id must not contain `:`).
  *
  * @param eventName - The worker event to listen for.
  *
