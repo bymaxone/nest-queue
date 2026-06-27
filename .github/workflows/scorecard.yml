@@ -33,8 +33,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          visibility="$(gh api "repos/${{ github.repository }}" --jq '.visibility')"
-          if [ "$visibility" = "public" ]; then
+          # Fail safe: any API/CLI error defaults to private, so a transient gh failure
+          # skips the analysis (run stays green) instead of failing the whole workflow.
+          if visibility="$(gh api "repos/${{ github.repository }}" --jq '.visibility' 2>/dev/null)" \
+            && [ "$visibility" = "public" ]; then
             echo 'public=true' >> "$GITHUB_OUTPUT"
           else
             echo 'public=false' >> "$GITHUB_OUTPUT"
