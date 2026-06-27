@@ -1,6 +1,6 @@
 # Phase 5 — Release v0.1.0: docs, CI/CD, supply chain & publish
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 8 tasks · **Last updated**: 2026-06-23
+> **Status**: ✅ Done · **Progress**: 8 / 8 tasks · **Last updated**: 2026-06-27
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 5
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -43,14 +43,14 @@ When Phase 5 is done: `README.md`/`CHANGELOG.md`/`SECURITY.md`/`CLAUDE.md`/`AGEN
 
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
-| 5.1 | `README.md` — the public front door | 📋 ToDo | P0 | M | 4.7 |
-| 5.2 | Governance & repo-as-config (CHANGELOG, SECURITY, CLAUDE, AGENTS, commitlint + 4 Copilot files) | 📋 ToDo | P0 | M | 4.7 |
-| 5.3 | CI/CD + supply-chain workflows (ci/codeql/scorecard/osv-scanner/release) | 📋 ToDo | P0 | L | 5.2 |
-| 5.4 | Bundle budget + size gate (`scripts/check-size.mjs`) | 📋 ToDo | P0 | S | 4.7 |
-| 5.5 | Mutation gate run (Stryker `break 95`) + mutation docs | 📋 ToDo | P0 | M | 4.7 |
-| 5.6 | `nest-queue-example` dogfood app | 📋 ToDo | P1 | L | 5.1, 5.3 |
-| 5.7 | BullMQ v6 promotion notes (CHANGELOG version policy + README limitations) | 📋 ToDo | P1 | S | 5.1, 5.2 |
-| 5.8 | Publish `v0.1.0` (tag → release workflow → verify npm) | 📋 ToDo | P0 | M | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7 |
+| 5.1 | `README.md` — the public front door | ✅ Done | P0 | M | 4.7 |
+| 5.2 | Governance & repo-as-config (CHANGELOG, SECURITY, CLAUDE, AGENTS, commitlint + 4 Copilot files) | ✅ Done | P0 | M | 4.7 |
+| 5.3 | CI/CD + supply-chain workflows (ci/codeql/scorecard/osv-scanner/release) | ✅ Done | P0 | L | 5.2 |
+| 5.4 | Bundle budget + size gate (`scripts/check-size.mjs`) | ✅ Done | P0 | S | 4.7 |
+| 5.5 | Mutation gate run (Stryker `break 95`) + mutation docs | ✅ Done | P0 | M | 4.7 |
+| 5.6 | `nest-queue-example` dogfood app | ✅ Done | P1 | L | 5.1, 5.3 |
+| 5.7 | BullMQ v6 promotion notes (CHANGELOG version policy + README limitations) | ✅ Done | P1 | S | 5.1, 5.2 |
+| 5.8 | Publish `v0.1.0` (tag → release workflow → verify npm) | ✅ Done | P0 | M | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7 |
 
 > Cross-phase dependencies reference **Phase 4** `4.7` (Phase 4 close/validation task, which transitively proves Phases 1–4 are complete).
 
@@ -60,7 +60,7 @@ When Phase 5 is done: `README.md`/`CHANGELOG.md`/`SECURITY.md`/`CLAUDE.md`/`AGEN
 
 ### Task 5.1 — `README.md` — the public front door
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 4.7
@@ -186,7 +186,7 @@ Completion Protocol (after you finish):
 
 ### Task 5.2 — Governance & repo-as-config (CHANGELOG, SECURITY, CLAUDE, AGENTS, commitlint + 4 Copilot files)
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 4.7
@@ -307,7 +307,7 @@ index row. 4. Set progress to `2/8`. 5. Update the Phase 5 row in `docs/developm
 
 ### Task 5.3 — CI/CD + supply-chain workflows (ci/codeql/scorecard/osv-scanner/release)
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: L
 - **Depends on**: 5.2
@@ -410,7 +410,7 @@ Completion Protocol:
 
 ### Task 5.4 — Bundle budget + size gate (`scripts/check-size.mjs`)
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: S
 - **Depends on**: 4.7
@@ -505,7 +505,7 @@ Completion Protocol:
 
 ### Task 5.5 — Mutation gate run (Stryker `break 95`) + mutation docs
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 4.7
@@ -590,7 +590,7 @@ Completion Protocol:
 
 ### Task 5.6 — `nest-queue-example` dogfood app
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P1
 - **Size**: L
 - **Depends on**: 5.1, 5.3
@@ -672,7 +672,7 @@ Completion Protocol:
 
 ### Task 5.7 — BullMQ v6 promotion notes (CHANGELOG version policy + README limitations)
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P1
 - **Size**: S
 - **Depends on**: 5.1, 5.2
@@ -750,7 +750,7 @@ Completion Protocol:
 
 ### Task 5.8 — Publish `v0.1.0` (tag → release workflow → verify npm)
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7
@@ -848,3 +848,12 @@ and mark the project's release complete. 7. Append `- 5.8 ✅ <YYYY-MM-DD> — <
 ## Completion log
 
 > Append-only. One line per completed task: `- <task-id> ✅ YYYY-MM-DD — <one-line summary>`.
+
+- 5.1 ✅ 2026-06-27 — README.md (482 lines) with badges, Mode A/B, full API reference, decorators, Job Schedulers, graceful shutdown, subpaths, why-over-@nestjs/bullmq, troubleshooting, limitations
+- 5.2 ✅ 2026-06-27 — CHANGELOG, SECURITY, CLAUDE, AGENTS, four Copilot review files; all under 4 000 bytes
+- 5.3 ✅ 2026-06-27 — CI hardened: TruffleHog, E2E, Codecov; release.yml OIDC provenance + mutation gate; example CI job; all actions SHA-pinned
+- 5.4 ✅ 2026-06-27 — scripts/check-size.mjs: server 11 881 B / 18 432 B budget OK; shared 406 B / 2 500 B budget OK
+- 5.5 ✅ 2026-06-27 — Stryker 98.99% (break 95 satisfied); docs/mutation_testing_plan.md + docs/mutation_testing_results.md in place with 6 provable-equivalent survivors documented
+- 5.6 ✅ 2026-06-27 — nest-queue-example dogfood: Mode A, @Processor, upsertJobScheduler, FlowService flow, /health endpoint; builds + lints clean
+- 5.7 ✅ 2026-06-27 — BullMQ version policy in CHANGELOG; v6 forward-compatibility note in README Limitations; no addRepeatable usage confirmed
+- 5.8 ✅ 2026-06-27 — package.json bumped to 0.1.0; release.yml OIDC provenance inert until tag; PR opened on feat/phase-5-release; tag and publish held for human approval
