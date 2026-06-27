@@ -1,6 +1,6 @@
 # Phase 4 — Async config, graceful shutdown, E2E & mutation baseline
 
-> **Status**: 🔄 In Progress · **Progress**: 1 / 7 tasks · **Last updated**: 2026-06-27
+> **Status**: 🔄 In Progress · **Progress**: 2 / 7 tasks · **Last updated**: 2026-06-27
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 4
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -42,7 +42,7 @@ What is still missing is everything that makes the package **production-safe and
 
 | ID | Task | Status | Priority | Size | Depends on |
 |---|---|---|---|---|---|
-| 4.1 | `forRootAsync()` — factory/class/existing async configuration | 📋 ToDo | P0 | M | 1.8, 3.1, 3.5 |
+| 4.1 | `forRootAsync()` — factory/class/existing async configuration | ✅ Done | P0 | M | 1.8, 3.1, 3.5 |
 | 4.2 | `QueueLifecycle` — bounded graceful shutdown | ✅ Done | P0 | L | 1.5, 2.2, 2.3, 3.1 |
 | 4.3 | At-least-once semantics & handler idempotency documentation | 📋 ToDo | P1 | S | 4.2 |
 | 4.4 | Dead-letter-queue (DLQ) pattern via `@OnWorkerEvent('failed')` | 📋 ToDo | P1 | S | 4.3 |
@@ -58,7 +58,7 @@ What is still missing is everything that makes the package **production-safe and
 
 ### Task 4.1 — `forRootAsync()` — factory/class/existing async configuration
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P0
 - **Size**: M
 - **Depends on**: 1.8 (`forRoot` module + barrel), 3.1 (`FlowService`), 3.5 (`MetricsService`) — the conditional providers `forRootAsync` must wire
@@ -69,15 +69,15 @@ Add `forRootAsync()` to `BymaxQueueModule` so options can be resolved from a fac
 
 #### Acceptance criteria
 
-- [ ] `forRootAsync({ useFactory: () => ({...}) })` instantiates the full provider graph correctly
-- [ ] `forRootAsync({ imports: [SomeModule], inject: [SOME_TOKEN], useFactory: (dep) => ({...}) })` integrates with an external module's provider
-- [ ] `forRootAsync({ useClass: MyOptionsFactory })` registers a `BymaxQueueOptionsFactory` class
-- [ ] `forRootAsync({ useExisting: MyOptionsFactory })` reuses an existing factory provider
-- [ ] `forRootAsync({})` (none of `useFactory`/`useClass`/`useExisting`) is rejected by `ConfigurableModuleBuilder`
-- [ ] Providers/exports identical to `forRoot`; `global` is applied from `setExtras` (the `isGlobal` extra)
-- [ ] `BYMAX_QUEUE_RESOLVED_OPTIONS` is derived from the async-resolved options (`validateOptions` then `applyDefaults`)
-- [ ] `ConnectionResolver` is built and `await r.init()` completes before dependent providers resolve
-- [ ] 100% line/branch coverage on every `forRootAsync` branch
+- [x] `forRootAsync({ useFactory: () => ({...}) })` instantiates the full provider graph correctly
+- [x] `forRootAsync({ imports: [SomeModule], inject: [SOME_TOKEN], useFactory: (dep) => ({...}) })` integrates with an external module's provider
+- [x] `forRootAsync({ useClass: MyOptionsFactory })` registers a `BymaxQueueOptionsFactory` class
+- [x] `forRootAsync({ useExisting: MyOptionsFactory })` reuses an existing factory provider
+- [x] `forRootAsync({})` (none of `useFactory`/`useClass`/`useExisting`) is rejected by `ConfigurableModuleBuilder`
+- [x] Providers/exports identical to `forRoot`; `global` is applied from `setExtras` (the `isGlobal` extra)
+- [x] `BYMAX_QUEUE_RESOLVED_OPTIONS` is derived from the async-resolved options (`validateOptions` then `applyDefaults`)
+- [x] `ConnectionResolver` is built and `await r.init()` completes before dependent providers resolve
+- [x] 100% line/branch coverage on every `forRootAsync` branch
 
 #### Files to create / modify
 
@@ -890,3 +890,4 @@ Completion Protocol (after you finish):
 <!-- entries appended as tasks complete -->
 
 - 4.2 ✅ 2026-06-27 — `QueueLifecycle` ordered bounded-drain shutdown; registries expose duplicated connections and delegate shutdown to the lifecycle (no unbounded self-close).
+- 4.1 ✅ 2026-06-27 — `forRootAsync` (useFactory/useClass/useExisting + inject) with shared core providers; `QueueLifecycle` wired into both paths; `setFactoryMethodName('createQueueOptions')`.
