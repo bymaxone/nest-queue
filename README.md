@@ -1,18 +1,79 @@
-# @bymax-one/nest-queue
+<p align="center">
+  <img src="https://img.shields.io/badge/%40bymax--one-nest--queue-000000?style=for-the-badge&logo=nestjs&logoColor=E0234E" alt="@bymax-one/nest-queue" />
+</p>
 
-NestJS dynamic module wrapping BullMQ — typed jobs, flows, Job Schedulers,
-deduplication, OpenTelemetry, and a bounded graceful shutdown.
+<h1 align="center">@bymax-one/nest-queue</h1>
 
-[![npm](https://img.shields.io/npm/v/@bymax-one/nest-queue)](https://www.npmjs.com/package/@bymax-one/nest-queue)
-[![CI](https://github.com/bymaxone/nest-queue/actions/workflows/ci.yml/badge.svg)](https://github.com/bymaxone/nest-queue/actions/workflows/ci.yml)
-[![Coverage](https://codecov.io/gh/bymaxone/nest-queue/branch/main/graph/badge.svg)](https://codecov.io/gh/bymaxone/nest-queue)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/bymaxone/nest-queue/badge)](https://securityscorecards.dev/viewer/?uri=github.com/bymaxone/nest-queue)
-[![provenance](https://img.shields.io/badge/SLSA-provenance-green)](https://www.npmjs.com/package/@bymax-one/nest-queue)
+<p align="center">
+  <strong>Typed BullMQ queues for NestJS</strong><br />
+  <sub>BullMQ 5 · Workers · Flows · Job Schedulers · Deduplication · OpenTelemetry · Graceful Shutdown · Zero Runtime Dependencies</sub>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@bymax-one/nest-queue"><img src="https://img.shields.io/npm/v/@bymax-one/nest-queue?style=flat-square&colorA=000000&colorB=000000" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@bymax-one/nest-queue"><img src="https://img.shields.io/npm/dm/@bymax-one/nest-queue?style=flat-square&colorA=000000&colorB=000000" alt="npm downloads" /></a>
+  <a href="https://github.com/bymaxone/nest-queue/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/bymaxone/nest-queue/ci.yml?branch=main&style=flat-square&colorA=000000&label=CI" alt="CI status" /></a>
+  <a href="https://github.com/bymaxone/nest-queue/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat-square&colorA=000000" alt="coverage" /></a>
+  <a href="https://github.com/bymaxone/nest-queue/blob/main/docs/mutation_testing_results.md"><img src="https://img.shields.io/badge/mutation-98.99%25-brightgreen?style=flat-square&colorA=000000" alt="mutation score" /></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/bymaxone/nest-queue"><img src="https://api.scorecard.dev/projects/github.com/bymaxone/nest-queue/badge?style=flat-square" alt="OpenSSF Scorecard" /></a>
+  <a href="https://github.com/bymaxone/nest-queue/blob/main/LICENSE"><img src="https://img.shields.io/github/license/bymaxone/nest-queue?style=flat-square&colorA=000000&colorB=000000" alt="license" /></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-24%2B-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node.js" /></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/bymaxone/nest-queue">GitHub</a> ·
+  <a href="https://github.com/bymaxone/nest-queue/issues">Issues</a> ·
+  <a href="#-quick-start">Quick Start</a> ·
+  <a href="#-api-reference">API Reference</a> ·
+  <a href="https://github.com/bymaxone/nest-queue/tree/main/examples/nest-queue-example">Example App</a>
+</p>
 
 ---
 
-## Quick Start
+## ✨ Overview
+
+`@bymax-one/nest-queue` is a NestJS dynamic module that wraps **BullMQ 5** behind a typed,
+opinionated surface. Instead of wiring `ioredis` connections, per-queue registration, and
+`maxRetriesPerRequest` policy by hand, you install one library and get typed producers,
+decorator-based workers, flows, recurring **Job Schedulers**, native deduplication,
+OpenTelemetry passthrough, and a tested bounded graceful-shutdown protocol.
+
+The library has **zero direct dependencies** — `bullmq`, `ioredis`, and `@nestjs/*` arrive as
+peer dependencies, so you control exact versions and the supply-chain surface stays minimal.
+
+### Why nest-queue?
+
+- **One setup, every queue.** A single `forRoot`/`forRootAsync`; queues are created on demand by
+  name — no `registerQueue()` per queue.
+- **Correct connections by default.** Dual-mode (bring-your-own client or lib-owned) with the
+  per-role `maxRetriesPerRequest` policy applied automatically — the Queue connection keeps
+  default retries (fail fast), only the duplicated Worker/QueueEvents connections force `null`.
+- **Current BullMQ API only.** Recurring jobs use Job Schedulers (`upsertJobScheduler`), never the
+  removed `addRepeatable`. Cron is validated by BullMQ's own parser, never a hand-rolled regex.
+- **Safe shutdown.** A bounded-drain protocol with at-least-once semantics, force-close, and
+  stalled-job accounting — verified against a real Redis (Testcontainers) E2E suite.
+
+---
+
+## 🔥 Features
+
+- **Typed producer API** — `enqueue<TData, TResult>()`, `enqueueBulk` (bounded), `getJob`,
+  `getJobs`, `getMetrics`, `pauseQueue`/`resumeQueue`/`cleanQueue`.
+- **Decorator workers** — `@Processor`, `@Process`, `@OnWorkerEvent`, `@OnQueueEvent`, discovered
+  automatically from your providers; plus a programmatic `WorkerRegistry` and file-based sandboxed
+  processors.
+- **Flows** — opt-in `FlowService` over BullMQ `FlowProducer` with correct fail-parent semantics.
+- **Job Schedulers** — cron (incl. 6-field seconds) and interval recurrence via `upsertJobScheduler`.
+- **Deduplication** — native BullMQ simple/throttle/debounce modes, passed straight through.
+- **OpenTelemetry** — optional `bullmq-otel` telemetry passthrough across enqueue → handler.
+- **Metrics** — opt-in `MetricsService` with a configurable TTL cache.
+- **Graceful shutdown** — bounded drain → force-close, wired via NestJS `onApplicationShutdown`.
+- **Dual subpath exports** — `.` (server) and `./shared` (zero-dependency types/constants).
+
+---
+
+## 🚀 Quick Start
 
 ```bash
 pnpm add @bymax-one/nest-queue bullmq ioredis
@@ -79,7 +140,7 @@ export class EmailModule {}
 
 ---
 
-## Mode A — Bring Your Own Connection (recommended with `@bymax-one/nest-cache`)
+## 🔌 Mode A — Bring Your Own Connection (recommended with `@bymax-one/nest-cache`)
 
 Mode A accepts an existing `ioredis` client injected from your cache or connection layer.
 Worker and QueueEvents connections are duplicated from this client with
@@ -105,7 +166,7 @@ without touching your cache connection.
 
 ---
 
-## Mode B — Lib-Owned Connection
+## 🔌 Mode B — Lib-Owned Connection
 
 Mode B lets the library own the Redis connections. Pass either a URL or raw ioredis options:
 
@@ -135,7 +196,7 @@ with `maxRetriesPerRequest: null` where BullMQ requires it.
 
 ---
 
-## API Reference
+## 📖 API Reference
 
 ### `QueueService`
 
@@ -228,7 +289,7 @@ const all = await this.metricsService.getAll(['email', 'notifications'])
 
 ---
 
-## Decorators
+## 🎀 Decorators
 
 ### `@Processor(queueName)`
 
@@ -270,7 +331,7 @@ onCompleted(jobId: string, returnValue: string): void {
 
 ---
 
-## Job Schedulers
+## ⏰ Job Schedulers
 
 Job Schedulers are the current recurring-jobs API in BullMQ (superseding the removed `addRepeatable` API). Use `upsertJobScheduler` to create or update a scheduler:
 
@@ -303,7 +364,7 @@ own `cron-parser`, not a hand-rolled regex.
 
 ---
 
-## Deduplication & Telemetry
+## 🔁 Deduplication & Telemetry
 
 ### Deduplication
 
@@ -341,7 +402,7 @@ BymaxQueueModule.forRoot({
 
 ---
 
-## Graceful Shutdown
+## 🛑 Graceful Shutdown
 
 `QueueLifecycle` is registered and invoked automatically via NestJS `onApplicationShutdown`.
 It implements a **bounded drain protocol** with at-least-once semantics:
@@ -381,7 +442,7 @@ BymaxQueueModule.forRoot({
 
 ---
 
-## Subpaths
+## 📦 Subpath Exports
 
 | Subpath | Entry | Description |
 |---|---|---|
@@ -398,7 +459,7 @@ BymaxQueueModule.forRoot({
 
 ---
 
-## Why over `@nestjs/bullmq`
+## 🤔 Why over `@nestjs/bullmq`
 
 | Concern | `@nestjs/bullmq` (official) | `@bymax-one/nest-queue` |
 |---|---|---|
@@ -417,7 +478,35 @@ wire connection and defaults yourself.
 
 ---
 
-## Troubleshooting
+## 🧱 Tech Stack
+
+- **Runtime:** Node.js 24+
+- **Framework:** NestJS 11 (`ConfigurableModuleBuilder` + `setExtras`)
+- **Queue engine:** BullMQ `^5.16` (peer) over `ioredis ^5` (peer)
+- **Telemetry:** `bullmq-otel ^1` (optional peer)
+- **Build:** tsup (ESM + CJS dual subpath, `.d.ts` for both)
+- **Tests:** Jest + `@testcontainers/redis` (E2E) + Stryker (mutation)
+- **TypeScript:** 5.x strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), zero `any`
+
+---
+
+## 🧪 Testing & Quality
+
+- **100% line/branch coverage** on every implemented file (hard CI gate).
+- **Mutation score 98.99%** (Stryker `break 95`) — see [`docs/mutation_testing_results.md`](docs/mutation_testing_results.md).
+- **Real-Redis E2E** via Testcontainers (workers, flows, schedulers, deduplication, retries,
+  DLQ, graceful shutdown).
+- **Bundle budgets** enforced (`pnpm size`): server ≤ 18 KiB brotli, shared ≤ 2.5 KiB.
+- **Supply chain:** SHA-pinned GitHub Actions, OSV-Scanner, TruffleHog, OpenSSF Scorecard,
+  npm publish with provenance (OIDC).
+
+```bash
+pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size
+```
+
+---
+
+## 🩺 Troubleshooting
 
 ### `CONNECTION_REQUIRES_NULL_RETRIES`
 
@@ -449,7 +538,7 @@ do not pick them up:
 
 ---
 
-## Limitations
+## 🚫 What This Library Does NOT Do
 
 - **NestJS only** — does not work with plain Express, standalone Fastify, or other frameworks.
 - **Node.js only** — Deno and Bun are not supported.
@@ -466,7 +555,7 @@ For the full list of limitations and their alternatives, see
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
 Pull requests are welcome. Please open an issue first for significant changes.
 
@@ -477,6 +566,20 @@ Pull requests are welcome. Please open an issue first for significant changes.
 
 ---
 
-## License
+## 🔒 Security Policy
 
-[MIT](LICENSE) © Bymax One
+If you discover a security vulnerability, please **do not** open a public issue. Instead, email us
+at **support@bymax.one** with details. We take security seriously and will respond promptly. See
+[`SECURITY.md`](SECURITY.md) for the full policy.
+
+---
+
+## 📄 License
+
+[MIT](./LICENSE) © [Bymax One](https://github.com/bymaxone)
+
+---
+
+<p align="center">
+  <sub>Built with ❤️ by <a href="https://github.com/bymaxone">Bymax One</a></sub>
+</p>
