@@ -1,6 +1,6 @@
 # Phase 3 — Flows, Job Schedulers, Deduplication, Telemetry & Metrics
 
-> **Status**: 📋 ToDo · **Progress**: 0 / 6 tasks · **Last updated**: 2026-06-23
+> **Status**: 🔄 In Progress · **Progress**: 0 / 6 tasks · **Last updated**: 2026-06-27
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 3
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
