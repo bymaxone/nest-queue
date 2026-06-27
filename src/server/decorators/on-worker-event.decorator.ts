@@ -53,6 +53,13 @@ export type WorkerEventName =
  * visible at-least-once path, so handlers must be idempotent. Set `lockDuration`
  * comfortably above the worst-case handler runtime to avoid false stalls.
  *
+ * Dead-letter-queue pattern (`'failed'`): the library ships no DLQ service, but
+ * the endorsed pattern is a `'failed'` listener that, once retries are exhausted
+ * (`job.attemptsMade >= (job.opts.attempts ?? 1)`), re-enqueues the payload plus
+ * failure metadata onto a `<queue>-dlq` queue via `QueueService.enqueue`. Use a
+ * stable DLQ `jobId` (e.g. `dlq:${job.id}`) so a redelivered `'failed'` event is
+ * idempotent and never double-inserts.
+ *
  * @param eventName - The worker event to listen for.
  *
  * @example

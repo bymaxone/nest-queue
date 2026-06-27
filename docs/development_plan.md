@@ -70,7 +70,7 @@ The phase order respects the dependency graph (Appendix A): connection before qu
 | 1 | [Foundation + ConnectionResolver + base QueueService](./tasks/phase-01-foundation.md) | ✅ Done | 8 / 8 | MEDIUM | 2026-06-26 |
 | 2 | [Workers — decorators + WorkerRegistry + Discovery](./tasks/phase-02-workers.md) | ✅ Done | 6 / 6 | MEDIUM | 2026-06-26 |
 | 3 | [Flows + Job Schedulers + Deduplication/Telemetry + Metrics](./tasks/phase-03-flows-schedulers-metrics.md) | ✅ Done | 6 / 6 | MEDIUM | 2026-06-27 |
-| 4 | [forRootAsync + Graceful Shutdown + E2E + Mutation](./tasks/phase-04-async-shutdown-e2e.md) | 🔄 In Progress | 3 / 7 | HIGH | 2026-06-27 |
+| 4 | [forRootAsync + Graceful Shutdown + E2E + Mutation](./tasks/phase-04-async-shutdown-e2e.md) | 🔄 In Progress | 4 / 7 | HIGH | 2026-06-27 |
 | 5 | [Release v0.1.0 — docs, CI/CD, supply chain, publish](./tasks/phase-05-release.md) | 📋 ToDo | 0 / 8 | LOW | 2026-06-23 |
 | | **Total** | **✅ 3 / 5 phases** | **20 / 35 tasks** | — | — |
 

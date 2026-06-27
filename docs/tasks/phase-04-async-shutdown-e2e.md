@@ -1,6 +1,6 @@
 # Phase 4 — Async config, graceful shutdown, E2E & mutation baseline
 
-> **Status**: 🔄 In Progress · **Progress**: 3 / 7 tasks · **Last updated**: 2026-06-27
+> **Status**: 🔄 In Progress · **Progress**: 4 / 7 tasks · **Last updated**: 2026-06-27
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 4
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -45,7 +45,7 @@ What is still missing is everything that makes the package **production-safe and
 | 4.1 | `forRootAsync()` — factory/class/existing async configuration | ✅ Done | P0 | M | 1.8, 3.1, 3.5 |
 | 4.2 | `QueueLifecycle` — bounded graceful shutdown | ✅ Done | P0 | L | 1.5, 2.2, 2.3, 3.1 |
 | 4.3 | At-least-once semantics & handler idempotency documentation | ✅ Done | P1 | S | 4.2 |
-| 4.4 | Dead-letter-queue (DLQ) pattern via `@OnWorkerEvent('failed')` | 📋 ToDo | P1 | S | 4.3 |
+| 4.4 | Dead-letter-queue (DLQ) pattern via `@OnWorkerEvent('failed')` | ✅ Done | P1 | S | 4.3 |
 | 4.5 | E2E suite with Testcontainers Redis (7 scenarios) | 📋 ToDo | P0 | L | 4.1, 4.2 |
 | 4.6 | Mutation-testing baseline (Stryker `break 95`) | 📋 ToDo | P1 | M | 4.5 |
 | 4.7 | Phase 4 index exports, lifecycle tests & validation | 📋 ToDo | P0 | M | 4.1–4.6 |
@@ -465,7 +465,7 @@ Completion Protocol (after you finish):
 
 ### Task 4.4 — Dead-letter-queue (DLQ) pattern via `@OnWorkerEvent('failed')`
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P1
 - **Size**: S
 - **Depends on**: 4.3
@@ -476,11 +476,11 @@ Document and demonstrate the dead-letter-queue pattern the lib endorses for exha
 
 #### Acceptance criteria
 
-- [ ] A documented DLQ example processor exists showing the `attemptsMade >= attempts` guard and re-enqueue to a `<queue>-dlq` queue
-- [ ] The example preserves the original payload plus failure metadata (`failedReason`, `attemptsMade`, original `jobId`) and is idempotent (stable DLQ `jobId`)
-- [ ] `@OnWorkerEvent('failed')` JSDoc references the DLQ pattern and the exhaustion guard
-- [ ] The example uses only the public API (`@Processor`, `@Process`, `@OnWorkerEvent`, `QueueService.enqueue`) — no internal services
-- [ ] `pnpm typecheck && pnpm lint` clean; the fixture compiles under the E2E tsconfig
+- [x] A documented DLQ example processor exists showing the `attemptsMade >= attempts` guard and re-enqueue to a `<queue>-dlq` queue
+- [x] The example preserves the original payload plus failure metadata (`failedReason`, `attemptsMade`, original `jobId`) and is idempotent (stable DLQ `jobId`)
+- [x] `@OnWorkerEvent('failed')` JSDoc references the DLQ pattern and the exhaustion guard
+- [x] The example uses only the public API (`@Processor`, `@Process`, `@OnWorkerEvent`, `QueueService.enqueue`) — no internal services
+- [x] `pnpm typecheck && pnpm lint` clean; the fixture compiles under the E2E tsconfig
 
 #### Files to create / modify
 
@@ -892,3 +892,4 @@ Completion Protocol (after you finish):
 - 4.2 ✅ 2026-06-27 — `QueueLifecycle` ordered bounded-drain shutdown; registries expose duplicated connections and delegate shutdown to the lifecycle (no unbounded self-close).
 - 4.1 ✅ 2026-06-27 — `forRootAsync` (useFactory/useClass/useExisting + inject) with shared core providers; `QueueLifecycle` wired into both paths; `setFactoryMethodName('createQueueOptions')`.
 - 4.3 ✅ 2026-06-27 — At-least-once + idempotency JSDoc on `enqueue`/`enqueueBulk`, `@Process`/`@Processor`, `@OnWorkerEvent`, and the lifecycle (jobId vs deduplication; stalled-retry; lockDuration).
+- 4.4 ✅ 2026-06-27 — DLQ example fixture (`risky` → `risky-dlq`, public API only, idempotent stable DLQ jobId) + DLQ guidance in `@OnWorkerEvent`; e2e tsconfig path alias.
