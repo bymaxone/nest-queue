@@ -1,6 +1,6 @@
 # Phase 3 — Flows, Job Schedulers, Deduplication, Telemetry & Metrics
 
-> **Status**: 🔄 In Progress · **Progress**: 2 / 6 tasks · **Last updated**: 2026-06-27
+> **Status**: 🔄 In Progress · **Progress**: 3 / 6 tasks · **Last updated**: 2026-06-27
 > **Source roadmap**: [`docs/development_plan.md`](../development_plan.md) § Phase 3
 > **Source spec**: [`docs/technical_specification.md`](../technical_specification.md)
 
@@ -57,7 +57,7 @@ By the end of Phase 3 you can compose hierarchical flows, schedule recurring job
 |---|---|---|---|---|---|
 | 3.1 | FlowService — opt-in FlowProducer wrapper | ✅ Done | P0 | M | 1.5, 1.8 |
 | 3.2 | Job Schedulers in QueueService + cron validation util | ✅ Done | P0 | M | 1.2, 1.7 |
-| 3.3 | Native deduplication options on `enqueue` | 📋 ToDo | P1 | S | 1.7 |
+| 3.3 | Native deduplication options on `enqueue` | ✅ Done | P1 | S | 1.7 |
 | 3.4 | Telemetry passthrough (OpenTelemetry) to Queue/Worker/FlowProducer | 📋 ToDo | P1 | S | 1.7, 2.2, 3.1 |
 | 3.5 | MetricsService — cached getJobCounts + getMetrics delegation + health-check docs | 📋 ToDo | P0 | M | 1.7, 1.8 |
 | 3.6 | Index exports + Phase 3 integration tests + validation | 📋 ToDo | P0 | S | 3.1, 3.2, 3.3, 3.4, 3.5 |
@@ -385,7 +385,7 @@ Completion Protocol (after you finish):
 
 ### Task 3.3 — Native deduplication options on `enqueue`
 
-- **Status**: 📋 ToDo
+- **Status**: ✅ Done
 - **Priority**: P1
 - **Size**: S
 - **Depends on**: 1.7 (base `QueueService`)
@@ -396,14 +396,14 @@ Completion Protocol (after you finish):
 
 #### Acceptance criteria
 
-- [ ] `enqueue` JSDoc documents the four BullMQ deduplication modes and the `{ id, ttl?, extend?, replace?, keepLastIfActive? }` option shape, with an `@example`.
-- [ ] Test: **Simple** `{ id }` — a second enqueue while the first is in-flight does not create a second job.
-- [ ] Test: **Throttle** `{ id, ttl }` — duplicates within `ttl` are ignored.
-- [ ] Test: **Debounce** `{ id, ttl, extend: true, replace: true }` — only the latest data is kept; the TTL resets per duplicate.
-- [ ] Test: **keep-last-if-active** `{ id, keepLastIfActive: true }` — the latest data is stored while a job is active.
-- [ ] Tests assert that `enqueue` forwards `options.deduplication` to `Queue.add` unchanged (no transformation by the lib).
-- [ ] The deduplication key is shown to be independent of `jobId` (a test sets one without the other).
-- [ ] No custom deduplication logic exists in the lib (verified by inspection).
+- [x] `enqueue` JSDoc documents the four BullMQ deduplication modes and the `{ id, ttl?, extend?, replace?, keepLastIfActive? }` option shape, with an `@example`.
+- [x] Test: **Simple** `{ id }` — a second enqueue while the first is in-flight does not create a second job.
+- [x] Test: **Throttle** `{ id, ttl }` — duplicates within `ttl` are ignored.
+- [x] Test: **Debounce** `{ id, ttl, extend: true, replace: true }` — only the latest data is kept; the TTL resets per duplicate.
+- [x] Test: **keep-last-if-active** `{ id, keepLastIfActive: true }` — the latest data is stored while a job is active.
+- [x] Tests assert that `enqueue` forwards `options.deduplication` to `Queue.add` unchanged (no transformation by the lib).
+- [x] The deduplication key is shown to be independent of `jobId` (a test sets one without the other).
+- [x] No custom deduplication logic exists in the lib (verified by inspection).
 
 #### Files to create / modify
 
@@ -887,3 +887,4 @@ Completion Protocol (after you finish):
 
 - 3.1 ✅ 2026-06-27 — FlowService guarded FlowProducer wrapper, registered/exported by the module; 100% coverage.
 - 3.2 ✅ 2026-06-27 — Job Scheduler API (upsert/remove/list) on QueueService + structural validator; cron delegated to BullMQ, no cron-parser dep; dropped deprecated `immediately`; 100% coverage.
+- 3.3 ✅ 2026-06-27 — Documented the four native deduplication modes on `enqueue` and proved passthrough (incl. jobId/deduplication independence); no custom dedup code.

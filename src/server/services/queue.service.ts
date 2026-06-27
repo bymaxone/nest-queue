@@ -76,12 +76,31 @@ export class QueueService implements OnModuleDestroy {
   }
 
   /**
-   * Add a single job to a queue. The queue is created lazily if needed. Native
-   * `options.jobId` (idempotent insert) and `options.deduplication` pass straight
-   * through — there is no custom deduplication code in the library.
+   * Add a single job to a queue. The queue is created lazily if needed.
    *
-   * @example
-   * await queueService.enqueue<{ to: string }>('email', 'send', { to: 'a@b.com' })
+   * `options` surfaces BullMQ natives directly — including `jobId` (idempotent
+   * insert: a second add with the same id is a no-op while the first exists) and
+   * `deduplication` (windowed deduplication). The library writes no deduplication
+   * code; BullMQ owns the behavior. The deduplication key is independent of
+   * `jobId`, so both can be set together or apart.
+   *
+   * Deduplication modes (`deduplication: { id, ttl?, extend?, replace?, keepLastIfActive? }`):
+   *  - Simple `{ id }` — collapse duplicates until the in-flight job completes or fails.
+   *  - Throttle `{ id, ttl }` — ignore duplicates for `ttl` milliseconds.
+   *  - Debounce `{ id, ttl, extend: true, replace: true }` — keep only the latest
+   *    data; each duplicate resets the TTL.
+   *  - keep-last-if-active `{ id, keepLastIfActive: true }` — while a job is active,
+   *    store the latest data and run a single follow-up when it finishes.
+   *
+   * @param queueName - Target queue (created lazily if absent).
+   * @param jobName - Job identifier used by `@Process` to dispatch.
+   * @param data - Typed job payload.
+   * @param options - Per-job BullMQ options (priority, delay, `jobId`, `deduplication`, ...).
+   * @returns The created job.
+   * @example Throttle: at most one reindex per term every 5 seconds.
+   *   await queueService.enqueue('search', 'reindex', { term }, {
+   *     deduplication: { id: `reindex:${term}`, ttl: 5_000 },
+   *   })
    */
   async enqueue<TData = unknown, TResult = unknown>(
     queueName: string,

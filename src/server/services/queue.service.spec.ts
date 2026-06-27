@@ -134,6 +134,51 @@ describe('QueueService — enqueue', () => {
   })
 })
 
+describe('QueueService — deduplication passthrough', () => {
+  /** Assert enqueue forwards the given options object to Queue.add unchanged. */
+  async function expectForwarded(options: Parameters<QueueService['enqueue']>[3]): Promise<void> {
+    const { service } = makeService()
+    service.getOrCreateQueue('search')
+    queueInstances[0]?.add.mockResolvedValue({ id: '1' } as Job)
+
+    await service.enqueue('search', 'reindex', { term: 'shoes' }, options)
+
+    expect(queueInstances[0]?.add).toHaveBeenCalledWith('reindex', { term: 'shoes' }, options)
+  }
+
+  it('forwards Simple deduplication unchanged', async () => {
+    // Simple mode: { id } collapses until the in-flight job settles.
+    await expectForwarded({ deduplication: { id: 'reindex:shoes' } })
+  })
+
+  it('forwards Throttle deduplication unchanged', async () => {
+    // Throttle mode: { id, ttl } ignores duplicates within the window.
+    await expectForwarded({ deduplication: { id: 'reindex:shoes', ttl: 5_000 } })
+  })
+
+  it('forwards Debounce deduplication unchanged', async () => {
+    // Debounce mode: keep latest data and reset the TTL per duplicate.
+    await expectForwarded({
+      deduplication: { id: 'reindex:shoes', ttl: 5_000, extend: true, replace: true },
+    })
+  })
+
+  it('forwards keep-last-if-active deduplication unchanged', async () => {
+    // keep-last-if-active: store latest while a job runs, then run one follow-up.
+    await expectForwarded({ deduplication: { id: 'reindex:shoes', keepLastIfActive: true } })
+  })
+
+  it('treats jobId and deduplication as independent options', async () => {
+    // Both can be set together; the library applies no transformation.
+    await expectForwarded({ jobId: 'job-1', deduplication: { id: 'reindex:shoes' } })
+  })
+
+  it('forwards a bare jobId without any deduplication key', async () => {
+    // jobId alone (idempotent insert) does not imply a deduplication key.
+    await expectForwarded({ jobId: 'job-1' })
+  })
+})
+
 describe('QueueService — enqueueBulk', () => {
   it('delegates to Queue.addBulk mapping per-job options to BullMQ `opts`', async () => {
     // Each descriptor is forwarded with its options under the `opts` key BullMQ reads.
