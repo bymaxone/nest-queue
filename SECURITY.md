@@ -4,7 +4,7 @@
 
 **Please do not open a public GitHub issue for security vulnerabilities.**
 
-Report vulnerabilities by email to **security@bymax.one**. Include:
+Report vulnerabilities by email to **support@bymax.one**. Include:
 
 - A description of the vulnerability and its potential impact
 - Steps to reproduce the issue
