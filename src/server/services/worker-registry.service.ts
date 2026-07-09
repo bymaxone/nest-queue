@@ -360,6 +360,9 @@ export class WorkerRegistry {
       connection: conn,
       concurrency: opts?.concurrency ?? DEFAULT_WORKER_CONCURRENCY,
       autorun: opts?.autorun ?? true,
+      // Match the producer Queue's key prefix so the worker polls the same
+      // keyspace; without this a non-default prefix leaves jobs unconsumed.
+      prefix: this.options.prefix,
     }
     if (opts?.limiter !== undefined) result.limiter = opts.limiter
     if (opts?.lockDuration !== undefined) result.lockDuration = opts.lockDuration

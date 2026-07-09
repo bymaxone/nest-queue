@@ -53,7 +53,7 @@ beforeEach(() => {
 describe('FlowService — enabled', () => {
   it('constructs a FlowProducer on the main connection', () => {
     // When enabled, the producer is built with the resolver's Queue-role client.
-    new FlowService(makeConnection(), true)
+    new FlowService(makeConnection(), true, 'bull')
 
     expect(producerConstructorArgs).toHaveLength(1)
     const [opts] = producerConstructorArgs[0] as [{ connection: unknown }]
@@ -62,7 +62,7 @@ describe('FlowService — enabled', () => {
 
   it('delegates add to the underlying producer', async () => {
     // add forwards the flow definition unchanged and returns the producer result.
-    const service = new FlowService(makeConnection(), true)
+    const service = new FlowService(makeConnection(), true, 'bull')
     const flow = { name: 'root', queueName: 'pdf', data: {} } as FlowJob
     const node = { job: { id: '1' } } as unknown as JobNode
     producerInstances[0]?.add.mockResolvedValue(node)
@@ -73,7 +73,7 @@ describe('FlowService — enabled', () => {
 
   it('delegates addBulk to the underlying producer as a mutable array', async () => {
     // addBulk copies the readonly input into the array BullMQ expects.
-    const service = new FlowService(makeConnection(), true)
+    const service = new FlowService(makeConnection(), true, 'bull')
     const flows = [{ name: 'a', queueName: 'q', data: {} }] as FlowJob[]
     const nodes = [{ job: { id: '1' } }] as unknown as JobNode[]
     producerInstances[0]?.addBulk.mockResolvedValue(nodes)
@@ -84,7 +84,7 @@ describe('FlowService — enabled', () => {
 
   it('returns the underlying producer from getProducer', () => {
     // getProducer exposes the constructed FlowProducer instance.
-    const service = new FlowService(makeConnection(), true)
+    const service = new FlowService(makeConnection(), true, 'bull')
 
     expect(service.getProducer()).toBe(producerInstances[0])
   })
@@ -92,15 +92,24 @@ describe('FlowService — enabled', () => {
   it('passes the configured telemetry into the FlowProducer constructor', () => {
     // A configured telemetry instance reaches the producer so spans propagate to children.
     const telemetry = { name: 'sentinel-telemetry' } as unknown as Telemetry
-    new FlowService(makeConnection(), true, telemetry)
+    new FlowService(makeConnection(), true, 'bull', telemetry)
 
     const [opts] = producerConstructorArgs[0] as [{ telemetry?: unknown }]
     expect(opts.telemetry).toBe(telemetry)
   })
 
+  it('passes the configured prefix into the FlowProducer constructor', () => {
+    // The producer must use the same key prefix as the Queue so flow jobs land
+    // in the keyspace the workers poll; a non-default prefix breaks otherwise.
+    new FlowService(makeConnection(), true, 'tenant:flows')
+
+    const [opts] = producerConstructorArgs[0] as [{ prefix?: unknown }]
+    expect(opts.prefix).toBe('tenant:flows')
+  })
+
   it('omits the telemetry key when telemetry is not configured', () => {
     // Without telemetry, the producer options never carry the key.
-    new FlowService(makeConnection(), true)
+    new FlowService(makeConnection(), true, 'bull')
 
     const [opts] = producerConstructorArgs[0] as [Record<string, unknown>]
     expect('telemetry' in opts).toBe(false)
@@ -110,14 +119,14 @@ describe('FlowService — enabled', () => {
 describe('FlowService — disabled', () => {
   it('does not construct a FlowProducer', () => {
     // When disabled, no producer is built (no Redis connection is opened).
-    new FlowService(makeConnection(), false)
+    new FlowService(makeConnection(), false, 'bull')
 
     expect(producerConstructorArgs).toHaveLength(0)
   })
 
   it('throws FLOW_DISABLED (503) from add', async () => {
     // add is guarded and rejects with the typed disabled error.
-    const service = new FlowService(makeConnection(), false)
+    const service = new FlowService(makeConnection(), false, 'bull')
 
     await expect(service.add({} as FlowJob)).rejects.toBeInstanceOf(QueueException)
     await service.add({} as FlowJob).catch((err: unknown) => {
@@ -128,14 +137,14 @@ describe('FlowService — disabled', () => {
 
   it('throws FLOW_DISABLED from addBulk', async () => {
     // addBulk is guarded the same way as add.
-    const service = new FlowService(makeConnection(), false)
+    const service = new FlowService(makeConnection(), false, 'bull')
 
     await expect(service.addBulk([])).rejects.toBeInstanceOf(QueueException)
   })
 
   it('throws FLOW_DISABLED from getProducer', () => {
     // getProducer cannot return a producer that was never created.
-    const service = new FlowService(makeConnection(), false)
+    const service = new FlowService(makeConnection(), false, 'bull')
 
     expect(() => service.getProducer()).toThrow(QueueException)
   })
@@ -144,7 +153,7 @@ describe('FlowService — disabled', () => {
 describe('FlowService — onModuleDestroy', () => {
   it('closes the producer when active', async () => {
     // Shutdown closes the active producer a single time.
-    const service = new FlowService(makeConnection(), true)
+    const service = new FlowService(makeConnection(), true, 'bull')
 
     await service.onModuleDestroy()
 
@@ -153,7 +162,7 @@ describe('FlowService — onModuleDestroy', () => {
 
   it('swallows a close rejection', async () => {
     // A failing close must not abort the shutdown sequence.
-    const service = new FlowService(makeConnection(), true)
+    const service = new FlowService(makeConnection(), true, 'bull')
     producerInstances[0]?.close.mockRejectedValue(new Error('close failed'))
 
     await expect(service.onModuleDestroy()).resolves.toBeUndefined()
@@ -161,7 +170,7 @@ describe('FlowService — onModuleDestroy', () => {
 
   it('is a no-op when inactive', async () => {
     // With no producer there is nothing to close.
-    const service = new FlowService(makeConnection(), false)
+    const service = new FlowService(makeConnection(), false, 'bull')
 
     await expect(service.onModuleDestroy()).resolves.toBeUndefined()
     expect(producerInstances).toHaveLength(0)
