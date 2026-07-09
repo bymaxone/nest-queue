@@ -40,11 +40,11 @@ export class QueueLifecycle implements OnModuleDestroy {
   private readonly logger = new Logger(QueueLifecycle.name)
 
   constructor(
-    private readonly workers: WorkerRegistry,
-    private readonly events: QueueEventsRegistry,
-    private readonly queues: QueueService,
-    private readonly flow: FlowService,
-    private readonly connection: ConnectionResolver,
+    @Inject(WorkerRegistry) private readonly workers: WorkerRegistry,
+    @Inject(QueueEventsRegistry) private readonly events: QueueEventsRegistry,
+    @Inject(QueueService) private readonly queues: QueueService,
+    @Inject(FlowService) private readonly flow: FlowService,
+    @Inject(ConnectionResolver) private readonly connection: ConnectionResolver,
     @Inject(BYMAX_QUEUE_RESOLVED_OPTIONS) private readonly resolved: ResolvedQueueOptions,
   ) {}
 

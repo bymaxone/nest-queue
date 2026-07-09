@@ -99,7 +99,7 @@ export class WorkerRegistry {
   private readonly entries = new Map<string, WorkerEntry>()
 
   constructor(
-    private readonly connection: ConnectionResolver,
+    @Inject(ConnectionResolver) private readonly connection: ConnectionResolver,
     @Inject(BYMAX_QUEUE_RESOLVED_OPTIONS) private readonly options: ResolvedQueueOptions,
   ) {}
 
