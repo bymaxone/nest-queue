@@ -43,7 +43,7 @@ Before making any change, read these sections (use `Read` with `offset`/`limit` 
 pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size
 ```
 
-100% line/branch coverage on every implemented file is a hard gate. Mutation testing (`pnpm mutation`) is a pre-release gate only.
+100% line/branch coverage on every implemented file is a hard gate. Mutation testing runs automatically post-merge on `main` via the shared reusable (`bymaxone/.github` → node-lib-ci) plus an optional manual `pnpm mutation`.
 
 ---
 
