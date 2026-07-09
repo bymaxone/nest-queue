@@ -91,6 +91,15 @@ describe('WorkerRegistry.register', () => {
     expect(registry.list()).toContain('email')
   })
 
+  it('constructs the Worker with the configured key prefix', () => {
+    // The worker must poll the same prefixed keyspace the producer Queue writes
+    // to; a non-default prefix would otherwise leave every job unconsumed.
+    const registry = new WorkerRegistry(fakeConnection(), { ...makeOptions(), prefix: 'tenant:wk' })
+    registry.register({ queueName: 'email', handler: noopHandler })
+    const [, , workerOpts] = workerConstructorArgs[0] as [unknown, unknown, { prefix?: unknown }]
+    expect(workerOpts.prefix).toBe('tenant:wk')
+  })
+
   it('throws DUPLICATE_PROCESSOR when the same queue is registered twice', () => {
     // Two processors targeting the same queue is an application-level error.
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())

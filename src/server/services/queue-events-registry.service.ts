@@ -11,6 +11,8 @@ import { Inject, Injectable } from '@nestjs/common'
 import { QueueEvents } from 'bullmq'
 import type { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
+import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
+import type { ResolvedQueueOptions } from '../config/resolved-options'
 import { duplicateConnection } from '../utils/duplicate-connection'
 
 /**
@@ -34,7 +36,10 @@ export class QueueEventsRegistry {
   private readonly events = new Map<string, QueueEvents>()
   private readonly connections = new Map<string, Redis>()
 
-  constructor(@Inject(ConnectionResolver) private readonly connection: ConnectionResolver) {}
+  constructor(
+    @Inject(ConnectionResolver) private readonly connection: ConnectionResolver,
+    @Inject(BYMAX_QUEUE_RESOLVED_OPTIONS) private readonly options: ResolvedQueueOptions,
+  ) {}
 
   /**
    * Returns the cached `QueueEvents` for `queueName`, creating one on first
@@ -50,7 +55,7 @@ export class QueueEventsRegistry {
     const conn = duplicateConnection(this.connection.getClient())
     let qe: QueueEvents
     try {
-      qe = new QueueEvents(queueName, { connection: conn })
+      qe = new QueueEvents(queueName, { connection: conn, prefix: this.options.prefix })
     } catch (err) {
       // Disconnect the duplicated connection to prevent a Redis resource leak.
       conn.disconnect()

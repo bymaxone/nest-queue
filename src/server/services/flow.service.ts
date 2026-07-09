@@ -33,10 +33,18 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 export class FlowService implements OnModuleDestroy {
   private readonly producer?: FlowProducer
 
-  constructor(connection: ConnectionResolver, enabled: boolean, telemetry?: Telemetry) {
+  constructor(
+    connection: ConnectionResolver,
+    enabled: boolean,
+    prefix: string,
+    telemetry?: Telemetry,
+  ) {
     if (enabled) {
       this.producer = new FlowProducer({
         connection: connection.getClient(),
+        // Match the producer Queue's key prefix so flow jobs land in the same
+        // keyspace the workers poll; a non-default prefix breaks flows otherwise.
+        prefix,
         ...(telemetry ? { telemetry } : {}),
       })
     }

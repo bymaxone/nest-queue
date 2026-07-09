@@ -6,6 +6,7 @@
 
 import { QueueEventsRegistry } from './queue-events-registry.service'
 import type { ConnectionResolver } from './connection-resolver.service'
+import type { ResolvedQueueOptions } from '../config/resolved-options'
 import type { Redis } from 'ioredis'
 
 /** Track instances created by the mocked constructor. */
@@ -37,6 +38,11 @@ function fakeConnection(redis?: Redis): ConnectionResolver {
   } as unknown as ConnectionResolver
 }
 
+/** Minimal resolved-options stub carrying just the key prefix. */
+function fakeOptions(prefix = 'bull'): ResolvedQueueOptions {
+  return { prefix } as unknown as ResolvedQueueOptions
+}
+
 beforeEach(() => {
   createdQueueEvents.length = 0
 })
@@ -44,7 +50,7 @@ beforeEach(() => {
 describe('QueueEventsRegistry.getOrCreate', () => {
   it('creates a QueueEvents on first call and returns it', () => {
     // First call must instantiate and cache a QueueEvents for the queue.
-    const registry = new QueueEventsRegistry(fakeConnection())
+    const registry = new QueueEventsRegistry(fakeConnection(), fakeOptions())
     const qe = registry.getOrCreate('email')
     expect(qe).toBeDefined()
     expect(createdQueueEvents).toHaveLength(1)
@@ -55,10 +61,22 @@ describe('QueueEventsRegistry.getOrCreate', () => {
     // SUBSCRIBE needs maxRetriesPerRequest: null), not an empty/default options bag.
     const { QueueEvents: MockQueueEvents } = jest.requireMock<{ QueueEvents: jest.Mock }>('bullmq')
     const redis = fakeRedis()
-    const registry = new QueueEventsRegistry(fakeConnection(redis))
+    const registry = new QueueEventsRegistry(fakeConnection(redis), fakeOptions())
     registry.getOrCreate('email')
     const dup = (redis.duplicate as jest.Mock).mock.results[0]!.value as unknown
-    expect(MockQueueEvents).toHaveBeenCalledWith('email', { connection: dup })
+    expect(MockQueueEvents).toHaveBeenCalledWith('email', { connection: dup, prefix: 'bull' })
+  })
+
+  it('constructs QueueEvents with the configured key prefix', () => {
+    // QueueEvents must watch the same prefixed keyspace the producer writes to;
+    // a non-default prefix would otherwise silently drop every event.
+    const { QueueEvents: MockQueueEvents } = jest.requireMock<{ QueueEvents: jest.Mock }>('bullmq')
+    const registry = new QueueEventsRegistry(fakeConnection(), fakeOptions('tenant:events'))
+    registry.getOrCreate('email')
+    expect(MockQueueEvents).toHaveBeenCalledWith(
+      'email',
+      expect.objectContaining({ prefix: 'tenant:events' }),
+    )
   })
 
   it('disconnects the duplicated connection when QueueEvents constructor throws (no leak)', () => {
@@ -70,7 +88,7 @@ describe('QueueEventsRegistry.getOrCreate', () => {
       throw new Error('subscribe failed')
     })
     const redis = fakeRedis()
-    const registry = new QueueEventsRegistry(fakeConnection(redis))
+    const registry = new QueueEventsRegistry(fakeConnection(redis), fakeOptions())
     expect(() => registry.getOrCreate('email')).toThrow('subscribe failed')
     const dupResult = (redis.duplicate as jest.Mock).mock.results[0]!.value as {
       disconnect: jest.Mock
@@ -80,7 +98,7 @@ describe('QueueEventsRegistry.getOrCreate', () => {
 
   it('returns the same instance on subsequent calls (idempotent)', () => {
     // Idempotency is critical — no second Redis connection must be opened.
-    const registry = new QueueEventsRegistry(fakeConnection())
+    const registry = new QueueEventsRegistry(fakeConnection(), fakeOptions())
     const first = registry.getOrCreate('email')
     const second = registry.getOrCreate('email')
     expect(first).toBe(second)
@@ -89,7 +107,7 @@ describe('QueueEventsRegistry.getOrCreate', () => {
 
   it('creates separate instances for different queues', () => {
     // Each queue requires its own QueueEvents (and its own Redis connection).
-    const registry = new QueueEventsRegistry(fakeConnection())
+    const registry = new QueueEventsRegistry(fakeConnection(), fakeOptions())
     const emailQe = registry.getOrCreate('email')
     const smsQe = registry.getOrCreate('sms')
     expect(emailQe).not.toBe(smsQe)
@@ -100,7 +118,7 @@ describe('QueueEventsRegistry.getOrCreate', () => {
 describe('QueueEventsRegistry.list / getAll', () => {
   it('list returns the names of queues with an open QueueEvents', () => {
     // list() surfaces which queues currently have a QueueEvents connection.
-    const registry = new QueueEventsRegistry(fakeConnection())
+    const registry = new QueueEventsRegistry(fakeConnection(), fakeOptions())
     registry.getOrCreate('email')
     registry.getOrCreate('sms')
     expect(registry.list()).toEqual(expect.arrayContaining(['email', 'sms']))
@@ -108,7 +126,7 @@ describe('QueueEventsRegistry.list / getAll', () => {
 
   it('getAll returns a ReadonlyMap of all QueueEvents', () => {
     // getAll() is used by the shutdown orchestrator.
-    const registry = new QueueEventsRegistry(fakeConnection())
+    const registry = new QueueEventsRegistry(fakeConnection(), fakeOptions())
     registry.getOrCreate('email')
     const map = registry.getAll()
     expect(map.size).toBe(1)
@@ -119,7 +137,7 @@ describe('QueueEventsRegistry.list / getAll', () => {
 describe('QueueEventsRegistry.getConnections', () => {
   it('exposes the duplicated connection opened per queue', () => {
     // The shutdown orchestrator closes exactly these library-created connections.
-    const registry = new QueueEventsRegistry(fakeConnection())
+    const registry = new QueueEventsRegistry(fakeConnection(), fakeOptions())
     registry.getOrCreate('email')
     registry.getOrCreate('sms')
     const connections = registry.getConnections()
@@ -130,7 +148,7 @@ describe('QueueEventsRegistry.getConnections', () => {
 
   it('returns an empty map before any QueueEvents are created', () => {
     // With nothing observed there are no library-created connections to close.
-    const registry = new QueueEventsRegistry(fakeConnection())
+    const registry = new QueueEventsRegistry(fakeConnection(), fakeOptions())
     expect(registry.getConnections().size).toBe(0)
   })
 })
