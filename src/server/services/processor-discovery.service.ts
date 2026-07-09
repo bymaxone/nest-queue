@@ -8,7 +8,7 @@
  * @layer server/services
  */
 
-import { Injectable, Logger, type OnModuleInit } from '@nestjs/common'
+import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common'
 import { DiscoveryService } from '@nestjs/core'
 import type { Job } from 'bullmq'
 import { WorkerRegistry } from './worker-registry.service'
@@ -61,9 +61,9 @@ export class ProcessorDiscoveryService implements OnModuleInit {
   private readonly registeredQueues = new Set<string>()
 
   constructor(
-    private readonly discovery: DiscoveryService,
-    private readonly workers: WorkerRegistry,
-    private readonly events: QueueEventsRegistry,
+    @Inject(DiscoveryService) private readonly discovery: DiscoveryService,
+    @Inject(WorkerRegistry) private readonly workers: WorkerRegistry,
+    @Inject(QueueEventsRegistry) private readonly events: QueueEventsRegistry,
   ) {}
 
   /**

@@ -7,7 +7,7 @@
  * @layer server/services
  */
 
-import { Injectable } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
 import { QueueEvents } from 'bullmq'
 import type { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
@@ -34,7 +34,7 @@ export class QueueEventsRegistry {
   private readonly events = new Map<string, QueueEvents>()
   private readonly connections = new Map<string, Redis>()
 
-  constructor(private readonly connection: ConnectionResolver) {}
+  constructor(@Inject(ConnectionResolver) private readonly connection: ConnectionResolver) {}
 
   /**
    * Returns the cached `QueueEvents` for `queueName`, creating one on first
