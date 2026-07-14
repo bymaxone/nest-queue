@@ -12,11 +12,11 @@
   },
   "dependencies": {
     "@bymax-one/nest-queue": "workspace:*",
-    "@nestjs/common": "^11.0.0",
-    "@nestjs/core": "^11.0.0",
-    "@nestjs/platform-fastify": "^11.0.0",
-    "bullmq": "^5.16.0",
-    "ioredis": "^5.0.0",
+    "@nestjs/common": "^11.1.28",
+    "@nestjs/core": "^11.1.28",
+    "@nestjs/platform-fastify": "^11.1.28",
+    "bullmq": "^5.80.2",
+    "ioredis": "^5.11.1",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1"
   },
