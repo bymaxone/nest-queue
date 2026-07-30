@@ -19,6 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     # Only publish from a semver tag — a manual workflow_dispatch on a branch must never publish.
     if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+
+    # The `npm-publish` environment gates the run behind a manual approval and is
+    # itself restricted to `v*.*.*` tags (repo Settings → Environments). Even an
+    # accidentally pushed tag cannot publish without an explicit approval click.
+    environment:
+      name: npm-publish
+      url: https://www.npmjs.com/package/@bymax-one/nest-queue
+
     permissions:
       contents: write
       id-token: write
