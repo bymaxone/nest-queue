@@ -194,13 +194,25 @@ try {
       2,
     ),
   )
-  const installResult = spawnSync('pnpm', ['install', '--no-frozen-lockfile'], {
+  // `--ignore-scripts` is not a shortcut: this check proves the package RESOLVES,
+  // and no lifecycle script participates in that. Leaving them on makes the check
+  // fail for reasons that have nothing to do with this package — under pnpm 11 an
+  // ignored build script is an ERROR (`ERR_PNPM_IGNORED_BUILDS`), and `bullmq`
+  // pulls in `msgpackr-extract`, which builds natively. The repository itself is
+  // unaffected because `pnpm-workspace.yaml` approves that build explicitly; a
+  // throwaway consumer directory has no such policy and never will.
+  const installResult = spawnSync('pnpm', ['install', '--no-frozen-lockfile', '--ignore-scripts'], {
     cwd: consumerDir,
     encoding: 'utf8',
     timeout: 180_000,
   })
   if (installResult.status !== 0) {
-    fail(`pnpm install in consumer failed: ${installResult.stderr}`)
+    // pnpm reports this class of failure on stdout, not stderr. Printing only
+    // stderr produced an empty reason and a gate that failed without saying why.
+    fail(
+      `pnpm install in consumer failed (status ${String(installResult.status)})\n` +
+        `--- stdout ---\n${installResult.stdout ?? ''}\n--- stderr ---\n${installResult.stderr ?? ''}`,
+    )
   } else {
     pass('pnpm install with file: link succeeded')
 

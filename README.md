@@ -782,6 +782,38 @@ pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && \
 
 ## 🩺 Troubleshooting
 
+### `ERR_PNPM_IGNORED_BUILDS: msgpackr-extract` on install (pnpm 10+)
+
+Installing this library with pnpm can stop with:
+
+```
+ERR_PNPM_IGNORED_BUILDS  Ignored build scripts: msgpackr-extract@3.0.4
+Run "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.
+```
+
+Nothing is wrong with your setup. `msgpackr-extract` is a native optional dependency
+of BullMQ, and pnpm blocks build scripts by default — from **pnpm 11 that block is an
+error rather than a warning**. It is BullMQ's dependency, not this package's: this
+package ships zero runtime dependencies.
+
+Approve it once, either interactively:
+
+```bash
+pnpm approve-builds
+```
+
+or declaratively in your `pnpm-workspace.yaml`:
+
+```yaml
+onlyBuiltDependencies:
+  - msgpackr-extract
+```
+
+Skipping the build is also fine — `msgpackr` falls back to a pure-JavaScript
+implementation, so BullMQ still works, just without the native accelerator.
+
+---
+
 ### `CONNECTION_REQUIRES_NULL_RETRIES`
 
 This error fires in Mode A when the injected client was not configured with
