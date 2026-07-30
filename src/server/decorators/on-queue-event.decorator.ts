@@ -45,6 +45,12 @@ export type QueueEventName =
  * - `progress`  — `{ jobId: string, data: number | object }`
  * - `waiting`   — `{ jobId: string }`
  *
+ * `error` is the exception to that rule: it carries a real `Error` instance, not
+ * a serialized payload, because it reports a fault on the connection rather than
+ * a transition of any single job — so there is no `jobId` to look up. The library
+ * registers its own listener for it, which logs and keeps an unlistened emission
+ * from throwing; a handler declared here runs in addition to that one.
+ *
  * To retrieve the full job, call `QueueService.getJob(payload.jobId)`, which
  * may return `null` if the job was already evicted by `removeOnComplete`.
  *
