@@ -4,6 +4,7 @@
  * @layer server/services
  */
 
+import { Logger } from '@nestjs/common'
 import { EventEmitter } from 'node:events'
 import type { FlowJob, JobNode, Telemetry } from 'bullmq'
 import { FlowService } from './flow.service'
@@ -175,5 +176,26 @@ describe('FlowService — close', () => {
 
     await expect(service.close()).resolves.toBeUndefined()
     expect(producerInstances).toHaveLength(0)
+  })
+
+  it('survives an error emitted by the FlowProducer nobody subscribed to', () => {
+    // BullMQ's FlowProducer extends EventEmitter, where emitting 'error' with no
+    // listener THROWS. The producer is created by the library, so a transient
+    // Redis fault would otherwise become an uncaught exception in the consumer's
+    // process. The queue slot reads `*` because one producer spans every queue.
+    new FlowService(makeConnection(), true, 'bull')
+    const producer = producerInstances[0] as unknown as EventEmitter
+    const logSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+
+    try {
+      expect(() => {
+        producer.emit('error', new Error('Connection is closed'))
+      }).not.toThrow()
+      expect(logSpy).toHaveBeenCalledWith(
+        'FlowProducer for queue "*" emitted an error: Connection is closed',
+      )
+    } finally {
+      logSpy.mockRestore()
+    }
   })
 })

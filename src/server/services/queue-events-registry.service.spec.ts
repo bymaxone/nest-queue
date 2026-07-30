@@ -170,7 +170,9 @@ describe('QueueEventsRegistry.getConnections', () => {
       expect(() => {
         ;(qe as unknown as EventEmitter).emit('error', new Error('Connection is closed'))
       }).not.toThrow()
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Connection is closed'))
+      expect(logSpy).toHaveBeenCalledWith(
+        'QueueEvents for queue "email" emitted an error: Connection is closed',
+      )
     } finally {
       logSpy.mockRestore()
     }

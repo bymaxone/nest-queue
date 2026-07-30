@@ -3,6 +3,7 @@
  * @layer server/services
  */
 
+import { Logger } from '@nestjs/common'
 import { EventEmitter } from 'node:events'
 import type { Job, Telemetry } from 'bullmq'
 import { QueueService } from './queue.service'
@@ -609,5 +610,39 @@ describe('QueueService — bulk and scheduler hardening', () => {
     } catch (err) {
       expect(String(detailsOf(err).reason)).toContain('cron')
     }
+  })
+
+  it('survives an error emitted by a Queue nobody subscribed to', () => {
+    // BullMQ's Queue extends EventEmitter, where emitting 'error' with no listener
+    // THROWS. The library creates the Queue, so without a fallback a transient
+    // Redis fault becomes an uncaught exception in the consumer's process.
+    const { service } = makeService()
+    const queue = service.getOrCreateQueue('email')
+    const logSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+
+    try {
+      expect(() => {
+        ;(queue as unknown as EventEmitter).emit('error', new Error('Connection is closed'))
+      }).not.toThrow()
+      expect(logSpy).toHaveBeenCalledWith(
+        'Queue for queue "email" emitted an error: Connection is closed',
+      )
+    } finally {
+      logSpy.mockRestore()
+    }
+  })
+
+  it('classifies a non-object rejection as non-operational instead of crashing on it', async () => {
+    // The operational check reads `.code` off whatever was thrown. BullMQ is not
+    // obliged to throw an Error — a rejected promise can carry null — and reading
+    // a property off null inside the error handler would replace the caller's
+    // failure with a TypeError from our own code.
+    const { service } = makeService()
+    service.getOrCreateQueue('cleanup')
+    queueInstances[0]?.upsertJobScheduler.mockRejectedValue(null)
+
+    await expect(
+      service.upsertJobScheduler('cleanup', 'nightly', { pattern: '0 3 * * *' }),
+    ).rejects.toBeInstanceOf(QueueException)
   })
 })
