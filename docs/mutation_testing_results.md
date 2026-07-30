@@ -20,7 +20,7 @@ of the unused `config/default-options` re-export alias.
 
 ## Overall score
 
-**98.99%** — 583 killed + 4 timeout (detected) / 593 total · 6 survived · 0 no-coverage.
+**99.06%** — 627 killed + 4 timeout (detected) / 637 total · 6 survived · 0 no-coverage.
 
 The 6 survivors are **provable equivalent mutants** (documented below); every
 non-equivalent mutant is killed. The suite holds 100% line/branch coverage.

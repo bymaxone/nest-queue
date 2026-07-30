@@ -14,7 +14,7 @@
   <a href="https://www.npmjs.com/package/@bymax-one/nest-queue"><img src="https://img.shields.io/npm/dm/@bymax-one/nest-queue?style=flat-square&colorA=000000&colorB=000000" alt="npm downloads" /></a>
   <a href="https://github.com/bymaxone/nest-queue/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/bymaxone/nest-queue/ci.yml?branch=main&style=flat-square&colorA=000000&label=CI" alt="CI status" /></a>
   <a href="https://github.com/bymaxone/nest-queue/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat-square&colorA=000000" alt="coverage" /></a>
-  <a href="https://github.com/bymaxone/nest-queue/blob/main/docs/mutation_testing_results.md"><img src="https://img.shields.io/badge/mutation-98.99%25-brightgreen?style=flat-square&colorA=000000" alt="mutation score" /></a>
+  <a href="https://github.com/bymaxone/nest-queue/blob/main/docs/mutation_testing_results.md"><img src="https://img.shields.io/badge/mutation-99.06%25-brightgreen?style=flat-square&colorA=000000" alt="mutation score" /></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/bymaxone/nest-queue"><img src="https://api.scorecard.dev/projects/github.com/bymaxone/nest-queue/badge?style=flat-square" alt="OpenSSF Scorecard" /></a>
   <a href="https://github.com/bymaxone/nest-queue/blob/main/LICENSE"><img src="https://img.shields.io/github/license/bymaxone/nest-queue?style=flat-square&colorA=000000&colorB=000000" alt="license" /></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
@@ -754,7 +754,7 @@ key will do it twice at some point.
 ## 🧪 Testing & Quality
 
 - **100% line/branch coverage** on every implemented file (hard CI gate).
-- **Mutation score 98.99%** (Stryker `break 95`) — see [`docs/mutation_testing_results.md`](docs/mutation_testing_results.md).
+- **Mutation score 99.06%** (Stryker `break 95`) — see [`docs/mutation_testing_results.md`](docs/mutation_testing_results.md).
 - **Real-Redis E2E** via Testcontainers (workers, flows, schedulers, deduplication, retries,
   DLQ, graceful shutdown).
 - **Type-level API tests** (`pnpm test:types`) pin the published signatures, so a refactor

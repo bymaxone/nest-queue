@@ -254,6 +254,29 @@ describe('WorkerRegistry.register', () => {
 })
 
 describe('WorkerRegistry.registerSandboxed', () => {
+  it('survives an error emitted by a sandboxed worker nobody subscribed to', () => {
+    // The sandboxed path builds its own Worker, so it needs the fallback listener
+    // just as much as the in-process one — an out-of-process processor does not
+    // make the connection any less likely to drop.
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
+    const worker = registry.registerSandboxed({
+      queueName: 'sandboxed',
+      processorFile: '/tmp/processor.js',
+    })
+    const logSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+
+    try {
+      expect(() => {
+        ;(worker as unknown as EventEmitter).emit('error', new Error('Connection is closed'))
+      }).not.toThrow()
+      expect(logSpy).toHaveBeenCalledWith(
+        'Worker for queue "sandboxed" emitted an error: Connection is closed',
+      )
+    } finally {
+      logSpy.mockRestore()
+    }
+  })
+
   it('creates a file-based worker with the provided processorFile', () => {
     // Sandboxed workers pass the file path as the processor argument to BullMQ.
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())
@@ -727,7 +750,12 @@ describe('WorkerRegistry — validation boundaries and error details', () => {
       expect(() => {
         ;(worker as unknown as EventEmitter).emit('error', new Error('Connection is closed'))
       }).not.toThrow()
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Connection is closed'))
+      // The line must name WHICH emitter and WHICH queue failed: during an
+      // incident an operator reads this to decide where to look, and "emitted an
+      // error" on its own tells them nothing.
+      expect(logSpy).toHaveBeenCalledWith(
+        'Worker for queue "email" emitted an error: Connection is closed',
+      )
     } finally {
       logSpy.mockRestore()
     }
