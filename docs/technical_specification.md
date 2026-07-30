@@ -1,8 +1,8 @@
 # @bymax-one/nest-queue — Complete Technical Specification
 
-> **Spec revision:** 2.0.0 — aligned to the Bymax Lib Standard and to the current BullMQ API
-> **Last updated:** 2026-06-23
-> **Status:** Draft for implementation
+> **Spec revision:** 2.1.0 — aligned to the Bymax Lib Standard and to the current BullMQ API
+> **Last updated:** 2026-07-30
+> **Status:** Implemented — released as `1.0.0`. This document describes the shipped contract; §15 is retained as the historical implementation record.
 > **Type:** Public npm package (`@bymax-one/nest-queue`)
 > **Target engine:** BullMQ `^5.16.0` (validated against `5.79.1`, the current release at the time of writing)
 > **Origin:** Consolidates and supersedes an internal hand-rolled BullMQ helper (~154 LoC) used in a production NestJS app, re-designed as a public, fully-typed library.
@@ -33,6 +33,7 @@
 19. [CI/CD and Release Engineering](#19-cicd-and-release-engineering)
 20. [Versioning and Migration Policy](#20-versioning-and-migration-policy)
 21. [Comparison with `@nestjs/bullmq`](#21-comparison-with-nestjsbullmq)
+
 - [Appendix A — Relevant architectural decisions](#appendix-a--relevant-architectural-decisions)
 - [Appendix B — Security checklist](#appendix-b--security-checklist)
 
@@ -91,16 +92,16 @@ The lib resolves each of these frictions with sensible defaults and a typed API.
 
 ### 1.4 Distribution model
 
-| Aspect     | Detail                                   |
-| ---------- | ---------------------------------------- |
-| Registry   | Public npm (`@bymax-one/nest-queue`)     |
-| Cost       | Zero — open source package               |
-| License    | MIT                                      |
-| Runtime    | Node.js 24+                              |
-| Framework  | NestJS 11+ (server)                      |
-| Engine     | BullMQ `^5.16.0` (Job Schedulers API)    |
-| Subpaths   | `.` (server), `./shared`                 |
-| Size       | ≤ 18 KiB brotli (`check-size.mjs` target) |
+| Aspect    | Detail                                    |
+| --------- | ----------------------------------------- |
+| Registry  | Public npm (`@bymax-one/nest-queue`)      |
+| Cost      | Zero — open source package                |
+| License   | MIT                                       |
+| Runtime   | Node.js 24+                               |
+| Framework | NestJS 11+ (server)                       |
+| Engine    | BullMQ `^5.16.0` (Job Schedulers API)     |
+| Subpaths  | `.` (server), `./shared`                  |
+| Size      | ≤ 18 KiB brotli (`check-size.mjs` target) |
 
 ### 1.5 Design principles
 
@@ -119,29 +120,29 @@ The package organizes its surface into three layers with distinct activation lev
 
 #### Core (always active)
 
-| Component             | Responsibility                                                            |
-| --------------------- | ------------------------------------------------------------------------- |
-| **BymaxQueueModule**  | Dynamic module with `forRoot()` / `forRootAsync()`                        |
-| **QueueService**      | Factory and cache of `Queue<T>`, helpers `enqueue/getJob/getJobs/getMetrics` |
-| **WorkerRegistry**    | Centralized registry of workers (programmatic and decorator-based)        |
-| **ConnectionResolver** | Resolves the `Redis` in mode A (injected) or mode B (own)                |
-| **QueueLifecycle**    | `onModuleDestroy` orchestrates drain + close of queues and workers        |
+| Component              | Responsibility                                                               |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| **BymaxQueueModule**   | Dynamic module with `forRoot()` / `forRootAsync()`                           |
+| **QueueService**       | Factory and cache of `Queue<T>`, helpers `enqueue/getJob/getJobs/getMetrics` |
+| **WorkerRegistry**     | Centralized registry of workers (programmatic and decorator-based)           |
+| **ConnectionResolver** | Resolves the `Redis` in mode A (injected) or mode B (own)                    |
+| **QueueLifecycle**     | `onModuleDestroy` orchestrates drain + close of queues and workers           |
 
 #### Opt-in extensions (via configuration)
 
-| Component          | Activation                                | Responsibility                                            |
-| ------------------ | ----------------------------------------- | --------------------------------------------------------- |
-| **FlowService**    | `flows: { enabled: true }`                | Wrapper over `FlowProducer` for hierarchical jobs         |
-| **MetricsService** | `metrics: { enabled: true }`              | `getJobCounts()` collection + light cache for health checks |
+| Component          | Activation                   | Responsibility                                              |
+| ------------------ | ---------------------------- | ----------------------------------------------------------- |
+| **FlowService**    | `flows: { enabled: true }`   | Wrapper over `FlowProducer` for hierarchical jobs           |
+| **MetricsService** | `metrics: { enabled: true }` | `getJobCounts()` collection + light cache for health checks |
 
 #### Decorators (always available, opt-in by the developer)
 
-| Decorator              | Purpose                                                                                  |
-| ---------------------- | ---------------------------------------------------------------------------------------- |
-| **@Processor(queue)**  | Marks a class as a processor for a specific queue                                        |
-| **@Process(jobName?)** | Marks a method as a job handler (filters by optional `jobName`)                          |
+| Decorator              | Purpose                                                                                               |
+| ---------------------- | ----------------------------------------------------------------------------------------------------- |
+| **@Processor(queue)**  | Marks a class as a processor for a specific queue                                                     |
+| **@Process(jobName?)** | Marks a method as a job handler (filters by optional `jobName`)                                       |
 | **@OnWorkerEvent()**   | Worker-local listener — handler receives the full `Job` (`completed`, `failed`, `progress`, `active`) |
-| **@OnQueueEvent()**    | Global (cross-instance) listener via `QueueEvents` — receives `jobId` + serialized payload |
+| **@OnQueueEvent()**    | Global (cross-instance) listener via `QueueEvents` — receives `jobId` + serialized payload            |
 
 > **Principle:** when `flows` or `metrics` are not configured, their providers are **not registered** in the NestJS container, avoiding overhead and unnecessary dependencies. The same applies to `QueueEvents`: a global-events connection is opened only when at least one `@OnQueueEvent` is registered for a queue (worker-local `@OnWorkerEvent` listeners need no extra connection).
 
@@ -200,8 +201,8 @@ BymaxQueueModule.forRootAsync({
   inject: [BYMAX_CACHE_QUEUE_REDIS],
   useFactory: (queueRedis: Redis) => ({
     connection: { client: queueRedis },
-    defaultJobOptions: { attempts: 3 }
-  })
+    defaultJobOptions: { attempts: 3 },
+  }),
 })
 ```
 
@@ -220,7 +221,7 @@ BymaxQueueModule.forRoot({
     // Queue connection keeps default retries; the lib duplicates this with
     // maxRetriesPerRequest:null for worker/QueueEvents connections (see §2.3)
   },
-  defaultJobOptions: { attempts: 3 }
+  defaultJobOptions: { attempts: 3 },
 })
 ```
 
@@ -235,14 +236,46 @@ BymaxQueueModule.forRoot({
 
 BullMQ requires **separate** connections for blocking consumers: a `Worker` (and each `QueueEvents`) holds a connection busy on long-lived blocking commands (`BRPOPLPUSH`, `BZPOPMIN`, `BLMOVE`), so it cannot share the same socket as the non-blocking `Queue`. The lib implements the following rules:
 
-| Component          | Connection used (mode A)                                              | Connection used (mode B)                                              | `maxRetriesPerRequest` |
-| ------------------ | --------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------------------- |
-| `Queue`            | Received client (shared across all Queues)                            | Main client opened by the lib                                         | default (fail-fast)    |
-| `FlowProducer`     | Received client                                                       | Main client opened by the lib                                         | default (fail-fast)    |
-| `Worker`           | `client.duplicate({ maxRetriesPerRequest: null })` (one per worker)   | `client.duplicate({ maxRetriesPerRequest: null })` (one per worker)   | `null` (blocking)      |
-| `QueueEvents`      | `client.duplicate({ maxRetriesPerRequest: null })` (one per queue)    | `client.duplicate({ maxRetriesPerRequest: null })` (one per queue)    | `null` (blocking)      |
+| Component      | Connection used (mode A)                                            | Connection used (mode B)                                            | `maxRetriesPerRequest` |
+| -------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------- |
+| `Queue`        | Received client (shared across all Queues)                          | Main client opened by the lib                                       | default (fail-fast)    |
+| `FlowProducer` | Received client                                                     | Main client opened by the lib                                       | default (fail-fast)    |
+| `Worker`       | `client.duplicate({ maxRetriesPerRequest: null })` (one per worker) | `client.duplicate({ maxRetriesPerRequest: null })` (one per worker) | `null` (blocking)      |
+| `QueueEvents`  | `client.duplicate({ maxRetriesPerRequest: null })` (one per queue)  | `client.duplicate({ maxRetriesPerRequest: null })` (one per queue)  | `null` (blocking)      |
 
 Connection duplication — and the per-role `maxRetriesPerRequest` override — is internally managed by `ConnectionResolver`. The consumer does not need to think about it.
+
+#### The `prefix` applies to all four objects
+
+The configured `prefix` is namespacing, not a producer-side setting. It must be
+passed to **every** BullMQ object the library constructs:
+
+| Object         | Constructed by        | Receives `prefix` |
+| -------------- | --------------------- | ----------------- |
+| `Queue`        | `QueueService`        | yes               |
+| `Worker`       | `WorkerRegistry`      | yes               |
+| `QueueEvents`  | `QueueEventsRegistry` | yes               |
+| `FlowProducer` | `FlowService`         | yes               |
+
+BullMQ defaults an omitted prefix to `bull`. A prefix applied to only some of
+these objects puts producers and consumers on **separate keyspaces**, and the
+failure is entirely silent: `enqueue()` resolves with a real job id, no worker
+ever picks the job up, no event listener fires, and flow jobs land where nothing
+polls. There is no error to observe — only work that never happens. Any change
+that constructs a new BullMQ object must thread the resolved prefix into it.
+
+#### DI tokens are resolved explicitly
+
+Every injectable constructor parameter carries an explicit `@Inject(TOKEN)`. The
+package ships as a tsup/esbuild bundle, and esbuild does not emit
+`emitDecoratorMetadata` (`design:paramtypes`), so a provider whose parameters
+depend on reflected type metadata cannot be instantiated from the built `dist` by
+a consumer's Nest container — it fails at bootstrap with "Nest can't resolve
+dependencies … argument at index [0]". The library's own test suite runs against
+sources, where the metadata _is_ emitted, so this class of defect is invisible to
+it; the dogfood smoke test (`pnpm smoke`) exercises the built artifact instead.
+Services created by a `useFactory` are unaffected — their arguments come from the
+factory's `inject` array.
 
 ### 2.4 Initialization flow
 
@@ -384,10 +417,10 @@ The package is organized in 2 subpaths with distinct responsibilities:
 
 The package uses the `exports` field of `package.json` to expose two entry points with automatic tree-shaking:
 
-| Subpath      | Entry point             | Description                                                  | Dependencies                  |
-| ------------ | ----------------------- | ------------------------------------------------------------ | ----------------------------- |
-| `.` (server) | `dist/server/index.js`  | NestJS module, services, decorators, FlowProducer            | NestJS 11, bullmq, ioredis    |
-| `./shared`   | `dist/shared/index.js`  | Types and constants (job status, error codes, metrics)       | Zero                          |
+| Subpath      | Entry point            | Description                                            | Dependencies               |
+| ------------ | ---------------------- | ------------------------------------------------------ | -------------------------- |
+| `.` (server) | `dist/server/index.js` | NestJS module, services, decorators, FlowProducer      | NestJS 11, bullmq, ioredis |
+| `./shared`   | `dist/shared/index.js` | Types and constants (job status, error codes, metrics) | Zero                       |
 
 ```json
 {
@@ -418,7 +451,7 @@ export { BymaxQueueModule } from './bymax-queue.module'
 export {
   BYMAX_QUEUE_OPTIONS,
   BYMAX_QUEUE_REDIS_CLIENT,
-  BYMAX_QUEUE_CONNECTION_MODE
+  BYMAX_QUEUE_CONNECTION_MODE,
 } from './bymax-queue.constants'
 
 // Public services
@@ -439,7 +472,7 @@ export type {
   BymaxQueueModuleAsyncOptions,
   QueueConnectionConfig,
   WorkerOptions,
-  ProcessorMetadata
+  ProcessorMetadata,
 } from './interfaces'
 
 // Errors and constants
@@ -447,12 +480,20 @@ export { QueueException } from './errors/queue-exception'
 // QUEUE_ERROR_CODES is defined once in ./shared (zero-dep) and re-exported by the
 // server barrel; QUEUE_ERROR_MESSAGES (the human-readable map) lives with the codes.
 export { QUEUE_ERROR_CODES, QUEUE_ERROR_MESSAGES } from './errors/queue-error-codes'
-export { DEFAULT_WORKER_CONCURRENCY, DEFAULT_JOB_OPTIONS } from './config/default-options'
+export { DEFAULT_WORKER_CONCURRENCY, DEFAULT_JOB_OPTIONS } from './constants/default-options'
 
 // Re-exports BullMQ types for convenience (we do not duplicate the lib)
 export type {
-  Job, JobsOptions, Queue, Worker, FlowProducer, FlowJob, JobNode,
-  JobSchedulerJson, Telemetry, SandboxedJob
+  Job,
+  JobsOptions,
+  Queue,
+  Worker,
+  FlowProducer,
+  FlowJob,
+  JobNode,
+  JobSchedulerJson,
+  Telemetry,
+  SandboxedJob,
 } from 'bullmq'
 ```
 
@@ -580,9 +621,9 @@ export interface BymaxQueueModuleOptions {
  * Mode B: lib opens its own ioredis using url or options.
  */
 export type QueueConnectionConfig =
-  | { client: Redis; ownsConnection?: false }  // Mode A
-  | { url: string; options?: Partial<RedisOptions> }  // Mode B (url)
-  | { options: RedisOptions }  // Mode B (options)
+  | { client: Redis; ownsConnection?: false } // Mode A
+  | { url: string; options?: Partial<RedisOptions> } // Mode B (url)
+  | { options: RedisOptions } // Mode B (options)
 ```
 
 ### 4.2 `BymaxQueueModuleAsyncOptions` interface
@@ -622,13 +663,13 @@ export const {
   ConfigurableModuleClass,
   MODULE_OPTIONS_TOKEN: BYMAX_QUEUE_OPTIONS,
   OPTIONS_TYPE,
-  ASYNC_OPTIONS_TYPE
+  ASYNC_OPTIONS_TYPE,
 } = new ConfigurableModuleBuilder<BymaxQueueModuleOptions>({ moduleName: 'BymaxQueue' })
   .setClassMethodName('forRoot')
-  .setExtras(
-    { isGlobal: true },
-    (definition, extras) => ({ ...definition, global: extras.isGlobal })
-  )
+  .setExtras({ isGlobal: true }, (definition, extras) => ({
+    ...definition,
+    global: extras.isGlobal,
+  }))
   .build()
 
 export class BymaxQueueModule extends ConfigurableModuleClass {
@@ -659,13 +700,13 @@ export const DEFAULT_JOB_OPTIONS = {
   attempts: 3,
   backoff: { type: 'exponential', delay: 2000 },
   removeOnComplete: {
-    age: 24 * 3600,        // 24 hours
-    count: 1000             // last 1000 completed jobs
+    age: 24 * 3600, // 24 hours
+    count: 1000, // last 1000 completed jobs
   },
   removeOnFail: {
-    age: 7 * 24 * 3600,     // 7 days
-    count: 5000             // cap retained failed jobs to bound Redis memory under high failure rates
-  }
+    age: 7 * 24 * 3600, // 7 days
+    count: 5000, // cap retained failed jobs to bound Redis memory under high failure rates
+  },
 } as const satisfies JobsOptions
 ```
 
@@ -685,6 +726,14 @@ export const DEFAULT_JOB_OPTIONS = {
 - Applies `defaultJobOptions` and `prefix` from the configuration to every new queue.
 - Exposes typed helpers for enqueue, lookup, and metrics.
 
+> **The `prefix` is not the producer's alone.** It must be passed to **every**
+> BullMQ object the library constructs — `Queue`, `Worker` (`WorkerRegistry`),
+> `QueueEvents` (`QueueEventsRegistry`) and `FlowProducer` (`FlowService`).
+> BullMQ defaults an omitted prefix to `bull`, so a prefix applied to only some
+> of them puts producers and consumers on separate keyspaces. Nothing throws:
+> jobs are enqueued successfully and simply never consumed, event listeners
+> never fire, and flow jobs land where no worker polls. See §2.3.
+
 ```typescript
 import { Injectable } from '@nestjs/common'
 import { Job, JobsOptions, Queue, QueueOptions } from 'bullmq'
@@ -696,7 +745,7 @@ export class QueueService {
 
   constructor(
     private readonly redis: Redis,
-    private readonly options: ResolvedQueueOptions
+    private readonly options: ResolvedQueueOptions,
   ) {}
 
   // see methods below
@@ -722,10 +771,10 @@ interface SendEmailJobResult {
 
 // Enqueue with full type inference
 const job = await queueService.enqueue<SendEmailJobData, SendEmailJobResult>(
-  'email',                // queueName
-  'send-welcome',         // jobName
-  { to: 'user@x.com', templateId: 'welcome', variables: {} },  // data — typed!
-  { priority: 5 }         // options
+  'email', // queueName
+  'send-welcome', // jobName
+  { to: 'user@x.com', templateId: 'welcome', variables: {} }, // data — typed!
+  { priority: 5 }, // options
 )
 // job: Job<SendEmailJobData, SendEmailJobResult, 'send-welcome'>
 ```
@@ -782,18 +831,23 @@ Two distinct, complementary mechanisms — both native to BullMQ and surfaced th
 - **`jobId` (idempotent insert).** If you set `options.jobId`, adding a second job with the same id is a no-op while the first still exists. Best for "exactly one job for this entity id" (e.g. `jobId: \`welcome:${userId}\``).
 - **`deduplication` (windowed deduplication).** BullMQ's `deduplication` option collapses repeated enqueues of the same logical work within a window. Modes:
 
-  | Mode | Options | Behavior |
-  | ---- | ------- | -------- |
-  | Simple | `{ id }` | Deduplicate until the in-flight job completes/fails. |
-  | Throttle | `{ id, ttl }` | Ignore duplicates for `ttl` ms. |
-  | Debounce | `{ id, ttl, extend: true, replace: true }` | Keep only the latest data; each duplicate resets the TTL (use with `delay`). |
-  | Keep-last-if-active | `{ id, keepLastIfActive: true }` | While a job is processing, store the latest data and auto-create one follow-up job when it finishes. |
+  | Mode                | Options                                    | Behavior                                                                                             |
+  | ------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+  | Simple              | `{ id }`                                   | Deduplicate until the in-flight job completes/fails.                                                 |
+  | Throttle            | `{ id, ttl }`                              | Ignore duplicates for `ttl` ms.                                                                      |
+  | Debounce            | `{ id, ttl, extend: true, replace: true }` | Keep only the latest data; each duplicate resets the TTL (use with `delay`).                         |
+  | Keep-last-if-active | `{ id, keepLastIfActive: true }`           | While a job is processing, store the latest data and auto-create one follow-up job when it finishes. |
 
   ```typescript
   // Throttle: at most one index-rebuild per search term every 5s
-  await queue.enqueue('search', 'reindex', { term }, {
-    deduplication: { id: `reindex:${term}`, ttl: 5_000 }
-  })
+  await queue.enqueue(
+    'search',
+    'reindex',
+    { term },
+    {
+      deduplication: { id: `reindex:${term}`, ttl: 5_000 },
+    },
+  )
   ```
 
   This replaces the previous draft's "global deduplication is the consumer's job" stance — it is now a first-class, documented feature. The deduplication key is independent of `jobId`; inspect/clear it with the native `getDeduplicationJobId` / `removeDeduplicationKey`.
@@ -910,7 +964,7 @@ export interface QueueMetrics {
     delayed: number
     paused: number
   }
-  collectedAt: string  // ISO timestamp
+  collectedAt: string // ISO timestamp
 }
 ```
 
@@ -1065,7 +1119,15 @@ BullMQ exposes events at two levels, and this lib surfaces both. Choosing the ri
 ```typescript
 // Worker-local events — fired by THIS worker's process. Handler receives the
 // full Job object (job.data, job.returnvalue, job.attemptsMade, timings).
-type WorkerEventName = 'completed' | 'failed' | 'progress' | 'active' | 'stalled' | 'closing' | 'closed' | 'error'
+type WorkerEventName =
+  | 'completed'
+  | 'failed'
+  | 'progress'
+  | 'active'
+  | 'stalled'
+  | 'closing'
+  | 'closed'
+  | 'error'
 
 /**
  * Marks a method as a worker-local event listener. No extra Redis connection
@@ -1078,7 +1140,18 @@ export function OnWorkerEvent(eventName: WorkerEventName): MethodDecorator
 
 // Global events — fired across ALL instances via a dedicated QueueEvents
 // connection. Handler receives only ids + serialized strings, NOT the Job.
-type QueueEventName = 'completed' | 'failed' | 'active' | 'progress' | 'waiting' | 'delayed' | 'stalled' | 'paused' | 'resumed' | 'cleaned' | 'drained'
+type QueueEventName =
+  | 'completed'
+  | 'failed'
+  | 'active'
+  | 'progress'
+  | 'waiting'
+  | 'delayed'
+  | 'stalled'
+  | 'paused'
+  | 'resumed'
+  | 'cleaned'
+  | 'drained'
 
 /**
  * Marks a method as a global queue-event listener. The lib lazily creates ONE
@@ -1093,12 +1166,12 @@ type QueueEventName = 'completed' | 'failed' | 'active' | 'progress' | 'waiting'
 export function OnQueueEvent(eventName: QueueEventName): MethodDecorator
 ```
 
-| Use case | Decorator |
-| -------- | --------- |
+| Use case                                                        | Decorator                                    |
+| --------------------------------------------------------------- | -------------------------------------------- |
 | Log the completed/failed job with its `data`, timings, attempts | `@OnWorkerEvent` (no round-trip, full `Job`) |
-| Report/observe job `progress` updates | `@OnWorkerEvent('progress')` |
-| React to events from jobs processed on **other** instances | `@OnQueueEvent` |
-| Cross-instance dashboards / drained-queue signals | `@OnQueueEvent` |
+| Report/observe job `progress` updates                           | `@OnWorkerEvent('progress')`                 |
+| React to events from jobs processed on **other** instances      | `@OnQueueEvent`                              |
+| Cross-instance dashboards / drained-queue signals               | `@OnQueueEvent`                              |
 
 > **Migration note:** apps coming from `@nestjs/bullmq` that used `@OnWorkerEvent('completed')(job => …)` map 1:1 onto this lib's `@OnWorkerEvent` — they do **not** need to be rewritten as `QueueEvents` listeners, and they keep access to `job.data`.
 
@@ -1134,8 +1207,8 @@ export class DynamicWorkerBootstrap implements OnModuleInit {
     for (const tenant of activeTenants) {
       await this.workers.register({
         queueName: `email:${tenant.id}`,
-        handler: async job => this.processEmail(tenant.id, job.data),
-        options: { concurrency: tenant.tier === 'premium' ? 10 : 2 }
+        handler: async (job) => this.processEmail(tenant.id, job.data),
+        options: { concurrency: tenant.tier === 'premium' ? 10 : 2 },
       })
     }
   }
@@ -1152,7 +1225,7 @@ export interface ProgrammaticWorkerConfig<TData = unknown, TResult = unknown> {
 @Injectable()
 export class WorkerRegistry {
   async register<TData, TResult>(
-    config: ProgrammaticWorkerConfig<TData, TResult>
+    config: ProgrammaticWorkerConfig<TData, TResult>,
   ): Promise<Worker<TData, TResult>>
 
   /** Registers a file-based, out-of-process (sandboxed) worker — no NestJS DI (§6.8). */
@@ -1197,7 +1270,7 @@ export default async function (job: SandboxedJob): Promise<unknown> {
 await workerRegistry.registerSandboxed({
   queueName: 'thumbnails',
   processorFile: new URL('./cpu-heavy.processor.js', import.meta.url),
-  options: { concurrency: 4, useWorkerThreads: false } // process by default; threads opt-in
+  options: { concurrency: 4, useWorkerThreads: false }, // process by default; threads opt-in
 })
 ```
 
@@ -1275,10 +1348,10 @@ await flowService.add({
       data: { reportId: '123' },
       children: [
         { name: 'fetch-table-1', queueName: 'data', data: { tableId: 't1' } },
-        { name: 'fetch-table-2', queueName: 'data', data: { tableId: 't2' } }
-      ]
-    }
-  ]
+        { name: 'fetch-table-2', queueName: 'data', data: { tableId: 't2' } },
+      ],
+    },
+  ],
 })
 ```
 
@@ -1298,10 +1371,10 @@ await flowService.add({
 
 A scheduler fires on one of two schedule kinds:
 
-| Form           | When to use                              | Example                                |
-| -------------- | ---------------------------------------- | -------------------------------------- |
-| **Cron**       | Human times (every day at 03:00)         | `pattern: '0 3 * * *'`                 |
-| **Every (ms)** | Fixed intervals (every 5 min)            | `every: 5 * 60 * 1000`                 |
+| Form           | When to use                      | Example                |
+| -------------- | -------------------------------- | ---------------------- |
+| **Cron**       | Human times (every day at 03:00) | `pattern: '0 3 * * *'` |
+| **Every (ms)** | Fixed intervals (every 5 min)    | `every: 5 * 60 * 1000` |
 
 BullMQ parses cron with `cron-parser`, which accepts both **5-field** and **6-field** (seconds) patterns — e.g. `'*/30 * * * * *'` runs every 30 seconds. The **first run of a newly created scheduler fires immediately** (for both cron and interval) — this is BullMQ's current default, so no flag is needed. (BullMQ's legacy `immediately` option was deprecated in `5.19.0` and is therefore intentionally not exposed here, per §0 invariant #4.) Interval schedulers accept an `offset` to phase-shift the cadence.
 
@@ -1340,10 +1413,10 @@ export type JobSchedulerRepeatOptions =
 ```typescript
 // Cron — every day at 03:00 São Paulo time
 await queueService.upsertJobScheduler<CleanupJobData>(
-  'maintenance',                 // queueName
-  'nightly-cleanup',             // schedulerId (the stable upsert key)
+  'maintenance', // queueName
+  'nightly-cleanup', // schedulerId (the stable upsert key)
   { pattern: '0 3 * * *', tz: 'America/Sao_Paulo' },
-  { name: 'cleanup', data: { mode: 'soft' } }
+  { name: 'cleanup', data: { mode: 'soft' } },
 )
 
 // Interval — every 5 minutes
@@ -1351,7 +1424,7 @@ await queueService.upsertJobScheduler<HeartbeatJobData>(
   'monitoring',
   'api-heartbeat',
   { every: 5 * 60 * 1000 },
-  { name: 'heartbeat', data: { service: 'api' } }
+  { name: 'heartbeat', data: { service: 'api' } },
 )
 ```
 
@@ -1465,7 +1538,9 @@ The lib **does not** implement a `HealthIndicator` from `@nestjs/terminus` — t
 // In the host application
 @Injectable()
 export class QueueHealthIndicator extends HealthIndicator {
-  constructor(private readonly metrics: MetricsService) { super() }
+  constructor(private readonly metrics: MetricsService) {
+    super()
+  }
 
   async isHealthy(key: string): Promise<HealthIndicatorResult> {
     const all = await this.metrics.getAll()
@@ -1535,9 +1610,9 @@ The lib resolves this via `QueueLifecycle.onModuleDestroy()`, which executes the
 BymaxQueueModule.forRoot({
   // ...
   shutdown: {
-    drainTimeoutMs: 30_000,    // default
-    drainOnShutdown: false     // default — production-safe
-  }
+    drainTimeoutMs: 30_000, // default
+    drainOnShutdown: false, // default — production-safe
+  },
 })
 ```
 
@@ -1566,7 +1641,7 @@ import type { Redis } from 'ioredis'
     // Cache module exposes a Redis client tagged for BullMQ usage
     BymaxCacheModule.forRoot({
       url: process.env.REDIS_URL,
-      queueClient: { enabled: true }
+      queueClient: { enabled: true },
     }),
 
     // Queue module consumes the cache module's Redis client (Mode A)
@@ -1577,13 +1652,13 @@ import type { Redis } from 'ioredis'
         connection: { client: queueRedis },
         defaultJobOptions: {
           attempts: 5,
-          backoff: { type: 'exponential', delay: 5000 }
+          backoff: { type: 'exponential', delay: 5000 },
         },
         flows: { enabled: true },
-        metrics: { enabled: true, cacheTtlMs: 3000 }
-      })
-    })
-  ]
+        metrics: { enabled: true, cacheTtlMs: 3000 },
+      }),
+    }),
+  ],
 })
 export class AppModule {}
 ```
@@ -1626,17 +1701,17 @@ export class QueueException extends HttpException {
   constructor(
     code: string,
     statusCode: HttpStatus = QUEUE_ERROR_STATUS[code] ?? HttpStatus.INTERNAL_SERVER_ERROR,
-    details?: Record<string, unknown>
+    details?: Record<string, unknown>,
   ) {
     super(
       {
         error: {
           code,
           message: QUEUE_ERROR_MESSAGES[code] ?? 'Queue error',
-          details: details ?? null
-        }
+          details: details ?? null,
+        },
       },
-      statusCode
+      statusCode,
     )
   }
 }
@@ -1644,20 +1719,20 @@ export class QueueException extends HttpException {
 
 ### 12.2 Complete catalog
 
-| Code                                    | HTTP | Message                                               | Context                                                                                        |
-| --------------------------------------- | ---- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `queue.connection_invalid`              | 500  | Invalid Redis connection configuration                | Mode B with malformed URL, or mode A with client in `end`/`close` status                       |
+| Code                                     | HTTP | Message                                               | Context                                                                                                                                                                 |
+| ---------------------------------------- | ---- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `queue.connection_invalid`               | 500  | Invalid Redis connection configuration                | Mode B with malformed URL, or mode A with client in `end`/`close` status                                                                                                |
 | `queue.connection_requires_null_retries` | 500  | Worker connection must have maxRetriesPerRequest=null | Mode A: the duplicated worker/QueueEvents connection could not be coerced to `null` (e.g. a client wrapper that ignores the `duplicate()` override) — fail-fast at init |
-| `queue.connection_timeout`              | 500  | Redis connection timeout                              | Mode B: did not reach `ready` within the timeout (default 10s)                                 |
-| `queue.queue_not_found`                 | 404  | Queue not found                                       | Attempt to get metrics/jobs from an unregistered queue                                         |
-| `queue.job_not_found`                   | 404  | Job not found                                         | `getJob()` with a non-existent id                                                              |
-| `queue.invalid_job_data`                | 400  | Invalid job data                                      | `enqueue()` with `data` that fails schema validation (if the consumer enables it)              |
-| `queue.invalid_repeat_options`          | 400  | Invalid repeat options                                | `upsertJobScheduler()` with both/neither of `pattern`/`every`, `every <= 0`, an unparseable cron, or a past `endDate` |
-| `queue.duplicate_processor`             | 500  | Multiple @Processor decorators target the same queue  | Two classes annotated with `@Processor('foo')` — only one per queue is allowed                 |
-| `queue.shutdown_timeout_exceeded`       | 500  | Shutdown timeout exceeded                             | Workers did not finish within `drainTimeoutMs` — log warning, force close                      |
-| `queue.bulk_enqueue_failed`             | 500  | Bulk enqueue failed                                   | `enqueueBulk()` failed — thrown with the per-job errors in `details.errors`                     |
-| `queue.worker_registration_failed`      | 500  | Failed to register worker                             | Error instantiating BullMQ Worker (connection problem, invalid option)                         |
-| `queue.invalid_options`                 | 500  | Invalid module options                                | `forRoot()` with `connection` absent or ambiguous (client + URL at the same time)              |
+| `queue.connection_timeout`               | 500  | Redis connection timeout                              | Mode B: did not reach `ready` within the timeout (default 10s)                                                                                                          |
+| `queue.queue_not_found`                  | 404  | Queue not found                                       | Attempt to get metrics/jobs from an unregistered queue                                                                                                                  |
+| `queue.job_not_found`                    | 404  | Job not found                                         | `getJob()` with a non-existent id                                                                                                                                       |
+| `queue.invalid_job_data`                 | 400  | Invalid job data                                      | `enqueue()` with `data` that fails schema validation (if the consumer enables it)                                                                                       |
+| `queue.invalid_repeat_options`           | 400  | Invalid repeat options                                | `upsertJobScheduler()` with both/neither of `pattern`/`every`, `every <= 0`, an unparseable cron, or a past `endDate`                                                   |
+| `queue.duplicate_processor`              | 500  | Multiple @Processor decorators target the same queue  | Two classes annotated with `@Processor('foo')` — only one per queue is allowed                                                                                          |
+| `queue.shutdown_timeout_exceeded`        | 500  | Shutdown timeout exceeded                             | Workers did not finish within `drainTimeoutMs` — log warning, force close                                                                                               |
+| `queue.bulk_enqueue_failed`              | 500  | Bulk enqueue failed                                   | `enqueueBulk()` failed — thrown with the per-job errors in `details.errors`                                                                                             |
+| `queue.worker_registration_failed`       | 500  | Failed to register worker                             | Error instantiating BullMQ Worker (connection problem, invalid option)                                                                                                  |
+| `queue.invalid_options`                  | 500  | Invalid module options                                | `forRoot()` with `connection` absent or ambiguous (client + URL at the same time)                                                                                       |
 
 ### 12.3 Code constants
 
@@ -1674,7 +1749,7 @@ export const QUEUE_ERROR_CODES = {
   SHUTDOWN_TIMEOUT_EXCEEDED: 'queue.shutdown_timeout_exceeded',
   BULK_ENQUEUE_FAILED: 'queue.bulk_enqueue_failed',
   WORKER_REGISTRATION_FAILED: 'queue.worker_registration_failed',
-  INVALID_OPTIONS: 'queue.invalid_options'
+  INVALID_OPTIONS: 'queue.invalid_options',
 } as const
 ```
 
@@ -1705,16 +1780,16 @@ export const QUEUE_ERROR_CODES = {
 
 The lib was designed with clear boundaries. The items below are the **responsibility of the consuming application**:
 
-| Item                                            | Reason                                                                                          | Where to implement                                       |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| **BullBoard UI** (visual dashboard)             | UI is a separate product (`bull-board` is a heavy peer dep). The lib exposes `Queue` objects for the consumer to plug BullBoard at will. | Host application mounts `@bull-board/express` or `@bull-board/nestjs` |
-| **Alerting** (PagerDuty, Slack, etc.)           | Threshold decisions are product- and SLA-specific                                               | `@OnQueueEvent('failed')` in the consumer + tool integration |
-| **SLA tracking** (job age, percentile latency)  | Requires historical storage (Prometheus, ClickHouse) — out of scope                             | Consumer publishes metrics via `prom-client` or similar |
-| **Job audit log**                               | Retention of completed jobs is managed by BullMQ; long-term auditing requires another storage   | `@OnQueueEvent('completed')` hook + consumer table |
-| **Rate limiting per tenant** (cross-queue)      | Worker `limiter` is per queue; per-tenant limits require external coordination                  | Consumer implements via Redis tokens                   |
-| **Migration from old queues (BullMQ v3 → v5)**  | Can be destructive — we do not automate it                                                      | Consumer follows the official BullMQ migration guide   |
-| **In-transit payload encryption**               | Redis TLS is ioredis client configuration                                                       | Pass `tls: {}` in `connection.options`                 |
-| **Job persistence beyond removeOn***            | Long retention requires external archiving                                                      | `@OnWorkerEvent('completed')` hook → S3/database       |
+| Item                                           | Reason                                                                                                                                   | Where to implement                                                    |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **BullBoard UI** (visual dashboard)            | UI is a separate product (`bull-board` is a heavy peer dep). The lib exposes `Queue` objects for the consumer to plug BullBoard at will. | Host application mounts `@bull-board/express` or `@bull-board/nestjs` |
+| **Alerting** (PagerDuty, Slack, etc.)          | Threshold decisions are product- and SLA-specific                                                                                        | `@OnQueueEvent('failed')` in the consumer + tool integration          |
+| **SLA tracking** (job age, percentile latency) | Requires historical storage (Prometheus, ClickHouse) — out of scope                                                                      | Consumer publishes metrics via `prom-client` or similar               |
+| **Job audit log**                              | Retention of completed jobs is managed by BullMQ; long-term auditing requires another storage                                            | `@OnQueueEvent('completed')` hook + consumer table                    |
+| **Rate limiting per tenant** (cross-queue)     | Worker `limiter` is per queue; per-tenant limits require external coordination                                                           | Consumer implements via Redis tokens                                  |
+| **Migration from old queues (BullMQ v3 → v5)** | Can be destructive — we do not automate it                                                                                               | Consumer follows the official BullMQ migration guide                  |
+| **In-transit payload encryption**              | Redis TLS is ioredis client configuration                                                                                                | Pass `tls: {}` in `connection.options`                                |
+| **Job persistence beyond removeOn\***          | Long retention requires external archiving                                                                                               | `@OnWorkerEvent('completed')` hook → S3/database                      |
 
 ---
 
@@ -1724,13 +1799,13 @@ The lib was designed with clear boundaries. The items below are the **responsibi
 
 These dependencies must be installed in the host application that uses the server subpath. The package does not include them — it expects them to already exist.
 
-| Package              | Version      | Reason                                                                  |
-| -------------------- | ------------ | ----------------------------------------------------------------------- |
-| `@nestjs/common`     | `^11.0.0`    | Core framework — decorators, exceptions, providers, `ConfigurableModuleBuilder` |
-| `@nestjs/core`       | `^11.0.0`    | Core framework — module system, DI container, `DiscoveryService`        |
-| `bullmq`             | `^5.16.0`    | Queue engine. `5.16.0` is the floor because it introduced the Job Schedulers API (§8). See §14.5 |
-| `ioredis`            | `^5.0.0`     | Redis client (always present, even in mode A where the consumer passes) |
-| `reflect-metadata`   | `^0.2.0`     | Metadata reflection for the decorators                                  |
+| Package            | Version   | Reason                                                                                           |
+| ------------------ | --------- | ------------------------------------------------------------------------------------------------ |
+| `@nestjs/common`   | `^11.0.0` | Core framework — decorators, exceptions, providers, `ConfigurableModuleBuilder`                  |
+| `@nestjs/core`     | `^11.0.0` | Core framework — module system, DI container, `DiscoveryService`                                 |
+| `bullmq`           | `^5.16.0` | Queue engine. `5.16.0` is the floor because it introduced the Job Schedulers API (§8). See §14.5 |
+| `ioredis`          | `^5.0.0`  | Redis client (always present, even in mode A where the consumer passes)                          |
+| `reflect-metadata` | `^0.2.0`  | Metadata reflection for the decorators                                                           |
 
 ### 14.2 Direct dependencies
 
@@ -1738,27 +1813,27 @@ The package has **no** direct dependencies (`"dependencies": {}`). All functiona
 
 ### 14.3 Optional Peer Dependencies
 
-| Package       | Version    | Needed when                                                       |
-| ------------- | ---------- | ----------------------------------------------------------------- |
-| `bullmq-otel` | `^1.0.0`   | Only if you set `options.telemetry` for OpenTelemetry tracing (§4, §16.5) |
+| Package       | Version  | Needed when                                                               |
+| ------------- | -------- | ------------------------------------------------------------------------- |
+| `bullmq-otel` | `^1.0.0` | Only if you set `options.telemetry` for OpenTelemetry tracing (§4, §16.5) |
 
 `bullmq-otel` is declared in `peerDependenciesMeta` as `optional: true`, so installs do not warn when telemetry is unused. The `./shared` subpath has **zero** peer deps (only TS types).
 
 ### 14.4 Peer Dependencies per Subpath
 
-| Subpath      | Peer Dependencies                                                          |
-| ------------ | -------------------------------------------------------------------------- |
+| Subpath      | Peer Dependencies                                                                                                          |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | `.` (server) | `@nestjs/common ^11`, `@nestjs/core ^11`, `bullmq ^5.16`, `ioredis ^5`, `reflect-metadata ^0.2`; optional `bullmq-otel ^1` |
-| `./shared`   | None                                                                       |
+| `./shared`   | None                                                                                                                       |
 
 ### 14.5 Decision on BullMQ version (v5 → v6)
 
 At the time of writing, the current BullMQ release is **`5.79.1`**. The lib's floor is **`^5.16.0`** because that is where the Job Schedulers API (the only recurring-jobs API this lib exposes, §8) landed.
 
-| BullMQ | Status                                                                                                                              | Decision |
-| ------ | ----------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| **v5 (≥ 5.16)** | Current stable. Every API the lib uses (`Queue`, `Worker`, `FlowProducer`, `JobsOptions`, `getJobCounts`, `upsertJobScheduler`, `deduplication`, `Telemetry`) is GA. | ✅ Official support. |
-| **v6** | Removes the legacy repeatable-jobs API. **Because this lib already uses Job Schedulers (not `addRepeatable`), it is forward-compatible by design.** Promote to `^5.16.0 || ^6.0.0` once the e2e suite passes on v6. | 🟢 Pre-positioned — no public-API breakage expected. |
+| BullMQ          | Status                                                                                                                                                                  | Decision             |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ---------------------------------------- | ---------------------------------------------------- |
+| **v5 (≥ 5.16)** | Current stable. Every API the lib uses (`Queue`, `Worker`, `FlowProducer`, `JobsOptions`, `getJobCounts`, `upsertJobScheduler`, `deduplication`, `Telemetry`) is GA.    | ✅ Official support. |
+| **v6**          | Removes the legacy repeatable-jobs API. **Because this lib already uses Job Schedulers (not `addRepeatable`), it is forward-compatible by design.** Promote to `^5.16.0 |                      | ^6.0.0` once the e2e suite passes on v6. | 🟢 Pre-positioned — no public-API breakage expected. |
 
 > **Why this matters:** the earlier draft built on `addRepeatable`/`removeRepeatable`, which v6 deletes — that would have forced a breaking change on the first v6 bump. Standardizing on Job Schedulers removes that landmine.
 
@@ -1777,7 +1852,7 @@ This decision is reviewed in every minor release of the lib.
 ```json
 {
   "name": "@bymax-one/nest-queue",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "NestJS dynamic module wrapping BullMQ — typed jobs, flows, job schedulers, deduplication, OpenTelemetry, graceful shutdown",
   "author": "Bymax One <support@bymax.one>",
   "license": "MIT",
@@ -1842,9 +1917,20 @@ This decision is reviewed in every minor release of the lib.
     "typescript": "^5.6.0"
   },
   "keywords": [
-    "nestjs", "bullmq", "queue", "redis", "worker", "flow",
-    "cron", "job-scheduler", "scheduler", "deduplication",
-    "opentelemetry", "otel", "graceful-shutdown", "job"
+    "nestjs",
+    "bullmq",
+    "queue",
+    "redis",
+    "worker",
+    "flow",
+    "cron",
+    "job-scheduler",
+    "scheduler",
+    "deduplication",
+    "opentelemetry",
+    "otel",
+    "graceful-shutdown",
+    "job"
   ],
   "packageManager": "pnpm@11.0.0",
   "engines": { "node": ">=24.0.0" },
@@ -1866,12 +1952,12 @@ This decision is reviewed in every minor release of the lib.
 
 ### 15.1 Phase overview
 
-| Phase | Complexity | Focus                                      | Deliverables                                                                                          |
-| ----- | ---------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| 1     | MEDIUM     | Module + QueueService                      | Scaffold, dynamic module (`ConfigurableModuleBuilder`), ConnectionResolver, basic QueueService (enqueue/getJob/getMetrics) + tests |
-| 2     | MEDIUM     | Workers (decorator + programmatic)         | `@Processor`, `@Process`, `@OnWorkerEvent`, `@OnQueueEvent`, WorkerRegistry (+ `registerSandboxed`) + tests |
-| 3     | MEDIUM     | Flows + Job Schedulers + Deduplication/Telemetry   | FlowService, `upsertJobScheduler`/`removeJobScheduler`/`getJobSchedulers`, deduplication options, telemetry passthrough, MetricsService + tests |
-| 4     | HIGH       | forRootAsync + shutdown + E2E + release    | forRootAsync, graceful-shutdown protocol, E2E tests with real Redis (testcontainers), mutation baseline, docs/README, release prep |
+| Phase | Complexity | Focus                                            | Deliverables                                                                                                                                    |
+| ----- | ---------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | MEDIUM     | Module + QueueService                            | Scaffold, dynamic module (`ConfigurableModuleBuilder`), ConnectionResolver, basic QueueService (enqueue/getJob/getMetrics) + tests              |
+| 2     | MEDIUM     | Workers (decorator + programmatic)               | `@Processor`, `@Process`, `@OnWorkerEvent`, `@OnQueueEvent`, WorkerRegistry (+ `registerSandboxed`) + tests                                     |
+| 3     | MEDIUM     | Flows + Job Schedulers + Deduplication/Telemetry | FlowService, `upsertJobScheduler`/`removeJobScheduler`/`getJobSchedulers`, deduplication options, telemetry passthrough, MetricsService + tests |
+| 4     | HIGH       | forRootAsync + shutdown + E2E + release          | forRootAsync, graceful-shutdown protocol, E2E tests with real Redis (testcontainers), mutation baseline, docs/README, release prep              |
 
 > **Phase mapping to the execution plan.** This section describes **4 logical phases**; the execution plan (`docs/development_plan.md`) and the per-phase task files (`docs/tasks/`) keep the same scope but split this Phase 4 into **plan Phase 4** (forRootAsync + graceful shutdown + E2E + mutation baseline) and **plan Phase 5** (release/publish). 4 spec phases ≡ 5 plan phases — not a contradiction.
 
@@ -1899,7 +1985,7 @@ This decision is reviewed in every minor release of the lib.
 
 3. **Constants and configuration**
    - `bymax-queue.constants.ts` — `BYMAX_QUEUE_OPTIONS`, `BYMAX_QUEUE_REDIS_CLIENT`, `BYMAX_QUEUE_CONNECTION_MODE` (Symbol)
-   - `config/default-options.ts` — `DEFAULT_JOB_OPTIONS`, `DEFAULT_WORKER_CONCURRENCY`
+   - `constants/default-options.ts` — `DEFAULT_JOB_OPTIONS`, `DEFAULT_WORKER_CONCURRENCY`
    - `config/resolved-options.ts` — merge defaults with user options
 
 4. **`ConnectionResolver`**
@@ -1957,7 +2043,8 @@ This decision is reviewed in every minor release of the lib.
    - Wires `@OnQueueEvent` listeners to the corresponding (lazy) `QueueEvents`
 
 3b. **Sandboxed worker registration**
-   - `WorkerRegistry.registerSandboxed({ queueName, processorFile, options })` for file-based, out-of-process processors (no DI) — see §6.8
+
+- `WorkerRegistry.registerSandboxed({ queueName, processorFile, options })` for file-based, out-of-process processors (no DI) — see §6.8
 
 4. **Lazy `QueueEvents`**
    - Creates `QueueEvents` only when there is at least one `@OnQueueEvent` for that queue
@@ -2056,34 +2143,34 @@ This decision is reviewed in every minor release of the lib.
 
 ### 16.1 Framework
 
-| Limitation       | Impact                                                                   | Alternative                                                |
-| ---------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| **NestJS only**  | Does not work with plain Express, standalone Fastify, or other frameworks | BullMQ directly + your own factory                         |
-| **Node.js only** | No support for Deno, Bun, or other runtimes                              | Not planned                                                |
+| Limitation       | Impact                                                                    | Alternative                        |
+| ---------------- | ------------------------------------------------------------------------- | ---------------------------------- |
+| **NestJS only**  | Does not work with plain Express, standalone Fastify, or other frameworks | BullMQ directly + your own factory |
+| **Node.js only** | No support for Deno, Bun, or other runtimes                               | Not planned                        |
 
 ### 16.2 BullMQ
 
-| Limitation                                  | Impact                                                                    | Alternative                                              |
-| ------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Limitation                                  | Impact                                                                                    | Alternative                                        |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | **BullMQ `^5.16` (0.1.x)**                  | Floor is `5.16` (Job Schedulers); v6 enabled once e2e passes (already forward-compatible) | Track the lib's 1.x release for the `^6` promotion |
-| **No support for legacy Bull (without MQ)** | Apps still using `bull` v4 or earlier need to migrate first                | Official BullMQ migration guide                          |
-| **No support for Redis Cluster sharding**   | BullMQ has experimental support — the lib does not exercise those paths   | Manually validate in cluster environments                |
+| **No support for legacy Bull (without MQ)** | Apps still using `bull` v4 or earlier need to migrate first                               | Official BullMQ migration guide                    |
+| **No support for Redis Cluster sharding**   | BullMQ has experimental support — the lib does not exercise those paths                   | Manually validate in cluster environments          |
 
 ### 16.3 Connection
 
-| Limitation                                       | Impact                                                                   | Alternative                                             |
-| ------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------- |
-| **Mode A does not control connection health**    | If the consumer closes the connection silently, jobs fail silently       | Document the contract; consumer keeps the connection alive |
-| **Mode B opens one connection per app instance** | In deployments with 10 instances, there are 10+ connections              | Configure `connectionName` for visibility in Redis      |
-| **No advanced connection pooling**               | BullMQ does not use a pool — one connection per Worker/QueueEvents        | No alternative — inherent to BullMQ                     |
+| Limitation                                       | Impact                                                             | Alternative                                                |
+| ------------------------------------------------ | ------------------------------------------------------------------ | ---------------------------------------------------------- |
+| **Mode A does not control connection health**    | If the consumer closes the connection silently, jobs fail silently | Document the contract; consumer keeps the connection alive |
+| **Mode B opens one connection per app instance** | In deployments with 10 instances, there are 10+ connections        | Configure `connectionName` for visibility in Redis         |
+| **No advanced connection pooling**               | BullMQ does not use a pool — one connection per Worker/QueueEvents | No alternative — inherent to BullMQ                        |
 
 ### 16.4 Features
 
-| Limitation                                     | Impact                                                                    | Alternative                                             |
-| ---------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------- |
-| **No job versioning**                          | If the payload changes incompatibly, old jobs break                       | Version via `jobName` (`process-v2`)                    |
-| **No native job tags / labels**                | BullMQ does not support query by tag                                      | Include tags inside `data` and filter manually          |
-| **No built-in dead-letter queue helper**       | A job that exhausts `attempts` goes to `failed`, not to a separate DLQ    | Detect `attemptsMade >= attempts` in `@OnWorkerEvent('failed')` and re-enqueue to a `*-dlq` queue (pattern in §16.6) |
+| Limitation                               | Impact                                                                 | Alternative                                                                                                          |
+| ---------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **No job versioning**                    | If the payload changes incompatibly, old jobs break                    | Version via `jobName` (`process-v2`)                                                                                 |
+| **No native job tags / labels**          | BullMQ does not support query by tag                                   | Include tags inside `data` and filter manually                                                                       |
+| **No built-in dead-letter queue helper** | A job that exhausts `attempts` goes to `failed`, not to a separate DLQ | Detect `attemptsMade >= attempts` in `@OnWorkerEvent('failed')` and re-enqueue to a `*-dlq` queue (pattern in §16.6) |
 
 > Cron-with-seconds (6-field patterns) **is** supported — see §8.1. Native windowed **deduplication** is supported — see §5.4.1. Neither is a limitation.
 
@@ -2091,16 +2178,16 @@ This decision is reviewed in every minor release of the lib.
 
 OpenTelemetry tracing **is** supported via the optional `telemetry` option (§4) — spans propagate from `enqueue` through the handler when you pass a `bullmq-otel` instance. The remaining boundary is metrics export:
 
-| Boundary                                  | Impact                                                                  | Where to implement                                          |
-| ----------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------- |
-| **No Prometheus metrics export**          | The lib exposes counters via `getMetrics()` but does not publish them   | Consumer reads `getMetrics()` / `getAll()` and publishes via `prom-client` |
-| **No SLA/percentile history**             | Counters are instantaneous snapshots, not time-series                   | Consumer ships metrics to Prometheus/ClickHouse             |
+| Boundary                         | Impact                                                                | Where to implement                                                         |
+| -------------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **No Prometheus metrics export** | The lib exposes counters via `getMetrics()` but does not publish them | Consumer reads `getMetrics()` / `getAll()` and publishes via `prom-client` |
+| **No SLA/percentile history**    | Counters are instantaneous snapshots, not time-series                 | Consumer ships metrics to Prometheus/ClickHouse                            |
 
 ### 16.6 Backpressure, payload size, and dead-letter patterns
 
 These are documented patterns, not lib features — but a professional consumer must handle them:
 
-- **Backpressure / unbounded growth.** `removeOnComplete`/`removeOnFail` bound retained *finished* jobs, but nothing bounds the **waiting** set if producers outpace workers. Monitor `getMetrics().counts.waiting`; when it crosses a threshold, throttle producers or `pauseQueue()`. Treat a growing `waiting` depth as the primary saturation signal.
+- **Backpressure / unbounded growth.** `removeOnComplete`/`removeOnFail` bound retained _finished_ jobs, but nothing bounds the **waiting** set if producers outpace workers. Monitor `getMetrics().counts.waiting`; when it crosses a threshold, throttle producers or `pauseQueue()`. Treat a growing `waiting` depth as the primary saturation signal.
 - **Payload size.** Job data is stored in Redis and round-tripped as JSON; large payloads bloat memory and slow every operation. Keep payloads small (rule of thumb: < ~30 KB) and use the **claim-check pattern** — store the blob in S3/DB and enqueue only a reference. `enqueueBulk` arrays should be bounded (the lib caps batch size; see §16/Appendix B).
 - **Dead-letter queue.** Move exhausted jobs explicitly:
   ```typescript
@@ -2135,27 +2222,27 @@ import { ReportProcessor } from './report.processor'
   imports: [
     BymaxCacheModule.forRoot({
       url: process.env.REDIS_URL ?? 'redis://localhost:6379',
-      queueClient: { enabled: true }
+      queueClient: { enabled: true },
     }),
 
     BymaxQueueModule.forRootAsync({
       imports: [BymaxCacheModule],
       inject: [BYMAX_CACHE_QUEUE_REDIS],
       useFactory: (queueRedis: Redis) => ({
-        connection: { client: queueRedis },        // Mode A — worker conns duplicated with maxRetriesPerRequest:null
+        connection: { client: queueRedis }, // Mode A — worker conns duplicated with maxRetriesPerRequest:null
         prefix: `app:${process.env.NODE_ENV}`,
         defaultJobOptions: {
           attempts: 5,
-          backoff: { type: 'exponential', delay: 2000 }
+          backoff: { type: 'exponential', delay: 2000 },
         },
         flows: { enabled: true },
         metrics: { enabled: true, cacheTtlMs: 3000 },
         telemetry: new BullMQOtel('app-queue'), // OpenTelemetry spans (positional form works on the ^1 floor)
-        shutdown: { drainTimeoutMs: 45_000 }
-      })
-    })
+        shutdown: { drainTimeoutMs: 45_000 },
+      }),
+    }),
   ],
-  providers: [EmailProcessor, ReportProcessor]
+  providers: [EmailProcessor, ReportProcessor],
 })
 export class AppModule {}
 ```
@@ -2168,10 +2255,10 @@ BymaxQueueModule.forRoot({
     url: process.env.REDIS_URL ?? 'redis://localhost:6379',
     options: {
       db: 2,
-      tls: { rejectUnauthorized: true }
-    }
+      tls: { rejectUnauthorized: true },
+    },
   },
-  defaultJobOptions: { attempts: 3 }
+  defaultJobOptions: { attempts: 3 },
 })
 ```
 
@@ -2198,7 +2285,12 @@ export const SEND_EMAIL_JOB = 'send-email' as const
 // services/notifications.service.ts
 import { Injectable } from '@nestjs/common'
 import { QueueService } from '@bymax-one/nest-queue'
-import { EMAIL_QUEUE, SEND_EMAIL_JOB, SendEmailJobData, SendEmailJobResult } from '../shared/jobs/send-email.job'
+import {
+  EMAIL_QUEUE,
+  SEND_EMAIL_JOB,
+  SendEmailJobData,
+  SendEmailJobResult,
+} from '../shared/jobs/send-email.job'
 
 @Injectable()
 export class NotificationsService {
@@ -2211,12 +2303,12 @@ export class NotificationsService {
       {
         to: email,
         templateId: 'welcome',
-        variables: { userId }
+        variables: { userId },
       },
       {
         priority: 10,
-        jobId: `welcome:${userId}`  // deduplication
-      }
+        jobId: `welcome:${userId}`, // deduplication
+      },
     )
   }
 }
@@ -2230,16 +2322,12 @@ import { Injectable } from '@nestjs/common'
 import { Processor, Process, OnWorkerEvent } from '@bymax-one/nest-queue'
 import type { Job } from 'bullmq'
 import { MailerService } from '../mailer.service'
-import {
-  EMAIL_QUEUE,
-  SendEmailJobData,
-  SendEmailJobResult
-} from '../shared/jobs/send-email.job'
+import { EMAIL_QUEUE, SendEmailJobData, SendEmailJobResult } from '../shared/jobs/send-email.job'
 
 @Injectable()
 @Processor(EMAIL_QUEUE, {
   concurrency: 5,
-  limiter: { max: 10, duration: 1000 }  // 10 msg/s max (provider limit)
+  limiter: { max: 10, duration: 1000 }, // 10 msg/s max (provider limit)
 })
 export class EmailProcessor {
   constructor(private readonly mailer: MailerService) {}
@@ -2251,7 +2339,7 @@ export class EmailProcessor {
 
     return {
       messageId: result.id,
-      acceptedAt: new Date().toISOString()
+      acceptedAt: new Date().toISOString(),
     }
   }
 
@@ -2283,7 +2371,7 @@ export class PdfPipelineService {
         {
           name: 'fetch-data',
           queueName: 'data',
-          data: { reportId }
+          data: { reportId },
         },
         {
           name: 'render-charts',
@@ -2291,10 +2379,10 @@ export class PdfPipelineService {
           data: { reportId },
           children: [
             { name: 'render-chart-1', queueName: 'render', data: { chartId: 'c1' } },
-            { name: 'render-chart-2', queueName: 'render', data: { chartId: 'c2' } }
-          ]
-        }
-      ]
+            { name: 'render-chart-2', queueName: 'render', data: { chartId: 'c2' } },
+          ],
+        },
+      ],
     })
     return result.job.id ?? ''
   }
@@ -2316,9 +2404,9 @@ export class SchedulersBootstrap implements OnApplicationBootstrap {
     // Daily cleanup at 03:00 São Paulo — idempotent by schedulerId, safe on every boot
     await this.queue.upsertJobScheduler(
       'maintenance',
-      'cleanup-soft-deleted',                       // schedulerId (stable upsert key)
+      'cleanup-soft-deleted', // schedulerId (stable upsert key)
       { pattern: '0 3 * * *', tz: 'America/Sao_Paulo' },
-      { name: 'cleanup', data: { batchSize: 1000 } }
+      { name: 'cleanup', data: { batchSize: 1000 } },
     )
 
     // Heartbeat every 5 minutes
@@ -2326,7 +2414,7 @@ export class SchedulersBootstrap implements OnApplicationBootstrap {
       'monitoring',
       'api-heartbeat',
       { every: 5 * 60 * 1000 },
-      { name: 'heartbeat', data: { service: 'api', region: 'sa-east-1' } }
+      { name: 'heartbeat', data: { service: 'api', region: 'sa-east-1' } },
     )
   }
 }
@@ -2346,10 +2434,10 @@ export class HealthController {
   @Get('queues')
   async queues(): Promise<{ healthy: boolean; queues: readonly object[] }> {
     const all = await this.metrics.getAll()
-    const stuck = all.filter(m => m.counts.active > 100 || m.counts.failed > 1000)
+    const stuck = all.filter((m) => m.counts.active > 100 || m.counts.failed > 1000)
     return {
       healthy: stuck.length === 0,
-      queues: all
+      queues: all,
     }
   }
 }
@@ -2360,13 +2448,13 @@ export class HealthController {
 ```typescript
 // bootstrap/dynamic-workers.bootstrap.ts
 import { Injectable, OnModuleInit } from '@nestjs/common'
-import { WorkerRegistry } from '@bymax-one/nest-queue'  // advanced API — for dynamic worker creation
+import { WorkerRegistry } from '@bymax-one/nest-queue' // advanced API — for dynamic worker creation
 
 @Injectable()
 export class DynamicWorkersBootstrap implements OnModuleInit {
   constructor(
     private readonly workers: WorkerRegistry,
-    private readonly tenants: TenantsService
+    private readonly tenants: TenantsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -2375,14 +2463,14 @@ export class DynamicWorkersBootstrap implements OnModuleInit {
     for (const tenant of activeTenants) {
       await this.workers.register({
         queueName: `email:${tenant.id}`,
-        handler: async job => {
+        handler: async (job) => {
           // tenant-isolated processing
           return { messageId: 'x', acceptedAt: new Date().toISOString() }
         },
         options: {
           concurrency: tenant.tier === 'premium' ? 10 : 2,
-          limiter: { max: tenant.emailRateLimit, duration: 1000 }
-        }
+          limiter: { max: tenant.emailRateLimit, duration: 1000 },
+        },
       })
     }
   }
@@ -2395,11 +2483,11 @@ export class DynamicWorkersBootstrap implements OnModuleInit {
 
 ### 18.1 Test layers
 
-| Layer | Tooling | Scope | Gate |
-| ----- | ------- | ----- | ---- |
-| Unit | Jest + ts-jest | Every service, resolver, decorator, validator with mocked BullMQ/Redis | 100% line/branch on implemented files (`jest.coverage.config.ts` → `100/100/100/100`) |
-| E2E | Jest + `@testcontainers/redis` | Real Redis: enqueue→process, schedulers, flows, deduplication, retry, graceful shutdown, connection-role policy | Must pass in CI; run on a dedicated config (`jest.e2e.config.ts`) |
-| Mutation | Stryker (`jest.stryker.config.ts`) | Kills surviving mutants in core logic | `stryker.config.json` thresholds `{ high: 99, low: 95, break: 95 }`, target 100% — **pre-release gate**, not per-commit |
+| Layer    | Tooling                            | Scope                                                                                                           | Gate                                                                                                                    |
+| -------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Unit     | Jest + ts-jest                     | Every service, resolver, decorator, validator with mocked BullMQ/Redis                                          | 100% line/branch on implemented files (`jest.coverage.config.ts` → `100/100/100/100`)                                   |
+| E2E      | Jest + `@testcontainers/redis`     | Real Redis: enqueue→process, schedulers, flows, deduplication, retry, graceful shutdown, connection-role policy | Must pass in CI; run on a dedicated config (`jest.e2e.config.ts`)                                                       |
+| Mutation | Stryker (`jest.stryker.config.ts`) | Kills surviving mutants in core logic                                                                           | `stryker.config.json` thresholds `{ high: 99, low: 95, break: 95 }`, target 100% — **pre-release gate**, not per-commit |
 
 ### 18.2 Coverage and mutation policy
 
@@ -2417,13 +2505,13 @@ Enqueue + process + typed result; bounded graceful shutdown (finish in-flight, f
 
 ### 19.1 Workflows (`.github/workflows/`)
 
-| Workflow | Trigger | Responsibility |
-| -------- | ------- | -------------- |
-| `ci.yml` | PR + push | Install (frozen lockfile) → typecheck → lint → unit (100% coverage) → e2e (Testcontainers) → `check-size.mjs` budget |
-| `codeql.yml` | push to main + weekly | Static analysis (TS/JS) |
-| `scorecard.yml` | push to main + weekly | OpenSSF Scorecard (target ≥ 7.0) |
-| `osv-scanner.yml` | PR + weekly | Dependency vulnerability scan (OSV) |
-| `release.yml` | tag `v*` | typecheck → lint → coverage → mutation gate → build → `pnpm publish --provenance` (OIDC trusted publishing) |
+| Workflow          | Trigger               | Responsibility                                                                                                       |
+| ----------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`          | PR + push             | Install (frozen lockfile) → typecheck → lint → unit (100% coverage) → e2e (Testcontainers) → `check-size.mjs` budget |
+| `codeql.yml`      | push to main + weekly | Static analysis (TS/JS)                                                                                              |
+| `scorecard.yml`   | push to main + weekly | OpenSSF Scorecard (target ≥ 7.0)                                                                                     |
+| `osv-scanner.yml` | PR + weekly           | Dependency vulnerability scan (OSV)                                                                                  |
+| `release.yml`     | tag `v*`              | typecheck → lint → coverage → mutation gate → build → `pnpm publish --provenance` (OIDC trusted publishing)          |
 
 ### 19.2 Hardening
 
@@ -2465,16 +2553,16 @@ Enqueue + process + typed result; bounded graceful shutdown (finish in-flight, f
 
 The official `@nestjs/bullmq` is excellent and this lib does not replace it lightly — it targets the opinionated, multi-app Bymax use case. Where they overlap, the differentiators are explicit:
 
-| Concern | `@nestjs/bullmq` (official) | `@bymax-one/nest-queue` |
-| ------- | -------------------------- | ----------------------- |
-| Module setup | `BullModule.forRoot()` + `registerQueue()` per queue | Single `forRoot()`/`forRootAsync()`; queues created on demand by name (no per-queue registration) |
-| Connection | You wire ioredis + `maxRetriesPerRequest` yourself | Dual mode (BYO client from `@bymax-one/nest-cache`, or lib-owned); correct per-role retry policy applied automatically |
-| Job defaults | Per `registerQueue` | Centralized, opinionated `defaultJobOptions` (retry/backoff/retention) with per-queue/per-job overrides |
-| Concurrency | Default `1` (silent) | Explicit `concurrency` enforced + warning; workload-type guidance |
-| Producer API | `@InjectQueue` + raw `queue.add` | Typed `enqueue<TData, TResult>()`, `enqueueBulk`, `upsertJobScheduler`, with native deduplication surfaced |
-| Shutdown | Framework closes workers | Explicit bounded-drain protocol with force-close + `stalled` accounting + connection-ownership rules |
-| Observability | Manual | `telemetry` passthrough (OpenTelemetry) + `MetricsService` |
-| Decorators | `@Processor`/`WorkerHost.process`, `@OnWorkerEvent`, `@OnQueueEvent` | `@Processor`/`@Process(jobName?)`, `@OnWorkerEvent`, `@OnQueueEvent` (method-level dispatch) |
+| Concern       | `@nestjs/bullmq` (official)                                          | `@bymax-one/nest-queue`                                                                                                |
+| ------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Module setup  | `BullModule.forRoot()` + `registerQueue()` per queue                 | Single `forRoot()`/`forRootAsync()`; queues created on demand by name (no per-queue registration)                      |
+| Connection    | You wire ioredis + `maxRetriesPerRequest` yourself                   | Dual mode (BYO client from `@bymax-one/nest-cache`, or lib-owned); correct per-role retry policy applied automatically |
+| Job defaults  | Per `registerQueue`                                                  | Centralized, opinionated `defaultJobOptions` (retry/backoff/retention) with per-queue/per-job overrides                |
+| Concurrency   | Default `1` (silent)                                                 | Explicit `concurrency` enforced + warning; workload-type guidance                                                      |
+| Producer API  | `@InjectQueue` + raw `queue.add`                                     | Typed `enqueue<TData, TResult>()`, `enqueueBulk`, `upsertJobScheduler`, with native deduplication surfaced             |
+| Shutdown      | Framework closes workers                                             | Explicit bounded-drain protocol with force-close + `stalled` accounting + connection-ownership rules                   |
+| Observability | Manual                                                               | `telemetry` passthrough (OpenTelemetry) + `MetricsService`                                                             |
+| Decorators    | `@Processor`/`WorkerHost.process`, `@OnWorkerEvent`, `@OnQueueEvent` | `@Processor`/`@Process(jobName?)`, `@OnWorkerEvent`, `@OnQueueEvent` (method-level dispatch)                           |
 
 **Choose this lib when** you run several NestJS apps that should share one opinionated queue setup, want the `@bymax-one/nest-cache` connection-sharing story, and value enforced defaults + a tested shutdown protocol. **Choose `@nestjs/bullmq`** when you want the thinnest possible official binding and prefer to wire connection/defaults yourself.
 

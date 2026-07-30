@@ -8,10 +8,10 @@ Agent guidance for `@bymax-one/nest-queue`. Read the canonical docs before codin
 
 Before making any change, read these sections (use `Read` with `offset`/`limit` — the files are large):
 
-| Document | When to read |
-|---|---|
-| `docs/technical_specification.md` | Architecture, API contracts, design decisions |
-| `docs/development_plan.md` §1.2 | Guiding principles and coding standards |
+| Document                            | When to read                                  |
+| ----------------------------------- | --------------------------------------------- |
+| `docs/technical_specification.md`   | Architecture, API contracts, design decisions |
+| `docs/development_plan.md` §1.2     | Guiding principles and coding standards       |
 | `docs/tasks/` (relevant phase file) | Per-task acceptance criteria and agent prompt |
 
 ---
@@ -34,16 +34,23 @@ Before making any change, read these sections (use `Read` with `offset`/`limit` 
 - Recurring jobs go through `upsertJobScheduler`/`removeJobScheduler`/`getJobSchedulers` **only** — never `addRepeatable`/`removeRepeatable` (removed in BullMQ v6).
 - `maxRetriesPerRequest: null` is applied **only** to worker/QueueEvents connections (via `duplicate()`); the Queue/FlowProducer connection keeps default retries.
 - Cron patterns are validated by BullMQ's own `cron-parser` — never a hand-rolled regex.
+- The configured `prefix` must reach **`Queue`, `Worker`, `QueueEvents` and `FlowProducer`**. BullMQ defaults an omitted prefix to `bull`, so applying it to only some of them puts producers and consumers on separate keyspaces — jobs are enqueued and never consumed, with nothing thrown anywhere.
+- Every injectable constructor parameter carries an explicit `@Inject(TOKEN)`. The package ships as an esbuild bundle, which does not emit `design:paramtypes`, so reflection-based resolution works in this repo's tests and fails in a consumer's build.
 
 ---
 
 ## Quality gates (run after every change)
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size
+pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && \
+  pnpm build && pnpm size && pnpm check:exports && pnpm smoke
 ```
 
 100% line/branch coverage on every implemented file is a hard gate. Mutation testing runs automatically post-merge on `main` via the shared reusable (`bymaxone/.github` → node-lib-ci) plus an optional manual `pnpm mutation`.
+
+- **`test:types`** compiles `test/types/public-api.test-d.ts`, which pins the published signatures. A new export, a new generic parameter, or a new union member belongs there.
+- **`check:exports`** runs `attw` against the packed tarball. It must **not** be added to `prepublishOnly`: attw packs the tarball itself, and the nested pack inside `pnpm publish` fails with `ENOENT`.
+- **`smoke`** resolves the tarball from a real consumer in ESM _and_ CJS. It is the only gate that exercises the **built** artifact, so it is what catches DI or `exports` defects the source-based suite cannot see.
 
 ---
 
