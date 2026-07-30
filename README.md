@@ -58,18 +58,35 @@ peer dependencies, so you control exact versions and the supply-chain surface st
 
 ## 🔥 Features
 
-- **Typed producer API** — `enqueue<TData, TResult>()`, `enqueueBulk` (bounded), `getJob`,
-  `getJobs`, `getMetrics`, `pauseQueue`/`resumeQueue`/`cleanQueue`.
-- **Decorator workers** — `@Processor`, `@Process`, `@OnWorkerEvent`, `@OnQueueEvent`, discovered
-  automatically from your providers; plus a programmatic `WorkerRegistry` and file-based sandboxed
-  processors.
-- **Flows** — opt-in `FlowService` over BullMQ `FlowProducer` with correct fail-parent semantics.
-- **Job Schedulers** — cron (incl. 6-field seconds) and interval recurrence via `upsertJobScheduler`.
-- **Deduplication** — native BullMQ simple/throttle/debounce modes, passed straight through.
-- **OpenTelemetry** — optional `bullmq-otel` telemetry passthrough across enqueue → handler.
-- **Metrics** — opt-in `MetricsService` with a configurable TTL cache.
-- **Graceful shutdown** — bounded drain → force-close, wired via NestJS `onApplicationShutdown`.
-- **Dual subpath exports** — `.` (server) and `./shared` (zero-dependency types/constants).
+### 📤 Producing
+
+- ✅ **Typed producer API** — `enqueue<TData, TResult>()` threads both generics through to the returned `Job`, so `job.data` and `job.returnvalue` need no cast
+- ✅ **Bounded bulk insert** — `enqueueBulk` adds up to 1 000 jobs in a single Redis roundtrip and rejects a larger batch outright, rather than letting one call inflate the heap
+- ✅ **Native deduplication** — simple, throttle, debounce and keep-last-if-active, passed straight through to BullMQ; the library writes no deduplication logic of its own
+- ✅ **Job Schedulers** — cron (5-field, or 6-field with seconds) and fixed intervals through `upsertJobScheduler`; the `addRepeatable` API removed in BullMQ v6 is never called
+- ✅ **Flows** — opt-in `FlowService` over BullMQ's `FlowProducer`, with fail-parent semantics preserved
+
+### ⚙️ Consuming
+
+- ✅ **Decorator workers** — `@Processor`, `@Process`, `@OnWorkerEvent` and `@OnQueueEvent`, discovered automatically from your providers
+- ✅ **Programmatic registry** — `WorkerRegistry.register()` for workers built at runtime, and `registerSandboxed()` for file-based out-of-process processors
+- ✅ **Progress reporting** — `job.updateProgress()` with the matching worker event wired through to your handler
+
+### 🔌 Connections & Shutdown
+
+- ✅ **Dual-mode connection** — bring your own `ioredis` client, or let the library open its own from a URL or an options object
+- ✅ **Per-role retry policy** — `maxRetriesPerRequest: null` reaches only the duplicated Worker and QueueEvents connections; the producer keeps ioredis' defaults, so a Redis outage fails fast instead of hanging a request
+- ✅ **One namespace, four objects** — the configured `prefix` reaches `Queue`, `Worker`, `QueueEvents` **and** `FlowProducer`, so producers and consumers can never end up on separate keyspaces
+- ✅ **Bounded graceful shutdown** — a single ordered sequence drains every worker under a deadline and then force-closes; delivery is at-least-once by design, so handlers must be idempotent
+
+### 🧩 Developer Experience
+
+- ✅ **Zero runtime dependencies** — BullMQ, ioredis and `@nestjs/*` all arrive as peer dependencies, so you pin the versions and the supply-chain surface stays yours
+- ✅ **Two subpaths** — the server surface, and `./shared` carrying types and constants that pull in nothing at all
+- ✅ **Stable error catalog** — namespaced codes exported from both subpaths, so a frontend maps a `code` without importing the server
+- ✅ **Dual-format output** — ESM + CJS with declarations for each format, verified against the packed tarball on every PR
+- ✅ **Opt-in observability** — OpenTelemetry passthrough via `bullmq-otel`, plus a `MetricsService` with a configurable TTL cache
+- ✅ **Typed end to end** — TypeScript `strict` with `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`; zero `any`, no suppression comments
 
 ---
 
