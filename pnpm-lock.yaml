@@ -62,8 +62,8 @@ importers:
         specifier: ^9.13.0
         version: 9.39.4(jiti@2.6.1)
       eslint-config-prettier:
-        specifier: ^9.1.0
-        version: 9.1.2(eslint@9.39.4(jiti@2.6.1))
+        specifier: ^10.1.8
+        version: 10.1.8(eslint@9.39.4(jiti@2.6.1))
       husky:
         specifier: ^9.1.7
         version: 9.1.7
@@ -2189,8 +2189,8 @@ packages:
     resolution: {integrity: sha512-TtpcNJ3XAzx3Gq8sWRzJaVajRs0uVxA2YAkdb1jm2YkPz4G6egUFAyA3n5vtEIZefPk5Wa4UXbKuS5fKkJWdgA==}
     engines: {node: '>=10'}
 
-  eslint-config-prettier@9.1.2:
-    resolution: {integrity: sha512-iI1f+D2ViGn+uvv5HuHVUamg8ll4tN+JRHGc6IJi4TP9Kl976C57fzPXgseXNs8v0iA8aSJpHsTWjDb9QJamGQ==}
+  eslint-config-prettier@10.1.8:
+    resolution: {integrity: sha512-82GZUjRS0p/jganf6q1rEO25VSoHH0hKPCTrgillPjdI/3bgBhAE1QzHrHTizjpRvy6pGAvKjDJtk2pF9NDq8w==}
     hasBin: true
     peerDependencies:
       eslint: '>=7.0.0'
@@ -3302,8 +3302,8 @@ packages:
   react-is@18.3.1:
     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
 
-  react-is@19.2.7:
-    resolution: {integrity: sha512-kZFnouyVv7eP/Phmrlo9FK+zcAdriZJvzxXHF1Sl1P377WSGe2G/JxVolhTrB/jeV47lKImhNUsijjHAAbcl/A==}
+  react-is@19.2.8:
+    resolution: {integrity: sha512-s5un28nYxKJw5gvUHyW5PCC28CvBqLu9r3cWgzHT4Vo/5fqqkFcdRYsGcKf50WMPpjjFZS5d76fn3YCo2njKwQ==}
 
   readable-stream@2.3.8:
     resolution: {integrity: sha512-8p0AUk4XODgIewSi0l8Epjs+EVnWiK7NoDIEGU0HhE7+ZyY8D1IMY7odu5lRrFXGg71L15KG8QrPmum45RTtdA==}
@@ -6059,7 +6059,7 @@ snapshots:
 
   escape-string-regexp@4.0.0: {}
 
-  eslint-config-prettier@9.1.2(eslint@9.39.4(jiti@2.6.1)):
+  eslint-config-prettier@10.1.8(eslint@9.39.4(jiti@2.6.1)):
     dependencies:
       eslint: 9.39.4(jiti@2.6.1)
 
@@ -7289,7 +7289,7 @@ snapshots:
       '@jest/schemas': 30.4.1
       ansi-styles: 5.2.0
       react-is-18: react-is@18.3.1
-      react-is-19: react-is@19.2.7
+      react-is-19: react-is@19.2.8
 
   pretty-ms@9.3.0:
     dependencies:
@@ -7350,7 +7350,7 @@ snapshots:
 
   react-is@18.3.1: {}
 
-  react-is@19.2.7: {}
+  react-is@19.2.8: {}
 
   readable-stream@2.3.8:
     dependencies:
