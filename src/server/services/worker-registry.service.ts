@@ -10,12 +10,13 @@
  */
 
 import { isAbsolute, extname } from 'node:path'
-import { Inject, Injectable } from '@nestjs/common'
+import { Inject, Injectable, Logger } from '@nestjs/common'
 import { Worker } from 'bullmq'
 import type { Job, WorkerOptions as BullWorkerOptions } from 'bullmq'
 import type { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
 import { duplicateConnection } from '../utils/duplicate-connection'
+import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import type { WorkerOptions } from '../interfaces/worker-options.interface'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
@@ -96,6 +97,7 @@ interface WorkerEntry {
  */
 @Injectable()
 export class WorkerRegistry {
+  private readonly logger = new Logger(WorkerRegistry.name)
   private readonly entries = new Map<string, WorkerEntry>()
 
   constructor(
@@ -138,6 +140,7 @@ export class WorkerRegistry {
       })
     }
 
+    attachDefaultErrorListener(worker, this.logger, 'Worker', queueName)
     this.entries.set(queueName, { worker, connection: conn })
     return worker
   }
@@ -181,6 +184,7 @@ export class WorkerRegistry {
       })
     }
 
+    attachDefaultErrorListener(worker, this.logger, 'Worker', queueName)
     this.entries.set(queueName, { worker, connection: conn })
     return worker
   }

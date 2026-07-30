@@ -4,6 +4,7 @@
  * @layer server/services
  */
 
+import { EventEmitter } from 'node:events'
 import type { FlowJob, JobNode, Telemetry } from 'bullmq'
 import { FlowService } from './flow.service'
 import { QueueException } from '../errors/queue-exception'
@@ -23,11 +24,11 @@ const producerConstructorArgs: unknown[][] = []
 jest.mock('bullmq', () => ({
   FlowProducer: jest.fn().mockImplementation((...args: unknown[]) => {
     producerConstructorArgs.push(args)
-    const instance: MockFlowProducer = {
+    const instance = Object.assign(new EventEmitter(), {
       add: jest.fn(),
       addBulk: jest.fn(),
       close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
-    }
+    })
     producerInstances.push(instance)
     return instance
   }),

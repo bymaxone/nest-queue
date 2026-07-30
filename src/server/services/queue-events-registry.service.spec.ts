@@ -7,20 +7,25 @@
 import { QueueEventsRegistry } from './queue-events-registry.service'
 import type { ConnectionResolver } from './connection-resolver.service'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
+import { Logger } from '@nestjs/common'
+import { EventEmitter } from 'node:events'
 import type { Redis } from 'ioredis'
 
 /** Track instances created by the mocked constructor. */
 const createdQueueEvents: MockQueueEventsInstance[] = []
 
-interface MockQueueEventsInstance {
+type MockQueueEventsInstance = EventEmitter & {
   close: jest.MockedFunction<() => Promise<void>>
 }
 
+// Backed by a REAL EventEmitter, matching BullMQ's `QueueEvents`: emitting
+// `'error'` with no listener must throw here exactly as it does in production,
+// otherwise the regression these tests guard is invisible to them.
 jest.mock('bullmq', () => ({
   QueueEvents: jest.fn().mockImplementation(() => {
-    const instance: MockQueueEventsInstance = {
+    const instance = Object.assign(new EventEmitter(), {
       close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
-    }
+    }) as MockQueueEventsInstance
     createdQueueEvents.push(instance)
     return instance
   }),
@@ -150,5 +155,24 @@ describe('QueueEventsRegistry.getConnections', () => {
     // With nothing observed there are no library-created connections to close.
     const registry = new QueueEventsRegistry(fakeConnection(), fakeOptions())
     expect(registry.getConnections().size).toBe(0)
+  })
+
+  it('survives an error emitted by a QueueEvents nobody subscribed to', () => {
+    // BullMQ's QueueEvents extends EventEmitter, where emitting 'error' with no
+    // listener THROWS. The library opens these connections itself, so without a
+    // fallback listener a dropped socket becomes an uncaught exception in the
+    // consumer's process.
+    const registry = new QueueEventsRegistry(fakeConnection(), fakeOptions())
+    const qe = registry.getOrCreate('email')
+    const logSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+
+    try {
+      expect(() => {
+        ;(qe as unknown as EventEmitter).emit('error', new Error('Connection is closed'))
+      }).not.toThrow()
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Connection is closed'))
+    } finally {
+      logSpy.mockRestore()
+    }
   })
 })

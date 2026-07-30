@@ -3,6 +3,7 @@
  * @layer server/services
  */
 
+import { EventEmitter } from 'node:events'
 import type { Job, Telemetry } from 'bullmq'
 import { QueueService } from './queue.service'
 import { QueueException } from '../errors/queue-exception'
@@ -33,7 +34,7 @@ const queueConstructorArgs: unknown[][] = []
 jest.mock('bullmq', () => ({
   Queue: jest.fn().mockImplementation((...args: unknown[]) => {
     queueConstructorArgs.push(args)
-    const instance: MockQueue = {
+    const instance = Object.assign(new EventEmitter(), {
       add: jest.fn(),
       addBulk: jest.fn(),
       getJob: jest.fn(),
@@ -46,7 +47,7 @@ jest.mock('bullmq', () => ({
       resume: jest.fn().mockResolvedValue(undefined),
       clean: jest.fn(),
       close: jest.fn().mockResolvedValue(undefined),
-    }
+    }) as MockQueue
     queueInstances.push(instance)
     return instance
   }),

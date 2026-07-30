@@ -4,7 +4,7 @@
  * @layer server/services
  */
 
-import { Inject, Injectable } from '@nestjs/common'
+import { Inject, Injectable, Logger } from '@nestjs/common'
 import { type Job, type JobsOptions, Queue, type QueueOptions } from 'bullmq'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
@@ -16,6 +16,7 @@ import { ConnectionResolver } from './connection-resolver.service'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { validateJobSchedulerOptions } from '../utils/validate-job-scheduler-options'
+import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 
 /** Maximum number of jobs accepted by a single `enqueueBulk` call. */
 const MAX_BULK_SIZE = 1000
@@ -49,6 +50,7 @@ type CleanableStatus = 'completed' | 'failed' | 'delayed' | 'wait' | 'active' | 
  */
 @Injectable()
 export class QueueService {
+  private readonly logger = new Logger(QueueService.name)
   private readonly queues = new Map<string, Queue>()
 
   constructor(
@@ -83,6 +85,7 @@ export class QueueService {
       ...(this.options.telemetry ? { telemetry: this.options.telemetry } : {}),
       ...overrides,
     })
+    attachDefaultErrorListener(queue, this.logger, 'Queue', queueName)
     this.queues.set(queueName, queue)
     return queue as unknown as Queue<TData, TResult>
   }

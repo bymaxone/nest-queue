@@ -3,6 +3,7 @@
  * @layer server/module
  */
 
+import { EventEmitter } from 'node:events'
 import { Injectable, Module } from '@nestjs/common'
 import type { FactoryProvider, Provider, ValueProvider } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
@@ -32,20 +33,26 @@ import type { ResolvedQueueOptions } from './config/resolved-options'
 // when a mutated default flips a flag (e.g. enabling flows). BullMQ and ioredis
 // are mocked so the provider graph instantiates against inert doubles.
 jest.mock('bullmq', () => ({
-  Queue: jest.fn().mockImplementation(() => ({
-    close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
-  })),
-  Worker: jest.fn().mockImplementation(() => ({
-    close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
-    on: jest.fn(),
-  })),
-  QueueEvents: jest.fn().mockImplementation(() => ({
-    close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
-    on: jest.fn(),
-  })),
-  FlowProducer: jest.fn().mockImplementation(() => ({
-    close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
-  })),
+  Queue: jest.fn().mockImplementation(() =>
+    Object.assign(new EventEmitter(), {
+      close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
+    }),
+  ),
+  Worker: jest.fn().mockImplementation(() =>
+    Object.assign(new EventEmitter(), {
+      close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
+    }),
+  ),
+  QueueEvents: jest.fn().mockImplementation(() =>
+    Object.assign(new EventEmitter(), {
+      close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
+    }),
+  ),
+  FlowProducer: jest.fn().mockImplementation(() =>
+    Object.assign(new EventEmitter(), {
+      close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
+    }),
+  ),
 }))
 
 jest.mock('ioredis', () => ({
@@ -141,7 +148,10 @@ describe('BymaxQueueModule.forRoot', () => {
   it('provides the frozen resolved options as a value', () => {
     // The resolved-options token carries a frozen defaults-applied object.
     const dynamic = BymaxQueueModule.forRoot(baseOptions)
-    const provider = findProvider(dynamic.providers ?? [], BYMAX_QUEUE_RESOLVED_OPTIONS) as ValueProvider
+    const provider = findProvider(
+      dynamic.providers ?? [],
+      BYMAX_QUEUE_RESOLVED_OPTIONS,
+    ) as ValueProvider
 
     expect(Object.isFrozen(provider.useValue)).toBe(true)
     expect((provider.useValue as { prefix: string }).prefix).toBe('bull')
@@ -160,9 +170,14 @@ describe('BymaxQueueModule.forRoot', () => {
   it('exposes the resolved Redis client through a resolver-bound factory', () => {
     // The client token resolves to the resolver's Queue-role client so consumers can inject it.
     const dynamic = BymaxQueueModule.forRoot(baseOptions)
-    const provider = findProvider(dynamic.providers ?? [], BYMAX_QUEUE_REDIS_CLIENT) as FactoryProvider
+    const provider = findProvider(
+      dynamic.providers ?? [],
+      BYMAX_QUEUE_REDIS_CLIENT,
+    ) as FactoryProvider
     const fakeClient = {} as Redis
-    const resolver = { getClient: jest.fn().mockReturnValue(fakeClient) } as unknown as ConnectionResolver
+    const resolver = {
+      getClient: jest.fn().mockReturnValue(fakeClient),
+    } as unknown as ConnectionResolver
 
     expect(provider.inject).toEqual([ConnectionResolver])
     expect(provider.useFactory(resolver)).toBe(fakeClient)
@@ -171,8 +186,13 @@ describe('BymaxQueueModule.forRoot', () => {
   it('exposes the connection mode through a resolver-bound factory', () => {
     // The mode token resolves to the resolver's detected mode.
     const dynamic = BymaxQueueModule.forRoot(baseOptions)
-    const provider = findProvider(dynamic.providers ?? [], BYMAX_QUEUE_CONNECTION_MODE) as FactoryProvider
-    const resolver = { getMode: jest.fn().mockReturnValue('mode-b-owned') } as unknown as ConnectionResolver
+    const provider = findProvider(
+      dynamic.providers ?? [],
+      BYMAX_QUEUE_CONNECTION_MODE,
+    ) as FactoryProvider
+    const resolver = {
+      getMode: jest.fn().mockReturnValue('mode-b-owned'),
+    } as unknown as ConnectionResolver
 
     expect(provider.inject).toEqual([ConnectionResolver])
     expect(provider.useFactory(resolver)).toBe('mode-b-owned')
@@ -291,8 +311,14 @@ describe('BymaxQueueModule.forRootAsync', () => {
     } as unknown as ResolvedQueueOptions
     const resolverStub = { getClient: jest.fn() } as unknown as ConnectionResolver
     const queueServiceStub = {} as unknown as QueueService
-    const flowFactory = flow.useFactory as (c: ConnectionResolver, r: ResolvedQueueOptions) => unknown
-    const metricsFactory = metrics.useFactory as (q: QueueService, r: ResolvedQueueOptions) => unknown
+    const flowFactory = flow.useFactory as (
+      c: ConnectionResolver,
+      r: ResolvedQueueOptions,
+    ) => unknown
+    const metricsFactory = metrics.useFactory as (
+      q: QueueService,
+      r: ResolvedQueueOptions,
+    ) => unknown
     expect(flowFactory(resolverStub, resolved)).toBeInstanceOf(FlowService)
     expect(metricsFactory(queueServiceStub, resolved)).toBeInstanceOf(MetricsService)
   })
