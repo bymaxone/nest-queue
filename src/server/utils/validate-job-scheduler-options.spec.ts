@@ -133,6 +133,33 @@ describe('validateJobSchedulerOptions — error reasons and boundaries', () => {
     )
   })
 
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['a string', 'every 5 minutes'],
+    ['a number', 5000],
+    ['an array', []],
+  ])('rejects %s as a QueueException rather than throwing a TypeError', (_label, value) => {
+    // The union forbids these for a TypeScript caller. Two callers escape it: plain
+    // JavaScript, and a payload cast from `unknown`. Without the shape guard the `in`
+    // operator throws a TypeError, which escapes the documented error catalog.
+    const repeat = value as unknown as JobSchedulerRepeatOptions
+    expect(run(repeat)).toThrow(QueueException)
+    expect(reasonOf(repeat)).toBe('repeat must be an object declaring either pattern or every')
+  })
+
+  it.each([
+    ['an empty string', ''],
+    ['whitespace only', '   '],
+    ['a number', 300],
+  ])('rejects %s as a pattern', (_label, value) => {
+    // `pattern` reaches BullMQ's parser verbatim. A blank one is not a schedule that
+    // fails to parse — it is a caller mistake this layer owns, and catching it here
+    // keeps the reason specific instead of surfacing a parser message.
+    const repeat = { pattern: value } as unknown as JobSchedulerRepeatOptions
+    expect(reasonOf(repeat)).toBe('pattern must be a non-empty string')
+  })
+
   it('rejects an endDate exactly equal to now (must be strictly in the future)', () => {
     // The boundary is inclusive of "now" as invalid: endMs <= now must reject.
     const fixedNow = 1_900_000_000_000

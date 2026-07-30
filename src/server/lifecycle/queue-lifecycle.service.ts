@@ -161,14 +161,12 @@ export class QueueLifecycle implements OnModuleDestroy {
 
   /** Close the flow producer (idempotent), swallowing any failure. */
   private async closeFlowProducer(): Promise<void> {
-    await this.flow.onModuleDestroy().catch(() => undefined)
+    await this.flow.close().catch(() => undefined)
   }
 
-  /** Close every cached queue, swallowing individual failures. */
+  /** Close every cached queue and clear the cache, swallowing individual failures. */
   private async closeQueues(): Promise<void> {
-    for (const [, queue] of this.queues.getCachedQueues()) {
-      await queue.close().catch(() => undefined)
-    }
+    await this.queues.closeAll().catch(() => undefined)
   }
 
   /**
@@ -176,6 +174,6 @@ export class QueueLifecycle implements OnModuleDestroy {
    * Mode A is a no-op for the consumer's shared client.
    */
   private async teardownConnection(): Promise<void> {
-    await this.connection.onModuleDestroy().catch(() => undefined)
+    await this.connection.teardown().catch(() => undefined)
   }
 }

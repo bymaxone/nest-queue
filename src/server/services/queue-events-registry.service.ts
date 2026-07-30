@@ -90,9 +90,14 @@ export class QueueEventsRegistry {
    * orchestrator so it can close exactly the connections the library created
    * (Mode A never exposes the consumer's shared client here).
    *
-   * @returns A read-only map of queue name to duplicated connection.
+   * Returns a copy. `ReadonlyMap` is a compile-time claim only — handing back the
+   * live registry lets any consumer cast it away and delete a connection the
+   * shutdown sequence is about to close. The allocation costs nothing on a path
+   * that runs once per shutdown.
+   *
+   * @returns A read-only snapshot of queue name to duplicated connection.
    */
   getConnections(): ReadonlyMap<string, Redis> {
-    return this.connections
+    return new Map(this.connections)
   }
 }

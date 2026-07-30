@@ -5,7 +5,7 @@
  * @layer server/services
  */
 
-import { Inject, Injectable, type OnModuleDestroy } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
 import { Redis } from 'ioredis'
 import { BYMAX_QUEUE_OPTIONS } from '../bymax-queue.constants'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
@@ -27,13 +27,11 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
  *   for `ready`, closing it on shutdown.
  */
 @Injectable()
-export class ConnectionResolver implements OnModuleDestroy {
+export class ConnectionResolver {
   private client: Redis | undefined
   private mode: QueueConnectionMode | undefined
 
-  constructor(
-    @Inject(BYMAX_QUEUE_OPTIONS) private readonly options: BymaxQueueModuleOptions,
-  ) {}
+  constructor(@Inject(BYMAX_QUEUE_OPTIONS) private readonly options: BymaxQueueModuleOptions) {}
 
   /** Resolve and validate the connection. Call once during module bootstrap. */
   async init(): Promise<void> {
@@ -47,13 +45,17 @@ export class ConnectionResolver implements OnModuleDestroy {
       'url' in cfg
         ? new Redis(cfg.url, { ...(cfg.options ?? {}), lazyConnect: false })
         : new Redis({ ...cfg.options, lazyConnect: false })
-    await this.waitReady(this.options.connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS)
+    await this.waitReady(
+      this.options.connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS,
+    )
   }
 
   /** The resolved Queue-role client. */
   getClient(): Redis {
     if (!this.client) {
-      throw new QueueException(QUEUE_ERROR_CODES.CONNECTION_INVALID, 500, { reason: 'not initialized' })
+      throw new QueueException(QUEUE_ERROR_CODES.CONNECTION_INVALID, 500, {
+        reason: 'not initialized',
+      })
     }
     return this.client
   }
@@ -61,7 +63,9 @@ export class ConnectionResolver implements OnModuleDestroy {
   /** The resolved connection mode. */
   getMode(): QueueConnectionMode {
     if (!this.mode) {
-      throw new QueueException(QUEUE_ERROR_CODES.CONNECTION_INVALID, 500, { reason: 'not initialized' })
+      throw new QueueException(QUEUE_ERROR_CODES.CONNECTION_INVALID, 500, {
+        reason: 'not initialized',
+      })
     }
     return this.mode
   }
@@ -72,7 +76,7 @@ export class ConnectionResolver implements OnModuleDestroy {
   }
 
   /** Close the library-owned connection on shutdown; never touch a BYO client. */
-  async onModuleDestroy(): Promise<void> {
+  async teardown(): Promise<void> {
     if (this.isOwned() && this.client) {
       const client = this.client
       await client.quit().catch(() => {

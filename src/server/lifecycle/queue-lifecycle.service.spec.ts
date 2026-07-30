@@ -62,14 +62,17 @@ function makeLifecycle(args: {
   events?: ReadonlyMap<string, QueueEvents>
   eventConnections?: ReadonlyMap<string, Redis>
   queues?: ReadonlyMap<string, Queue>
+  queuesCloseAll?: jest.Mock
   flowDestroy?: jest.Mock
   connectionDestroy?: jest.Mock
   resolved?: ResolvedQueueOptions
 }): {
   lifecycle: QueueLifecycle
+  queuesCloseAll: jest.Mock
   flowDestroy: jest.Mock
   connectionDestroy: jest.Mock
 } {
+  const queuesCloseAll = args.queuesCloseAll ?? jest.fn().mockResolvedValue(undefined)
   const flowDestroy = args.flowDestroy ?? jest.fn().mockResolvedValue(undefined)
   const connectionDestroy = args.connectionDestroy ?? jest.fn().mockResolvedValue(undefined)
 
@@ -83,9 +86,10 @@ function makeLifecycle(args: {
   } as unknown as QueueEventsRegistry
   const queues = {
     getCachedQueues: () => args.queues ?? new Map<string, Queue>(),
+    closeAll: queuesCloseAll,
   } as unknown as QueueService
-  const flow = { onModuleDestroy: flowDestroy } as unknown as FlowService
-  const connection = { onModuleDestroy: connectionDestroy } as unknown as ConnectionResolver
+  const flow = { close: flowDestroy } as unknown as FlowService
+  const connection = { teardown: connectionDestroy } as unknown as ConnectionResolver
 
   const lifecycle = new QueueLifecycle(
     workers,
@@ -95,7 +99,7 @@ function makeLifecycle(args: {
     connection,
     args.resolved ?? makeResolved(),
   )
-  return { lifecycle, flowDestroy, connectionDestroy }
+  return { lifecycle, queuesCloseAll, flowDestroy, connectionDestroy }
 }
 
 let warnSpy: jest.SpyInstance
@@ -126,11 +130,14 @@ describe('QueueLifecycle.onModuleDestroy — happy path', () => {
       order.push('event-conn')
       return Promise.resolve('OK')
     })
-    const queueClose = jest.fn().mockImplementation(() => {
+    const queueClose = jest.fn().mockResolvedValue(undefined)
+    const queueDrain = jest.fn().mockResolvedValue(undefined)
+    // Closing the queues belongs to QueueService.closeAll (covered by its own
+    // spec); what this test owns is WHERE that step falls in the sequence.
+    const queuesCloseAll = jest.fn().mockImplementation(() => {
       order.push('queue')
       return Promise.resolve()
     })
-    const queueDrain = jest.fn().mockResolvedValue(undefined)
     const flowDestroy = jest.fn().mockImplementation(() => {
       order.push('flow')
       return Promise.resolve()
@@ -146,6 +153,7 @@ describe('QueueLifecycle.onModuleDestroy — happy path', () => {
       events: new Map([['email', makeQueueEvents(eventsClose)]]),
       eventConnections: new Map([['email', makeConnection(eventQuit, jest.fn())]]),
       queues: new Map([['email', makeQueue(queueClose, queueDrain)]]),
+      queuesCloseAll,
       flowDestroy,
       connectionDestroy,
     })
@@ -193,9 +201,13 @@ describe('QueueLifecycle.onModuleDestroy — bounded drain', () => {
   it('force-closes a worker that exceeds the drain budget and continues teardown', async () => {
     // A graceful close that never resolves must be force-closed after the timeout.
     jest.useFakeTimers()
-    const close = jest.fn().mockImplementation((force?: boolean) =>
-      force === true ? Promise.reject(new Error('force failed')) : new Promise<void>(() => undefined),
-    )
+    const close = jest
+      .fn()
+      .mockImplementation((force?: boolean) =>
+        force === true
+          ? Promise.reject(new Error('force failed'))
+          : new Promise<void>(() => undefined),
+      )
     const connectionDestroy = jest.fn().mockResolvedValue(undefined)
     const { lifecycle } = makeLifecycle({
       workers: new Map([['slow', makeWorker(close)]]),
@@ -246,9 +258,11 @@ describe('QueueLifecycle.onModuleDestroy — bounded drain', () => {
 
   it('treats a rejected graceful close as a forced worker without timing out', async () => {
     // A close() that rejects immediately is escalated to a force-close on the same path.
-    const close = jest.fn().mockImplementation((force?: boolean) =>
-      force === true ? Promise.resolve() : Promise.reject(new Error('graceful close failed')),
-    )
+    const close = jest
+      .fn()
+      .mockImplementation((force?: boolean) =>
+        force === true ? Promise.resolve() : Promise.reject(new Error('graceful close failed')),
+      )
     const { lifecycle } = makeLifecycle({
       workers: new Map([['email', makeWorker(close)]]),
     })
@@ -263,14 +277,15 @@ describe('QueueLifecycle.onModuleDestroy — conditional drain', () => {
     // drainOnShutdown removes waiting/delayed jobs; the swallowed drain error is tolerated.
     const queueClose = jest.fn().mockResolvedValue(undefined)
     const queueDrain = jest.fn().mockRejectedValue(new Error('drain failed'))
-    const { lifecycle } = makeLifecycle({
+    const { lifecycle, queuesCloseAll } = makeLifecycle({
       queues: new Map([['email', makeQueue(queueClose, queueDrain)]]),
       resolved: makeResolved({ drainOnShutdown: true }),
     })
 
     await expect(lifecycle.onModuleDestroy()).resolves.toBeUndefined()
     expect(queueDrain).toHaveBeenCalledTimes(1)
-    expect(queueClose).toHaveBeenCalledTimes(1)
+    // Draining precedes closing, and closing is delegated to the service.
+    expect(queuesCloseAll).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -281,8 +296,9 @@ describe('QueueLifecycle.onModuleDestroy — error resilience', () => {
     const eventsClose = jest.fn().mockRejectedValue(new Error('events close failed'))
     const workerDisconnect = jest.fn()
     const workerQuit = jest.fn().mockRejectedValue(new Error('quit failed'))
-    const queueClose = jest.fn().mockRejectedValue(new Error('queue close failed'))
+    const queueClose = jest.fn().mockResolvedValue(undefined)
     const queueDrain = jest.fn().mockResolvedValue(undefined)
+    const queuesCloseAll = jest.fn().mockRejectedValue(new Error('queues close failed'))
     const flowDestroy = jest.fn().mockRejectedValue(new Error('flow close failed'))
     const connectionDestroy = jest.fn().mockRejectedValue(new Error('connection teardown failed'))
 
@@ -291,6 +307,7 @@ describe('QueueLifecycle.onModuleDestroy — error resilience', () => {
       workerConnections: new Map([['email', makeConnection(workerQuit, workerDisconnect)]]),
       events: new Map([['email', makeQueueEvents(eventsClose)]]),
       queues: new Map([['email', makeQueue(queueClose, queueDrain)]]),
+      queuesCloseAll,
       flowDestroy,
       connectionDestroy,
     })
@@ -299,7 +316,7 @@ describe('QueueLifecycle.onModuleDestroy — error resilience', () => {
     expect(eventsClose).toHaveBeenCalledTimes(1)
     expect(workerDisconnect).toHaveBeenCalledTimes(1)
     expect(flowDestroy).toHaveBeenCalledTimes(1)
-    expect(queueClose).toHaveBeenCalledTimes(1)
+    expect(queuesCloseAll).toHaveBeenCalledTimes(1)
     expect(connectionDestroy).toHaveBeenCalledTimes(1)
   })
 })
