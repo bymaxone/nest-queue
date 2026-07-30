@@ -143,6 +143,25 @@ try {
   fail(`npm pack --dry-run failed: ${err instanceof Error ? err.message : String(err)}`)
 }
 
+// -- 5b. Zero-runtime-dependency contract ------------------------------------
+// The empty `dependencies` object is the contract, not decoration: it is what the
+// README, CLAUDE.md and the Dependabot config all assert about this package. It is
+// also fragile — `pnpm add` rewrites the manifest and drops an empty object without
+// a word, so the key disappears on an ordinary dependency bump and nothing else in
+// the pipeline notices. Assert the key EXISTS and is empty; a missing key and an
+// empty one are different claims, and only one of them is the contract.
+section('5b. Zero-runtime-dependency contract')
+const manifest = req(resolve(ROOT, 'package.json'))
+if (!Object.hasOwn(manifest, 'dependencies')) {
+  fail('package.json has no `dependencies` key — the zero-dependency contract is unstated')
+} else if (Object.keys(manifest.dependencies).length > 0) {
+  fail(
+    `package.json declares runtime dependencies: ${Object.keys(manifest.dependencies).join(', ')}`,
+  )
+} else {
+  pass('package.json declares an explicit empty `dependencies`')
+}
+
 // -- 6. Consumer file: link smoke --------------------------------------------
 section('6. Consumer file: link smoke (resolution check, ESM + CJS)')
 try {
