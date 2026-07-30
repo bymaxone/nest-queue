@@ -36,6 +36,27 @@ updates:
           - minor
           - patch
 
+      # BullMQ and ioredis are one type graph, not two packages. BullMQ's
+      # `ConnectionOptions` accepts an ioredis `Redis`, and that assignment only
+      # typechecks while a single copy of ioredis resolves in the tree. Bump one
+      # without the other and the copies diverge:
+      #
+      #   error TS2322: Type 'Redis' is not assignable to type 'ConnectionOptions'
+      #
+      # on every site that hands a client to a Queue, Worker, QueueEvents or
+      # FlowProducer. Both #33 (ioredis alone) and #39 (bullmq alone) failed exactly
+      # that way, while the same two versions applied together are green. Grouping
+      # all update types keeps them moving as the pair they are.
+      bullmq-stack:
+        patterns:
+          - 'bullmq'
+          - 'bullmq-otel'
+          - 'ioredis'
+        update-types:
+          - major
+          - minor
+          - patch
+
       # Batch low-risk dev tooling bumps into a single PR to cut review noise.
       # Majors stay out: each one needs its own verification and its own revert.
       dev-dependencies:
