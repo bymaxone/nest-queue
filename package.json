@@ -1,6 +1,6 @@
 {
   "name": "@bymax-one/nest-queue",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "NestJS dynamic module wrapping BullMQ — typed jobs, flows, job schedulers, deduplication, OpenTelemetry, graceful shutdown",
   "author": "Bymax One <support@bymax.one>",
   "license": "MIT",
@@ -78,8 +78,8 @@
   },
   "dependencies": {},
   "peerDependencies": {
-    "@nestjs/common": "^11.0.0",
-    "@nestjs/core": "^11.0.0",
+    "@nestjs/common": "^11.0.16",
+    "@nestjs/core": "^11.1.18",
     "bullmq": "^5.16.0",
     "bullmq-otel": "^1.0.0",
     "ioredis": "^5.0.0",

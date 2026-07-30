@@ -7,6 +7,30 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.1.0] — 2026-07-30
+
+### Security
+
+- **Peer floors raised to exclude known-vulnerable NestJS versions.** The declared
+  ranges were `@nestjs/common ^11.0.0` and `@nestjs/core ^11.0.0`, and both
+  admitted versions with published advisories:
+
+  | Peer             | Advisory                                                                                                                                    | Vulnerable                    | New floor  |
+  | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ---------- |
+  | `@nestjs/common` | [GHSA-cj7v-w2c7-cp7c](https://github.com/advisories/GHSA-cj7v-w2c7-cp7c) — remote code execution via the `Content-Type` header              | `>= 11.0.0-next.1, < 11.0.16` | `^11.0.16` |
+  | `@nestjs/core`   | [GHSA-36xv-jgw5-4q75](https://github.com/advisories/GHSA-36xv-jgw5-4q75) — improper neutralization of special elements in downstream output | `<= 11.1.17`                  | `^11.1.18` |
+
+  A peer range is a statement about which versions this library supports. Leaving
+  the floor below a published advisory tells a consumer that a vulnerable install
+  is a supported one, and nothing in their tooling contradicts it.
+
+  Shipped as a **minor**: narrowing a peer range can make an install that
+  previously resolved stop resolving, so it should not arrive in a patch. No
+  runtime behaviour changed, and the repository's own dev dependencies were
+  already above both floors.
+
+---
+
 ## [1.0.1] — 2026-07-30
 
 First release published by CI, and therefore the first carrying an npm provenance
@@ -146,5 +170,6 @@ v6 peer range.
 
 ---
 
+[1.1.0]: https://github.com/bymaxone/nest-queue/releases/tag/v1.1.0
 [1.0.1]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.1
 [1.0.0]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.0

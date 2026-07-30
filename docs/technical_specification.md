@@ -1810,13 +1810,13 @@ The lib was designed with clear boundaries. The items below are the **responsibi
 
 These dependencies must be installed in the host application that uses the server subpath. The package does not include them — it expects them to already exist.
 
-| Package            | Version   | Reason                                                                                           |
-| ------------------ | --------- | ------------------------------------------------------------------------------------------------ |
-| `@nestjs/common`   | `^11.0.0` | Core framework — decorators, exceptions, providers, `ConfigurableModuleBuilder`                  |
-| `@nestjs/core`     | `^11.0.0` | Core framework — module system, DI container, `DiscoveryService`                                 |
-| `bullmq`           | `^5.16.0` | Queue engine. `5.16.0` is the floor because it introduced the Job Schedulers API (§8). See §14.5 |
-| `ioredis`          | `^5.0.0`  | Redis client (always present, even in mode A where the consumer passes)                          |
-| `reflect-metadata` | `^0.2.0`  | Metadata reflection for the decorators                                                           |
+| Package            | Version    | Reason                                                                                           |
+| ------------------ | ---------- | ------------------------------------------------------------------------------------------------ |
+| `@nestjs/common`   | `^11.0.16` | Core framework — decorators, exceptions, providers, `ConfigurableModuleBuilder`                  |
+| `@nestjs/core`     | `^11.1.18` | Core framework — module system, DI container, `DiscoveryService`                                 |
+| `bullmq`           | `^5.16.0`  | Queue engine. `5.16.0` is the floor because it introduced the Job Schedulers API (§8). See §14.5 |
+| `ioredis`          | `^5.0.0`   | Redis client (always present, even in mode A where the consumer passes)                          |
+| `reflect-metadata` | `^0.2.0`   | Metadata reflection for the decorators                                                           |
 
 ### 14.2 Direct dependencies
 
@@ -1832,10 +1832,10 @@ The package has **no** direct dependencies (`"dependencies": {}`). All functiona
 
 ### 14.4 Peer Dependencies per Subpath
 
-| Subpath      | Peer Dependencies                                                                                                          |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `.` (server) | `@nestjs/common ^11`, `@nestjs/core ^11`, `bullmq ^5.16`, `ioredis ^5`, `reflect-metadata ^0.2`; optional `bullmq-otel ^1` |
-| `./shared`   | None                                                                                                                       |
+| Subpath      | Peer Dependencies                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `.` (server) | `@nestjs/common ^11.0.16`, `@nestjs/core ^11.1.18`, `bullmq ^5.16`, `ioredis ^5`, `reflect-metadata ^0.2`; optional `bullmq-otel ^1` |
+| `./shared`   | None                                                                                                                                 |
 
 ### 14.5 Decision on BullMQ version (v5 → v6)
 
@@ -1901,8 +1901,8 @@ This decision is reviewed in every minor release of the lib.
     "release": "pnpm publish --provenance"
   },
   "peerDependencies": {
-    "@nestjs/common": "^11.0.0",
-    "@nestjs/core": "^11.0.0",
+    "@nestjs/common": "^11.0.16",
+    "@nestjs/core": "^11.1.18",
     "bullmq": "^5.16.0",
     "ioredis": "^5.0.0",
     "reflect-metadata": "^0.2.0",
@@ -1911,22 +1911,10 @@ This decision is reviewed in every minor release of the lib.
   "peerDependenciesMeta": {
     "bullmq-otel": { "optional": true }
   },
-  "devDependencies": {
-    "@nestjs/common": "^11.0.0",
-    "@nestjs/core": "^11.0.0",
-    "@nestjs/testing": "^11.0.0",
-    "@stryker-mutator/core": "^9.0.0",
-    "@stryker-mutator/jest-runner": "^9.0.0",
-    "@testcontainers/redis": "^11.0.0",
-    "@types/jest": "^30.0.0",
-    "bullmq": "^5.79.1",
-    "bullmq-otel": "^1.3.1",
-    "ioredis": "^5.11.1",
-    "jest": "^30.0.0",
-    "ts-jest": "^29.0.0",
-    "tsup": "^8.0.0",
-    "typescript": "^5.6.0"
-  },
+  // devDependencies are omitted here on purpose. They are not part of the
+  // published contract, Dependabot moves them every week, and a list pinned in
+  // prose is stale by the next merge — read the real manifest instead. The
+  // fields above are the ones this document is describing.
   "keywords": [
     "nestjs",
     "bullmq",

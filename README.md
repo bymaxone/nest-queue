@@ -114,11 +114,11 @@ Both subpaths ship ESM **and** CommonJS with declarations for each format, so a
 
 ### Peer dependency matrix
 
-| Subpath      | Required peers                                                                                  |
-| ------------ | ----------------------------------------------------------------------------------------------- |
-| `.` (server) | `@nestjs/common ^11`, `@nestjs/core ^11`, `bullmq ^5.16`, `ioredis ^5`, `reflect-metadata ^0.2` |
-| `./shared`   | None                                                                                            |
-| Optional     | `bullmq-otel ^1` (OpenTelemetry)                                                                |
+| Subpath      | Required peers                                                                                            |
+| ------------ | --------------------------------------------------------------------------------------------------------- |
+| `.` (server) | `@nestjs/common ^11.0.16`, `@nestjs/core ^11.1.18`, `bullmq ^5.16`, `ioredis ^5`, `reflect-metadata ^0.2` |
+| `./shared`   | None                                                                                                      |
+| Optional     | `bullmq-otel ^1` (OpenTelemetry)                                                                          |
 
 ---
 
