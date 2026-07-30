@@ -1911,22 +1911,10 @@ This decision is reviewed in every minor release of the lib.
   "peerDependenciesMeta": {
     "bullmq-otel": { "optional": true }
   },
-  "devDependencies": {
-    "@nestjs/common": "^11.0.16",
-    "@nestjs/core": "^11.1.18",
-    "@nestjs/testing": "^11.0.0",
-    "@stryker-mutator/core": "^9.0.0",
-    "@stryker-mutator/jest-runner": "^9.0.0",
-    "@testcontainers/redis": "^11.0.0",
-    "@types/jest": "^30.0.0",
-    "bullmq": "^5.79.1",
-    "bullmq-otel": "^1.3.1",
-    "ioredis": "^5.11.1",
-    "jest": "^30.0.0",
-    "ts-jest": "^29.0.0",
-    "tsup": "^8.0.0",
-    "typescript": "^5.6.0"
-  },
+  // devDependencies are omitted here on purpose. They are not part of the
+  // published contract, Dependabot moves them every week, and a list pinned in
+  // prose is stale by the next merge — read the real manifest instead. The
+  // fields above are the ones this document is describing.
   "keywords": [
     "nestjs",
     "bullmq",
