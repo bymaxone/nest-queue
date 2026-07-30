@@ -41,10 +41,10 @@ function toEpochMs(date: number | string): number {
  * @throws {QueueException} `INVALID_REPEAT_OPTIONS` (400) when the shape is invalid.
  */
 export function validateJobSchedulerOptions(repeat: JobSchedulerRepeatOptions): void {
-  // The union already forbids this for a TypeScript caller, but plain JavaScript
-  // and any payload that arrived as `unknown` and was cast reach here unchecked.
-  // Without the guard the `in` operator below throws a TypeError, which escapes
-  // the documented error catalog entirely.
+  // The union already forbids this for a TypeScript caller. Two callers escape it:
+  // plain JavaScript, and a payload that arrived as `unknown` and was cast. Without
+  // the guard the `in` operator below throws a TypeError, which escapes the
+  // documented error catalog entirely.
   const shape: unknown = repeat
   if (shape === null || typeof shape !== 'object' || Array.isArray(shape)) {
     invalid('repeat must be an object declaring either pattern or every')

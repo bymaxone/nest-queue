@@ -140,8 +140,8 @@ describe('validateJobSchedulerOptions — error reasons and boundaries', () => {
     ['a number', 5000],
     ['an array', []],
   ])('rejects %s as a QueueException rather than throwing a TypeError', (_label, value) => {
-    // The union forbids these for a TypeScript caller, but plain JavaScript and any
-    // payload cast from `unknown` arrive unchecked. Without the shape guard the `in`
+    // The union forbids these for a TypeScript caller. Two callers escape it: plain
+    // JavaScript, and a payload cast from `unknown`. Without the shape guard the `in`
     // operator throws a TypeError, which escapes the documented error catalog.
     const repeat = value as unknown as JobSchedulerRepeatOptions
     expect(run(repeat)).toThrow(QueueException)
