@@ -7,6 +7,32 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.1] — 2026-07-30
+
+First release published by CI, and therefore the first carrying an npm provenance
+attestation: `1.0.0` had to be published from a maintainer's machine because npm
+trusted publishing requires the package to already exist.
+
+### Documentation
+
+- Troubleshooting entry for `ERR_PNPM_IGNORED_BUILDS: msgpackr-extract` on
+  install. `msgpackr-extract` is a native optional dependency of BullMQ, and pnpm
+  blocks build scripts by default — pnpm 10 warns and installs anyway, pnpm 11
+  turns the same block into an error, so it appears on a pnpm upgrade with no
+  change on the consumer's side. The entry says whose dependency it is, shows both
+  the interactive and the declarative way to approve it, and notes that skipping
+  the build is fine because `msgpackr` falls back to a pure-JavaScript
+  implementation.
+
+### Internal
+
+- The dogfood smoke test installs its throwaway consumer with `--ignore-scripts`
+  and reports the full `spawnSync` outcome — status, signal, spawn error and both
+  streams — on failure. Not shipped in the package; recorded because it is what
+  made the `v1.0.0` release workflow fail after the publish had already succeeded.
+
+---
+
 ## [1.0.0] — 2026-07-30
 
 First public release. The library is feature-complete for the surface described
@@ -120,4 +146,5 @@ v6 peer range.
 
 ---
 
+[1.0.1]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.1
 [1.0.0]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.0
