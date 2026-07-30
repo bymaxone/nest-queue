@@ -7,7 +7,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [1.1.0] — 2026-07-30
+## [1.0.2] — 2026-07-30
 
 ### Security
 
@@ -24,10 +24,16 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the floor below a published advisory tells a consumer that a vulnerable install
   is a supported one, and nothing in their tooling contradicts it.
 
-  Shipped as a **minor**: narrowing a peer range can make an install that
-  previously resolved stop resolving, so it should not arrive in a patch. No
-  runtime behaviour changed, and the repository's own dev dependencies were
-  already above both floors.
+  Shipped as a **patch**, which is where a security fix belongs. Choosing a minor
+  would have bought nothing: `^1.0.1` — what a consumer almost always declares —
+  accepts `1.1.0` just as readily as `1.0.2`, so the same installs are affected
+  either way. Only a major would hold it back, and holding a security floor behind
+  a major migration is the opposite of what it is for.
+
+  No runtime behaviour changed, and the repository's own dev dependencies were
+  already above both floors. A consumer below them sees a peer warning telling
+  them to upgrade off a version with a published RCE advisory — which is the
+  intended outcome, not collateral damage.
 
 ---
 
@@ -170,6 +176,6 @@ v6 peer range.
 
 ---
 
-[1.1.0]: https://github.com/bymaxone/nest-queue/releases/tag/v1.1.0
+[1.0.2]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.2
 [1.0.1]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.1
 [1.0.0]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.0
