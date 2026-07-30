@@ -7,9 +7,10 @@
  *   2. ESM import resolves the expected named exports (server + shared)
  *   3. CJS require resolves the expected named exports (server + shared)
  *   4. Tarball contents (npm pack --dry-run) contain only dist/ + meta files
- *   5. A minimal consumer (file: link in an OS temp dir) resolves both subpaths
+ *   5. The manifest still declares an explicit empty `dependencies`
+ *   6. A minimal consumer (file: link in an OS temp dir) resolves both subpaths
  *      through the published `exports` map, in ESM *and* CJS
- *   6. Behavioral smoke against the built artifact: forRoot wires a DynamicModule
+ *   7. Behavioral smoke against the built artifact: forRoot wires a DynamicModule
  *      and the fail-fast validation path still throws
  *
  * Exit codes: 0 pass · 1 assertion failed · 2 build artifacts missing.
@@ -141,6 +142,28 @@ try {
     : fail('LICENSE is missing from the tarball')
 } catch (err) {
   fail(`npm pack --dry-run failed: ${err instanceof Error ? err.message : String(err)}`)
+}
+
+// -- 5b. Zero-runtime-dependency contract ------------------------------------
+// The empty `dependencies` object is the contract, not decoration: it is what the
+// README, CLAUDE.md and the Dependabot config all assert about this package. It is
+// also fragile — `pnpm add` rewrites the manifest and drops an empty object without
+// a word, so the key disappears on an ordinary dependency bump and nothing else in
+// the pipeline notices. Assert the key EXISTS and is empty; a missing key and an
+// empty one are different claims, and only one of them is the contract.
+section('5b. Zero-runtime-dependency contract')
+const manifest = req(resolve(ROOT, 'package.json'))
+const declared = Object.hasOwn(manifest, 'dependencies') ? manifest.dependencies : undefined
+if (declared === undefined) {
+  fail('package.json has no `dependencies` key — the zero-dependency contract is unstated')
+} else if (declared === null || typeof declared !== 'object' || Array.isArray(declared)) {
+  // A guard that throws is worse than no guard: the run dies on an opaque
+  // TypeError instead of reporting which contract broke.
+  fail(`package.json \`dependencies\` is not an object (got ${JSON.stringify(declared)})`)
+} else if (Object.keys(declared).length > 0) {
+  fail(`package.json declares runtime dependencies: ${Object.keys(declared).join(', ')}`)
+} else {
+  pass('package.json declares an explicit empty `dependencies`')
 }
 
 // -- 6. Consumer file: link smoke --------------------------------------------

@@ -76,6 +76,7 @@
     "release": "pnpm publish --provenance",
     "prepare": "husky"
   },
+  "dependencies": {},
   "peerDependencies": {
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",

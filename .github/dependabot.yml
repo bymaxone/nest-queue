@@ -44,9 +44,10 @@ updates:
       #   error TS2322: Type 'Redis' is not assignable to type 'ConnectionOptions'
       #
       # on every site that hands a client to a Queue, Worker, QueueEvents or
-      # FlowProducer. Both #33 (ioredis alone) and #39 (bullmq alone) failed exactly
-      # that way, while the same two versions applied together are green. Grouping
-      # all update types keeps them moving as the pair they are.
+      # FlowProducer, while the very same versions applied together typecheck
+      # cleanly. Grouping all update types keeps them moving as the pair they are.
+      # The workspace `overrides` in pnpm-workspace.yaml enforce the other half of
+      # the invariant: one resolved copy across the root and every example.
       bullmq-stack:
         patterns:
           - 'bullmq'
