@@ -782,9 +782,9 @@ pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && \
 
 ## 🩺 Troubleshooting
 
-### `ERR_PNPM_IGNORED_BUILDS: msgpackr-extract` on install (pnpm 10+)
+### `ERR_PNPM_IGNORED_BUILDS: msgpackr-extract` on install (pnpm 11)
 
-Installing this library with pnpm can stop with:
+Installing this library with **pnpm 11** can stop with:
 
 ```
 ERR_PNPM_IGNORED_BUILDS  Ignored build scripts: msgpackr-extract@3.0.4
@@ -792,9 +792,10 @@ Run "pnpm approve-builds" to pick which dependencies should be allowed to run sc
 ```
 
 Nothing is wrong with your setup. `msgpackr-extract` is a native optional dependency
-of BullMQ, and pnpm blocks build scripts by default — from **pnpm 11 that block is an
-error rather than a warning**. It is BullMQ's dependency, not this package's: this
-package ships zero runtime dependencies.
+of BullMQ, and pnpm blocks build scripts by default. **pnpm 10 warns and installs
+anyway; pnpm 11 turns the same block into an error**, which is why this appears on
+an upgrade with no change on your side. It is BullMQ's dependency, not this
+package's: this package ships zero runtime dependencies.
 
 Approve it once, either interactively:
 

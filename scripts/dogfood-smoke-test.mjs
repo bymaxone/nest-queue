@@ -67,6 +67,28 @@ const EXPECTED_SHARED_EXPORTS = ['JOB_STATUS', 'QUEUE_ERROR_CODES']
 
 const ALLOWED_TARBALL_PATHS = ['package.json', 'README.md', 'CHANGELOG.md', 'LICENSE', 'dist/']
 
+/**
+ * Render everything a `spawnSync` result can tell us about a failure.
+ *
+ * `status` is `null` when the process never ran (ENOENT) or was killed (timeout),
+ * and in both cases stdout and stderr are empty — so reporting only those brings
+ * back a gate that fails without saying why. `error` and `signal` are where the
+ * reason lives in exactly those cases.
+ *
+ * @param result - The `spawnSync` return value.
+ * @returns A multi-line, human-readable description of the failure.
+ */
+const describeFailure = (result) =>
+  [
+    `status ${String(result.status)}`,
+    result.signal ? `signal ${result.signal}` : null,
+    result.error ? `spawn error: ${result.error.message}` : null,
+    `--- stdout ---\n${result.stdout ?? ''}`,
+    `--- stderr ---\n${result.stderr ?? ''}`,
+  ]
+    .filter(Boolean)
+    .join('\n')
+
 let failures = 0
 const fail = (msg) => {
   console.error(`  FAIL: ${msg}`)
@@ -209,10 +231,7 @@ try {
   if (installResult.status !== 0) {
     // pnpm reports this class of failure on stdout, not stderr. Printing only
     // stderr produced an empty reason and a gate that failed without saying why.
-    fail(
-      `pnpm install in consumer failed (status ${String(installResult.status)})\n` +
-        `--- stdout ---\n${installResult.stdout ?? ''}\n--- stderr ---\n${installResult.stderr ?? ''}`,
-    )
+    fail(`pnpm install in consumer failed\n${describeFailure(installResult)}`)
   } else {
     pass('pnpm install with file: link succeeded')
 
