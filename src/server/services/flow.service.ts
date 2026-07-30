@@ -6,11 +6,12 @@
  * @layer server/services
  */
 
-import { Injectable } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 import { FlowProducer, type FlowJob, type JobNode, type Telemetry } from 'bullmq'
 import { ConnectionResolver } from './connection-resolver.service'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
+import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 
 /**
  * Wrapper over the BullMQ `FlowProducer` for hierarchical (parent/child) job
@@ -31,6 +32,7 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
  */
 @Injectable()
 export class FlowService {
+  private readonly logger = new Logger(FlowService.name)
   private readonly producer?: FlowProducer
 
   constructor(
@@ -47,6 +49,7 @@ export class FlowService {
         prefix,
         ...(telemetry ? { telemetry } : {}),
       })
+      attachDefaultErrorListener(this.producer, this.logger, 'FlowProducer', '*')
     }
   }
 

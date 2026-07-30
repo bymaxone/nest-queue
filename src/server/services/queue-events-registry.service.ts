@@ -7,13 +7,14 @@
  * @layer server/services
  */
 
-import { Inject, Injectable } from '@nestjs/common'
+import { Inject, Injectable, Logger } from '@nestjs/common'
 import { QueueEvents } from 'bullmq'
 import type { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import { duplicateConnection } from '../utils/duplicate-connection'
+import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 
 /**
  * Lazily creates and caches one BullMQ `QueueEvents` instance per queue.
@@ -33,6 +34,7 @@ import { duplicateConnection } from '../utils/duplicate-connection'
  */
 @Injectable()
 export class QueueEventsRegistry {
+  private readonly logger = new Logger(QueueEventsRegistry.name)
   private readonly events = new Map<string, QueueEvents>()
   private readonly connections = new Map<string, Redis>()
 
@@ -61,6 +63,7 @@ export class QueueEventsRegistry {
       conn.disconnect()
       throw err
     }
+    attachDefaultErrorListener(qe, this.logger, 'QueueEvents', queueName)
     this.events.set(queueName, qe)
     this.connections.set(queueName, conn)
     return qe

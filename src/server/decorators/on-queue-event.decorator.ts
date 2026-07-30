@@ -30,6 +30,7 @@ export type QueueEventName =
   | 'paused'
   | 'resumed'
   | 'cleaned'
+  | 'error'
 
 /**
  * Marks a method as a global queue-event listener. The method is bound to a

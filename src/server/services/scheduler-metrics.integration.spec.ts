@@ -6,6 +6,7 @@
  * @layer server/services
  */
 
+import { EventEmitter } from 'node:events'
 import type { Job } from 'bullmq'
 import { QueueService } from './queue.service'
 import { MetricsService } from './metrics.service'
@@ -23,13 +24,20 @@ const queueInstances: MockQueue[] = []
 
 jest.mock('bullmq', () => ({
   Queue: jest.fn().mockImplementation(() => {
-    const instance: MockQueue = {
+    const instance = Object.assign(new EventEmitter(), {
       upsertJobScheduler: jest.fn().mockResolvedValue({ id: 'repeat:nightly:1' } as Job),
       getJobCounts: jest
         .fn()
-        .mockResolvedValue({ waiting: 2, active: 0, completed: 9, failed: 0, delayed: 1, paused: 0 }),
+        .mockResolvedValue({
+          waiting: 2,
+          active: 0,
+          completed: 9,
+          failed: 0,
+          delayed: 1,
+          paused: 0,
+        }),
       close: jest.fn().mockResolvedValue(undefined),
-    }
+    }) as MockQueue
     queueInstances.push(instance)
     return instance
   }),

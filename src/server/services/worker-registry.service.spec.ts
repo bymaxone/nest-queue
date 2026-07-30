@@ -11,12 +11,13 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { DEFAULT_WORKER_CONCURRENCY, MAX_WORKER_CONCURRENCY } from '../constants/default-options'
 import type { ConnectionResolver } from './connection-resolver.service'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
+import { Logger } from '@nestjs/common'
+import { EventEmitter } from 'node:events'
 import type { Redis } from 'ioredis'
 
 /** Minimal mock of the BullMQ Worker instance returned by the mocked constructor. */
-interface MockWorkerInstance {
+type MockWorkerInstance = EventEmitter & {
   close: jest.MockedFunction<() => Promise<void>>
-  on: jest.MockedFunction<(event: string, listener: (...args: unknown[]) => unknown) => unknown>
 }
 
 /** Track instances created by the mocked constructor so tests can inspect them. */
@@ -24,13 +25,16 @@ const createdWorkers: MockWorkerInstance[] = []
 /** Track the constructor arguments so tests can assert the built worker options. */
 const workerConstructorArgs: unknown[][] = []
 
+// The fake is backed by a REAL EventEmitter, matching BullMQ's `Worker`. A plain
+// `on: jest.fn()` would be more permissive than production: `emit('error')` would
+// quietly do nothing, and the very defect these tests exist to catch — an
+// unlistened `error` throwing — could not be reproduced.
 jest.mock('bullmq', () => ({
   Worker: jest.fn().mockImplementation((...args: unknown[]) => {
     workerConstructorArgs.push(args)
-    const instance: MockWorkerInstance = {
+    const instance = Object.assign(new EventEmitter(), {
       close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
-      on: jest.fn(),
-    }
+    }) as MockWorkerInstance
     createdWorkers.push(instance)
     return instance
   }),
@@ -265,7 +269,10 @@ describe('WorkerRegistry.registerSandboxed', () => {
     // A successful sandboxed registration must track BOTH the worker and the
     // connection it opened, so the shutdown orchestrator can close each of them.
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())
-    const worker = registry.registerSandboxed({ queueName: 'sandboxed', processorFile: '/tmp/p.js' })
+    const worker = registry.registerSandboxed({
+      queueName: 'sandboxed',
+      processorFile: '/tmp/p.js',
+    })
     expect(registry.getAll().get('sandboxed')).toBe(worker)
     expect(registry.getConnections().get('sandboxed')).toBeDefined()
   })
@@ -491,8 +498,9 @@ function detailsOf(run: () => unknown): Record<string, unknown> {
   try {
     run()
   } catch (err) {
-    return ((err as QueueException).getResponse() as { error: { details: Record<string, unknown> } })
-      .error.details
+    return (
+      (err as QueueException).getResponse() as { error: { details: Record<string, unknown> } }
+    ).error.details
   }
   throw new Error('expected the operation to throw')
 }
@@ -521,7 +529,11 @@ describe('WorkerRegistry — constructor option forwarding', () => {
     registry.register({
       queueName: 'email',
       handler: noopHandler,
-      options: { limiter: { max: 10, duration: 1000 }, lockDuration: 60_000, stalledInterval: 15_000 },
+      options: {
+        limiter: { max: 10, duration: 1000 },
+        lockDuration: 60_000,
+        stalledInterval: 15_000,
+      },
     })
     const opts = lastWorkerOptions()
     expect(opts.limiter).toEqual({ max: 10, duration: 1000 })
@@ -566,7 +578,9 @@ describe('WorkerRegistry — validation boundaries and error details', () => {
   it('accepts concurrency at the lower and upper bounds', () => {
     // Exactly 1 and exactly MAX_WORKER_CONCURRENCY are valid (boundary inclusive).
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())
-    expect(() => registry.register({ queueName: 'a', handler: noopHandler, options: { concurrency: 1 } })).not.toThrow()
+    expect(() =>
+      registry.register({ queueName: 'a', handler: noopHandler, options: { concurrency: 1 } }),
+    ).not.toThrow()
     expect(() =>
       registry.register({
         queueName: 'b',
@@ -634,7 +648,9 @@ describe('WorkerRegistry — validation boundaries and error details', () => {
     // The duplicate-processor error names the conflicting queue.
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     registry.register({ queueName: 'email', handler: noopHandler })
-    expect(detailsOf(() => registry.register({ queueName: 'email', handler: noopHandler }))).toEqual({
+    expect(
+      detailsOf(() => registry.register({ queueName: 'email', handler: noopHandler })),
+    ).toEqual({
       queueName: 'email',
     })
   })
@@ -673,7 +689,9 @@ describe('WorkerRegistry — validation boundaries and error details', () => {
         registry.registerSandboxed({ queueName: file, processorFile: file }),
       ).not.toThrow()
     }
-    expect(detailsOf(() => registry.registerSandboxed({ queueName: 'x', processorFile: '/tmp/p.ts' }))).toEqual({
+    expect(
+      detailsOf(() => registry.registerSandboxed({ queueName: 'x', processorFile: '/tmp/p.ts' })),
+    ).toEqual({
       reason: 'processorFile must have a .js, .cjs, or .mjs extension',
     })
   })
@@ -681,7 +699,9 @@ describe('WorkerRegistry — validation boundaries and error details', () => {
   it('reports a precise reason for relative paths and non-file URLs', () => {
     // Both rejected forms surface their own descriptive reason.
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())
-    expect(detailsOf(() => registry.registerSandboxed({ queueName: 'a', processorFile: './p.js' }))).toEqual({
+    expect(
+      detailsOf(() => registry.registerSandboxed({ queueName: 'a', processorFile: './p.js' })),
+    ).toEqual({
       reason: 'processorFile must be an absolute path',
     })
     expect(
@@ -692,5 +712,41 @@ describe('WorkerRegistry — validation boundaries and error details', () => {
         }),
       ),
     ).toEqual({ reason: 'processorFile URL must use the file: protocol' })
+  })
+
+  it('survives an error emitted by a worker nobody subscribed to', () => {
+    // BullMQ's Worker extends EventEmitter, where emitting 'error' with no
+    // listener THROWS. These emitters are created by the library, not by the
+    // consumer, so without a fallback listener a transient Redis fault becomes an
+    // uncaught exception in an application that never asked for the emitter.
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
+    const worker = registry.register({ queueName: 'email', handler: noopHandler })
+    const logSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+
+    try {
+      expect(() => {
+        ;(worker as unknown as EventEmitter).emit('error', new Error('Connection is closed'))
+      }).not.toThrow()
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Connection is closed'))
+    } finally {
+      logSpy.mockRestore()
+    }
+  })
+
+  it('leaves the error event available to a consumer listener', () => {
+    // The fallback must not consume the event: EventEmitter delivers to every
+    // listener, so an @OnWorkerEvent('error') handler still runs alongside it.
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
+    const worker = registry.register({ queueName: 'email', handler: noopHandler })
+    const logSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    const consumer = jest.fn()
+
+    try {
+      ;(worker as unknown as EventEmitter).on('error', consumer)
+      ;(worker as unknown as EventEmitter).emit('error', new Error('boom'))
+      expect(consumer).toHaveBeenCalledTimes(1)
+    } finally {
+      logSpy.mockRestore()
+    }
   })
 })
