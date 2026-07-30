@@ -7,9 +7,10 @@
  *   2. ESM import resolves the expected named exports (server + shared)
  *   3. CJS require resolves the expected named exports (server + shared)
  *   4. Tarball contents (npm pack --dry-run) contain only dist/ + meta files
- *   5. A minimal consumer (file: link in an OS temp dir) resolves both subpaths
+ *   5. The manifest still declares an explicit empty `dependencies`
+ *   6. A minimal consumer (file: link in an OS temp dir) resolves both subpaths
  *      through the published `exports` map, in ESM *and* CJS
- *   6. Behavioral smoke against the built artifact: forRoot wires a DynamicModule
+ *   7. Behavioral smoke against the built artifact: forRoot wires a DynamicModule
  *      and the fail-fast validation path still throws
  *
  * Exit codes: 0 pass · 1 assertion failed · 2 build artifacts missing.
