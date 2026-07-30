@@ -233,9 +233,9 @@ describe('QueueService — enqueueBulk', () => {
     service.getOrCreateQueue('email')
     queueInstances[0]?.addBulk.mockRejectedValue(new Error('redis down'))
 
-    await expect(
-      service.enqueueBulk('email', [{ name: 'a', data: {} }]),
-    ).rejects.toBeInstanceOf(QueueException)
+    await expect(service.enqueueBulk('email', [{ name: 'a', data: {} }])).rejects.toBeInstanceOf(
+      QueueException,
+    )
   })
 })
 
@@ -393,11 +393,30 @@ describe('QueueService — job schedulers', () => {
     await expect(
       service.upsertJobScheduler('cleanup', 'nightly', { pattern: 'not a cron' }),
     ).rejects.toBeInstanceOf(QueueException)
-    await service.upsertJobScheduler('cleanup', 'nightly', { pattern: 'not a cron' }).catch((err: unknown) => {
-      const body = (err as QueueException).getResponse() as { error: { code: string } }
-      expect(body.error.code).toBe(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS)
-      expect((err as QueueException).getStatus()).toBe(400)
+    await service
+      .upsertJobScheduler('cleanup', 'nightly', { pattern: 'not a cron' })
+      .catch((err: unknown) => {
+        const body = (err as QueueException).getResponse() as { error: { code: string } }
+        expect(body.error.code).toBe(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS)
+        expect((err as QueueException).getStatus()).toBe(400)
+      })
+  })
+
+  it('propagates an operational failure untouched instead of relabelling it a bad cron', async () => {
+    // The same call fails on a bad cron AND on an unreachable Redis. Reporting the
+    // second as a 400 "invalid cron expression" names the one thing that is correct,
+    // hides the one that is broken, and tells the caller not to retry when retrying
+    // is exactly right. Operational faults carry a string `code`; parse errors do not.
+    const { service } = makeService()
+    service.getOrCreateQueue('cleanup')
+    const outage = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:6379'), {
+      code: 'ECONNREFUSED',
     })
+    queueInstances[0]?.upsertJobScheduler.mockRejectedValue(outage)
+
+    await expect(
+      service.upsertJobScheduler('cleanup', 'nightly', { pattern: '0 3 * * *' }),
+    ).rejects.toBe(outage)
   })
 
   it('removes a scheduler and returns the boolean result', async () => {
@@ -486,7 +505,7 @@ describe('QueueService — cache view and shutdown', () => {
     service.getOrCreateQueue('email')
     service.getOrCreateQueue('reports')
 
-    await service.onModuleDestroy()
+    await service.closeAll()
 
     expect(queueInstances[0]?.close).toHaveBeenCalledTimes(1)
     expect(queueInstances[1]?.close).toHaveBeenCalledTimes(1)
@@ -500,7 +519,7 @@ describe('QueueService — cache view and shutdown', () => {
     service.getOrCreateQueue('reports')
     queueInstances[0]?.close.mockRejectedValue(new Error('close failed'))
 
-    await expect(service.onModuleDestroy()).resolves.toBeUndefined()
+    await expect(service.closeAll()).resolves.toBeUndefined()
     expect(queueInstances[1]?.close).toHaveBeenCalledTimes(1)
     expect(service.getCachedQueues().size).toBe(0)
   })

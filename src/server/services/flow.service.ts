@@ -6,7 +6,7 @@
  * @layer server/services
  */
 
-import { Injectable, type OnModuleDestroy } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import { FlowProducer, type FlowJob, type JobNode, type Telemetry } from 'bullmq'
 import { ConnectionResolver } from './connection-resolver.service'
 import { QueueException } from '../errors/queue-exception'
@@ -30,7 +30,7 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
  * })
  */
 @Injectable()
-export class FlowService implements OnModuleDestroy {
+export class FlowService {
   private readonly producer?: FlowProducer
 
   constructor(
@@ -93,10 +93,15 @@ export class FlowService implements OnModuleDestroy {
   }
 
   /**
-   * Close the producer on shutdown when active; a no-op when inactive. A failed
-   * `close()` is swallowed so it never aborts the shutdown sequence.
+   * Close the producer when active; a no-op when inactive. A failed `close()` is
+   * swallowed so it never aborts the shutdown sequence.
+   *
+   * Deliberately NOT named `onModuleDestroy`: NestJS invokes lifecycle hooks by
+   * method name, so a hook here would run in addition to the call the ordered
+   * sequence already makes, closing the producer twice. `QueueLifecycle` is the
+   * only caller.
    */
-  async onModuleDestroy(): Promise<void> {
+  async close(): Promise<void> {
     if (this.producer) {
       await this.producer.close().catch(() => undefined)
     }

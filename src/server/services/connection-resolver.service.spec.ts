@@ -85,7 +85,7 @@ describe('ConnectionResolver — Mode A (bring your own client)', () => {
 
     const resolver = new ConnectionResolver(optionsWith({ client: asRedis(client) }))
     await resolver.init()
-    await resolver.onModuleDestroy()
+    await resolver.teardown()
 
     expect(client.quit).not.toHaveBeenCalled()
     expect(client.disconnect).not.toHaveBeenCalled()
@@ -127,10 +127,16 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     const client = new FakeRedis('ready', null)
     redisConstructor.mockReturnValue(asRedis(client))
 
-    const resolver = new ConnectionResolver(optionsWith({ options: { host: 'localhost', port: 6379 } }))
+    const resolver = new ConnectionResolver(
+      optionsWith({ options: { host: 'localhost', port: 6379 } }),
+    )
     await resolver.init()
 
-    expect(redisConstructor).toHaveBeenCalledWith({ host: 'localhost', port: 6379, lazyConnect: false })
+    expect(redisConstructor).toHaveBeenCalledWith({
+      host: 'localhost',
+      port: 6379,
+      lazyConnect: false,
+    })
   })
 
   it('resolves immediately when the client is already ready', async () => {
@@ -184,7 +190,7 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
 
     const resolver = new ConnectionResolver(optionsWith({ url: 'redis://localhost:6379' }))
     await resolver.init()
-    await resolver.onModuleDestroy()
+    await resolver.teardown()
 
     expect(client.quit).toHaveBeenCalledTimes(1)
   })
@@ -197,7 +203,7 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
 
     const resolver = new ConnectionResolver(optionsWith({ url: 'redis://localhost:6379' }))
     await resolver.init()
-    await resolver.onModuleDestroy()
+    await resolver.teardown()
 
     expect(client.disconnect).toHaveBeenCalledTimes(1)
   })
@@ -219,7 +225,7 @@ describe('ConnectionResolver — uninitialized access', () => {
   it('does nothing on destroy when never initialized', async () => {
     // Destroying an uninitialized resolver is a safe no-op.
     const resolver = new ConnectionResolver(optionsWith({ url: 'redis://localhost:6379' }))
-    await expect(resolver.onModuleDestroy()).resolves.toBeUndefined()
+    await expect(resolver.teardown()).resolves.toBeUndefined()
   })
 })
 

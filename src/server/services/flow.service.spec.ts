@@ -150,12 +150,12 @@ describe('FlowService — disabled', () => {
   })
 })
 
-describe('FlowService — onModuleDestroy', () => {
+describe('FlowService — close', () => {
   it('closes the producer when active', async () => {
     // Shutdown closes the active producer a single time.
     const service = new FlowService(makeConnection(), true, 'bull')
 
-    await service.onModuleDestroy()
+    await service.close()
 
     expect(producerInstances[0]?.close).toHaveBeenCalledTimes(1)
   })
@@ -165,14 +165,14 @@ describe('FlowService — onModuleDestroy', () => {
     const service = new FlowService(makeConnection(), true, 'bull')
     producerInstances[0]?.close.mockRejectedValue(new Error('close failed'))
 
-    await expect(service.onModuleDestroy()).resolves.toBeUndefined()
+    await expect(service.close()).resolves.toBeUndefined()
   })
 
   it('is a no-op when inactive', async () => {
     // With no producer there is nothing to close.
     const service = new FlowService(makeConnection(), false, 'bull')
 
-    await expect(service.onModuleDestroy()).resolves.toBeUndefined()
+    await expect(service.close()).resolves.toBeUndefined()
     expect(producerInstances).toHaveLength(0)
   })
 })

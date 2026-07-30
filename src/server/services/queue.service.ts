@@ -4,7 +4,7 @@
  * @layer server/services
  */
 
-import { Inject, Injectable, type OnModuleDestroy } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
 import { type Job, type JobsOptions, Queue, type QueueOptions } from 'bullmq'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
@@ -20,6 +20,22 @@ import { validateJobSchedulerOptions } from '../utils/validate-job-scheduler-opt
 /** Maximum number of jobs accepted by a single `enqueueBulk` call. */
 const MAX_BULK_SIZE = 1000
 
+/**
+ * Whether a thrown value is an operational fault rather than bad input.
+ *
+ * Node system errors, ioredis errors and BullMQ's own failures all carry a string
+ * `code` (`ECONNREFUSED`, `ETIMEDOUT`, `NR_CLOSED`, ...). A cron parse error from
+ * BullMQ's bundled parser is a bare `Error` and carries none. That difference is
+ * what separates "your schedule is wrong" from "the server is unreachable" on a
+ * call that can fail either way.
+ *
+ * @param err - The caught value.
+ * @returns `true` when the value carries a string `code`.
+ */
+function isOperationalError(err: unknown): boolean {
+  return typeof (err as { code?: unknown } | null)?.code === 'string'
+}
+
 /** A typed job in the library's public shape. */
 type TypedJob<TData, TResult> = Job<TData, TResult>
 
@@ -32,7 +48,7 @@ type CleanableStatus = 'completed' | 'failed' | 'delayed' | 'wait' | 'active' | 
  * enqueueing, inspection, metrics, and lifecycle control.
  */
 @Injectable()
-export class QueueService implements OnModuleDestroy {
+export class QueueService {
   private readonly queues = new Map<string, Queue>()
 
   constructor(
@@ -247,9 +263,17 @@ export class QueueService implements OnModuleDestroy {
       try {
         const job = await queue.upsertJobScheduler(schedulerId, repeat, jobTemplate)
         return job as Job<TData, TResult>
-      } catch {
-        // BullMQ delegates cron parsing to its bundled parser; an unparseable
-        // pattern surfaces here as a thrown error.
+      } catch (err) {
+        // BullMQ delegates cron parsing to its bundled parser, so an unparseable
+        // pattern surfaces here as a throw — but so does a Redis outage, and every
+        // other fault on this path. Reporting those as a 400 "invalid cron" names
+        // the one thing that is correct, hides the one that is broken, and tells
+        // the caller not to retry when retrying is exactly right.
+        //
+        // Operational faults carry a string `code` (ECONNREFUSED, ETIMEDOUT,
+        // NR_CLOSED, ...); a cron parse error is a bare Error and carries none.
+        // Anything with a code propagates untouched, status and message intact.
+        if (isOperationalError(err)) throw err
         throw new QueueException(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS, 400, {
           reason: 'pattern must be a valid cron expression (5- or 6-field)',
         })
@@ -322,8 +346,16 @@ export class QueueService implements OnModuleDestroy {
     return this.queues
   }
 
-  /** Close every cached queue (swallowing per-queue errors) and clear the cache. */
-  async onModuleDestroy(): Promise<void> {
+  /**
+   * Close every cached queue (swallowing per-queue errors) and clear the cache.
+   *
+   * Deliberately NOT named `onModuleDestroy`: NestJS invokes lifecycle hooks by
+   * method name, so a hook here would run on Nest's own schedule, concurrently
+   * with — and possibly before — the bounded drain in `QueueLifecycle`. Closing a
+   * queue while its worker is still draining is exactly what the ordered sequence
+   * exists to prevent. `QueueLifecycle` is the only caller.
+   */
+  async closeAll(): Promise<void> {
     for (const queue of this.queues.values()) {
       await queue.close().catch(() => undefined)
     }
