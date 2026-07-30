@@ -153,12 +153,15 @@ try {
 // empty one are different claims, and only one of them is the contract.
 section('5b. Zero-runtime-dependency contract')
 const manifest = req(resolve(ROOT, 'package.json'))
-if (!Object.hasOwn(manifest, 'dependencies')) {
+const declared = Object.hasOwn(manifest, 'dependencies') ? manifest.dependencies : undefined
+if (declared === undefined) {
   fail('package.json has no `dependencies` key — the zero-dependency contract is unstated')
-} else if (Object.keys(manifest.dependencies).length > 0) {
-  fail(
-    `package.json declares runtime dependencies: ${Object.keys(manifest.dependencies).join(', ')}`,
-  )
+} else if (declared === null || typeof declared !== 'object' || Array.isArray(declared)) {
+  // A guard that throws is worse than no guard: the run dies on an opaque
+  // TypeError instead of reporting which contract broke.
+  fail(`package.json \`dependencies\` is not an object (got ${JSON.stringify(declared)})`)
+} else if (Object.keys(declared).length > 0) {
+  fail(`package.json declares runtime dependencies: ${Object.keys(declared).join(', ')}`)
 } else {
   pass('package.json declares an explicit empty `dependencies`')
 }
