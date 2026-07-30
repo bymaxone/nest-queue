@@ -34,6 +34,8 @@ Before making any change, read these sections (use partial-read tools where avai
 - Recurring jobs: `upsertJobScheduler`/`removeJobScheduler`/`getJobSchedulers` **only** — never `addRepeatable`/`removeRepeatable`.
 - `maxRetriesPerRequest: null` is applied **only** to worker/QueueEvents connections.
 - Cron patterns delegated to BullMQ's `cron-parser` — no hand-rolled regex.
+- Every BullMQ emitter the library constructs — `Queue`, `Worker`, `QueueEvents`, `FlowProducer` — gets a fallback `error` listener. These extend `EventEmitter`, where emitting `'error'` with no listener **throws**, so an emitter the consumer never asked for would crash their process on a transient Redis fault.
+- `QueueLifecycle` is the ONLY class exposing `onModuleDestroy`. NestJS binds lifecycle hooks by method name, not by `implements`, so a collaborator with one runs on Nest's schedule and races the bounded drain. Collaborators expose `closeAll` / `close` / `teardown` instead.
 - The configured `prefix` must reach **`Queue`, `Worker`, `QueueEvents` and `FlowProducer`**. BullMQ defaults an omitted prefix to `bull`, so a partial application puts producers and consumers on separate keyspaces — jobs are enqueued and never consumed, with nothing thrown.
 - Every injectable constructor parameter carries an explicit `@Inject(TOKEN)`. The package ships as an esbuild bundle, which does not emit `design:paramtypes`, so reflection-based resolution passes here and fails in a consumer's build.
 
