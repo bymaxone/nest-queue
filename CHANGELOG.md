@@ -34,6 +34,9 @@ coverage, and ships with zero runtime dependencies.
 - Dual-mode connection (Mode A: bring-your-own ioredis / Mode B: lib-owned), with per-role
   `maxRetriesPerRequest` policy applied automatically
 - Subpaths: `.` (server), `./shared` (zero-dep types and constants)
+- `'error'` as a subscribable `@OnQueueEvent` name. It carries a real `Error`
+  instance rather than the serialized payload every other queue event delivers,
+  because it reports a connection fault rather than a job transition
 - Peer deps: `@nestjs/common ^11`, `@nestjs/core ^11`, `bullmq ^5.16`, `ioredis ^5`,
   `reflect-metadata ^0.2`; optional `bullmq-otel ^1`
 - E2E tests with Testcontainers Redis
@@ -57,6 +60,33 @@ coverage, and ships with zero runtime dependencies.
   consumer landed on ESM declarations. `types` is now declared per condition,
   `main`/`module`/`types` are present for legacy resolution, `./package.json` is
   exported, and the package passes `attw` at the strict profile.
+
+- **Every BullMQ emitter the library creates carries a fallback `error` listener.**
+  `Queue`, `Worker`, `QueueEvents` and `FlowProducer` extend Node's `EventEmitter`,
+  where emitting `'error'` with no listener **throws** rather than being delivered.
+  The library constructs all four on the consumer's behalf, so a transient Redis
+  fault surfaced as an uncaught exception in an application that never asked for
+  the emitter. The fallback logs and does not consume the event — an
+  `@OnWorkerEvent('error')` or `@OnQueueEvent('error')` handler still runs.
+- **One owner for shutdown.** `QueueService`, `FlowService` and `ConnectionResolver`
+  each exposed `onModuleDestroy`, and NestJS binds lifecycle hooks by method name,
+  so Nest invoked them on its own schedule while `QueueLifecycle` also called two
+  of them inside its ordered sequence: the flow producer closed twice, and queues
+  could close before the bounded drain finished with them. They now expose plain
+  methods — `QueueService.closeAll()`, `FlowService.close()`,
+  `ConnectionResolver.teardown()` — and `QueueLifecycle` is the only lifecycle hook.
+- **Operational failures no longer masquerade as a bad cron.** `upsertJobScheduler`
+  wrapped every failure in `INVALID_REPEAT_OPTIONS` with HTTP 400 and "pattern must
+  be a valid cron expression", so an unreachable Redis was reported as a client
+  mistake — with a status telling the caller not to retry. Faults carrying a string
+  `code` now propagate untouched.
+- **A malformed `repeat` raises the documented error instead of a `TypeError`.**
+  The union forbids it for a TypeScript caller, but plain JavaScript and any
+  payload cast from `unknown` reached the `in` operator unchecked. `null`,
+  `undefined`, strings, numbers and arrays are rejected as
+  `INVALID_REPEAT_OPTIONS`, as is a blank `pattern`.
+- **`QueueEventsRegistry.getConnections()` returns a copy.** `ReadonlyMap` is a
+  compile-time claim only; the live registry could be cast and mutated.
 
 ### Security
 

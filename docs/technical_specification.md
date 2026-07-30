@@ -208,7 +208,7 @@ BymaxQueueModule.forRootAsync({
 
 #### Mode B — Open Your Own Connection
 
-The lib receives connection parameters (URL or `RedisOptions` object) and internally creates a dedicated `ioredis`. The connection is closed in `onModuleDestroy`.
+The lib receives connection parameters (URL or `RedisOptions` object) and internally creates a dedicated `ioredis`. The connection is torn down by `ConnectionResolver.teardown()`, called from the shutdown sequence.
 
 ```typescript
 BymaxQueueModule.forRoot({
@@ -263,6 +263,24 @@ failure is entirely silent: `enqueue()` resolves with a real job id, no worker
 ever picks the job up, no event listener fires, and flow jobs land where nothing
 polls. There is no error to observe — only work that never happens. Any change
 that constructs a new BullMQ object must thread the resolved prefix into it.
+
+#### One lifecycle hook, and no unlistened emitter
+
+`QueueLifecycle` is the **only** class that exposes `onModuleDestroy`. NestJS binds
+lifecycle hooks by method NAME, not by the `implements` clause, so a collaborator
+that also declared one would be invoked on Nest's own schedule — concurrently with,
+and possibly before, the bounded drain. `QueueService`, `FlowService` and
+`ConnectionResolver` therefore expose plain methods (`closeAll`, `close`,
+`teardown`) that only the orchestrator calls.
+
+Separately, every BullMQ emitter the library constructs — `Queue`, `Worker`,
+`QueueEvents`, `FlowProducer` — receives a fallback `error` listener. These
+emitters extend Node's `EventEmitter`, where emitting `'error'` with no listener
+**throws** rather than being delivered, so a transient Redis fault on an emitter
+the consumer never asked for would surface as an uncaught exception in their
+process. The fallback logs and does not consume the event: an
+`@OnWorkerEvent('error')` or `@OnQueueEvent('error')` handler still runs alongside
+it and remains where real handling belongs.
 
 #### DI tokens are resolved explicitly
 
@@ -1120,14 +1138,7 @@ BullMQ exposes events at two levels, and this lib surfaces both. Choosing the ri
 // Worker-local events — fired by THIS worker's process. Handler receives the
 // full Job object (job.data, job.returnvalue, job.attemptsMade, timings).
 type WorkerEventName =
-  | 'completed'
-  | 'failed'
-  | 'progress'
-  | 'active'
-  | 'stalled'
-  | 'closing'
-  | 'closed'
-  | 'error'
+  'completed' | 'failed' | 'progress' | 'active' | 'stalled' | 'closing' | 'closed' | 'error'
 
 /**
  * Marks a method as a worker-local event listener. No extra Redis connection
@@ -1359,7 +1370,7 @@ await flowService.add({
 
 - Created once in `onModuleInit` (if `flows.enabled`).
 - Uses the main connection (mode A or B).
-- Closed in `onModuleDestroy` before the queues.
+- Closed by `FlowService.close()` before the queues, from the shutdown sequence.
 
 ---
 
