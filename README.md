@@ -78,7 +78,7 @@ peer dependencies, so you control exact versions and the supply-chain surface st
 - ✅ **Per-role retry policy** — `maxRetriesPerRequest: null` reaches only the duplicated Worker and QueueEvents connections; the producer keeps ioredis' defaults, so a Redis outage fails fast instead of hanging a request
 - ✅ **One namespace, four objects** — the configured `prefix` reaches `Queue`, `Worker`, `QueueEvents` **and** `FlowProducer`, so producers and consumers can never end up on separate keyspaces
 - ✅ **Bounded graceful shutdown** — a single ordered sequence drains every worker under a deadline and then force-closes; delivery is at-least-once by design, so handlers must be idempotent
-- ✅ **No unlistened emitter** — every `Queue`, `Worker`, `QueueEvents` and `FlowProducer` the library creates carries a fallback `error` listener, so a transient Redis fault cannot become an uncaught exception in your process; your own `@OnWorkerEvent('error')` still runs alongside it
+- ✅ **No unlistened emitter** — every `Queue`, `Worker`, `QueueEvents` and `FlowProducer` the library creates carries a fallback `error` listener, so a transient Redis fault cannot become an uncaught exception in your process; your own `@OnWorkerEvent('error')` or `@OnQueueEvent('error')` still runs alongside it
 
 ### 🧩 Developer Experience
 
@@ -381,14 +381,15 @@ const all = await this.metricsService.getAll(['email', 'notifications'])
 
 ## 🚨 Error Code Catalog
 
-Every failure raised by this library is a `QueueException` carrying a stable,
+Whatever **this library rejects** is a `QueueException` carrying a stable,
 transport-independent `code`. Branch on the code, never on the HTTP status or the
 message text — the code is the contract.
 
-Faults that are **not** yours propagate untouched. A dropped connection, a timeout
-or any other operational failure keeps its own error and status rather than being
-relabelled as invalid input — the codes below describe what the library rejected,
-not what the infrastructure did.
+Whatever **fails underneath it** is not wrapped at all. A dropped connection, a
+timeout or any other operational fault reaches you as the original error, with its
+own type and message, rather than being relabelled as invalid input. So the catalog
+below is a complete list of the library's own rejections, and deliberately not a
+complete list of everything a call can throw.
 
 ```typescript
 import { QueueException, QUEUE_ERROR_CODES } from '@bymax-one/nest-queue'
