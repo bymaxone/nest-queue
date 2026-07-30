@@ -41,16 +41,16 @@ When Phase 5 is done: `README.md`/`CHANGELOG.md`/`SECURITY.md`/`CLAUDE.md`/`AGEN
 
 ## Task index
 
-| ID | Task | Status | Priority | Size | Depends on |
-|---|---|---|---|---|---|
-| 5.1 | `README.md` — the public front door | ✅ Done | P0 | M | 4.7 |
-| 5.2 | Governance & repo-as-config (CHANGELOG, SECURITY, CLAUDE, AGENTS, commitlint + 4 Copilot files) | ✅ Done | P0 | M | 4.7 |
-| 5.3 | CI/CD + supply-chain workflows (ci/codeql/scorecard/osv-scanner/release) | ✅ Done | P0 | L | 5.2 |
-| 5.4 | Bundle budget + size gate (`scripts/check-size.mjs`) | ✅ Done | P0 | S | 4.7 |
-| 5.5 | Mutation gate run (Stryker `break 95`) + mutation docs | ✅ Done | P0 | M | 4.7 |
-| 5.6 | `nest-queue-example` dogfood app | ✅ Done | P1 | L | 5.1, 5.3 |
-| 5.7 | BullMQ v6 promotion notes (CHANGELOG version policy + README limitations) | ✅ Done | P1 | S | 5.1, 5.2 |
-| 5.8 | Publish `v0.1.0` (tag → release workflow → verify npm) | ✅ Done | P0 | M | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7 |
+| ID  | Task                                                                                            | Status  | Priority | Size | Depends on                        |
+| --- | ----------------------------------------------------------------------------------------------- | ------- | -------- | ---- | --------------------------------- |
+| 5.1 | `README.md` — the public front door                                                             | ✅ Done | P0       | M    | 4.7                               |
+| 5.2 | Governance & repo-as-config (CHANGELOG, SECURITY, CLAUDE, AGENTS, commitlint + 4 Copilot files) | ✅ Done | P0       | M    | 4.7                               |
+| 5.3 | CI/CD + supply-chain workflows (ci/codeql/scorecard/osv-scanner/release)                        | ✅ Done | P0       | L    | 5.2                               |
+| 5.4 | Bundle budget + size gate (`scripts/check-size.mjs`)                                            | ✅ Done | P0       | S    | 4.7                               |
+| 5.5 | Mutation gate run (Stryker `break 95`) + mutation docs                                          | ✅ Done | P0       | M    | 4.7                               |
+| 5.6 | `nest-queue-example` dogfood app                                                                | ✅ Done | P1       | L    | 5.1, 5.3                          |
+| 5.7 | BullMQ v6 promotion notes (CHANGELOG version policy + README limitations)                       | ✅ Done | P1       | S    | 5.1, 5.2                          |
+| 5.8 | Publish `v0.1.0` (tag → release workflow → verify npm)                                          | ✅ Done | P0       | M    | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7 |
 
 > Cross-phase dependencies reference **Phase 4** `4.7` (Phase 4 close/validation task, which transitively proves Phases 1–4 are complete).
 
@@ -336,7 +336,7 @@ Author the five GitHub Actions workflows — `ci.yml`, `codeql.yml`, `scorecard.
 
 #### Agent prompt
 
-````
+```
 You are a senior CI/CD + supply-chain engineer working on the nest-queue project.
 
 PROJECT: @bymax-one/nest-queue — a public NestJS/BullMQ module published to npm. The supply chain is
@@ -404,7 +404,7 @@ Completion Protocol:
 1. Status ✅ (block + index). 2. Tick acceptance criteria. 3. Update the index row. 4. Progress `3/8`.
 5. Update the Phase 5 row in `docs/development_plan.md`. 6. Recompute the overall progress percentage in `docs/development_plan.md`.
 7. Append `- 5.3 ✅ <YYYY-MM-DD> — <summary>`.
-````
+```
 
 ---
 
@@ -530,7 +530,7 @@ Run the Stryker mutation gate (`break 95`, high 99, low 95, target 100%) across 
 
 #### Agent prompt
 
-````
+```
 You are a senior test/quality engineer working on the nest-queue project.
 
 PROJECT: @bymax-one/nest-queue — a public NestJS/BullMQ module with 100% line/branch coverage on
@@ -584,7 +584,7 @@ Completion Protocol:
 1. Status ✅ (block + index). 2. Tick acceptance criteria. 3. Update the index row. 4. Progress `5/8`.
 5. Update the Phase 5 row in `docs/development_plan.md`. 6. Recompute the overall progress percentage in `docs/development_plan.md`.
 7. Append `- 5.5 ✅ <YYYY-MM-DD> — <summary>`.
-````
+```
 
 ---
 
@@ -609,12 +609,12 @@ Build the `nest-queue-example` dogfood application that consumes the published s
 
 #### Files to create / modify
 
-- `examples/nest-queue-example/` (a runnable NestJS app + `README.md`)
+- `test/consumer-app/` (a runnable NestJS app + `README.md`)
 - `.github/workflows/ci.yml` (an example build+lint job)
 
 #### Agent prompt
 
-````
+```
 You are a senior NestJS engineer working on the nest-queue project.
 
 PROJECT: @bymax-one/nest-queue — a public NestJS/BullMQ module. The dogfood example consumes the
@@ -638,7 +638,7 @@ Build the `nest-queue-example` dogfood app and wire its build+lint into CI.
 
 DELIVERABLES
 
-1. `examples/nest-queue-example/` — a runnable NestJS app that:
+1. `test/consumer-app/` — a runnable NestJS app that:
    - Wires `BymaxQueueModule.forRootAsync()` in Mode A, injecting a BullMQ-dedicated `ioredis` client
      from `@bymax-one/nest-cache` (`useFactory: (queueRedis) => ({ connection: { client: queueRedis } })`).
    - Defines a `@Processor('email')` + `@Process()` handler.
@@ -649,7 +649,7 @@ DELIVERABLES
      `@bymax-one/nest-queue/shared`) — no deep imports.
    - Carries a short `README.md` describing how to run it (with a local Redis).
 
-2. `.github/workflows/ci.yml` — add a dedicated job that builds + lints `examples/nest-queue-example`
+2. `.github/workflows/ci.yml` — add a dedicated job that builds + lints `test/consumer-app`
    so the example cannot rot (a breaking public-API change fails CI).
 
 Constraints:
@@ -657,16 +657,16 @@ Constraints:
   references; NO marketing about author/company seniority. Follow `/bymax-workflow:standards`.
 
 Verification:
-- `pnpm --filter nest-queue-example build` (or `pnpm build` inside the example) — expected: builds.
-- `pnpm --filter nest-queue-example lint` — expected: clean.
-- `grep -q '@bymax-one/nest-queue' examples/nest-queue-example/package.json` — expected: match.
-- `grep -q 'upsertJobScheduler' -r examples/nest-queue-example/src` — expected: match.
+- `pnpm --filter nest-queue-consumer-app build` (or `pnpm build` inside the example) — expected: builds.
+- `pnpm --filter nest-queue-consumer-app lint` — expected: clean.
+- `grep -q '@bymax-one/nest-queue' test/consumer-app/package.json` — expected: match.
+- `grep -q 'upsertJobScheduler' -r test/consumer-app/src` — expected: match.
 
 Completion Protocol:
 1. Status ✅ (block + index). 2. Tick acceptance criteria. 3. Update the index row. 4. Progress `6/8`.
 5. Update the Phase 5 row in `docs/development_plan.md`. 6. Recompute the overall progress percentage in `docs/development_plan.md`.
 7. Append `- 5.6 ✅ <YYYY-MM-DD> — <summary>`.
-````
+```
 
 ---
 
@@ -695,7 +695,7 @@ Document the BullMQ version policy and the v5 → v6 promotion strategy: a "Bull
 
 #### Agent prompt
 
-````
+```
 You are a senior maintainer / release engineer working on the nest-queue project.
 
 PROJECT: @bymax-one/nest-queue — a public NestJS/BullMQ module. The BullMQ floor is `^5.16.0` (where
@@ -744,7 +744,7 @@ Completion Protocol:
 1. Status ✅ (block + index). 2. Tick acceptance criteria. 3. Update the index row. 4. Progress `7/8`.
 5. Update the Phase 5 row in `docs/development_plan.md`. 6. Recompute the overall progress percentage in `docs/development_plan.md`.
 7. Append `- 5.7 ✅ <YYYY-MM-DD> — <summary>`.
-````
+```
 
 ---
 

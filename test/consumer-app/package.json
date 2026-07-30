@@ -1,8 +1,8 @@
 {
-  "name": "nest-queue-example",
+  "name": "nest-queue-consumer-app",
   "version": "0.0.0",
   "private": true,
-  "description": "Dogfood example app for @bymax-one/nest-queue",
+  "description": "Consumer-shaped typecheck fixture: compiles real application code against the built library. Not a demo — see the nest-queue-example repository for that.",
   "license": "MIT",
   "type": "module",
   "scripts": {

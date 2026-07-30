@@ -26,7 +26,7 @@
   <a href="https://github.com/bymaxone/nest-queue/issues">Issues</a> ·
   <a href="#-quick-start">Quick Start</a> ·
   <a href="#-api-reference">API Reference</a> ·
-  <a href="https://github.com/bymaxone/nest-queue/tree/main/examples/nest-queue-example">Example App</a>
+  <a href="https://github.com/bymaxone/nest-queue-example">Example App</a>
 </p>
 
 ---
@@ -123,10 +123,14 @@ Both subpaths ship ESM **and** CommonJS with declarations for each format, so a
 ---
 
 > [!TIP]
-> A runnable reference application lives in
-> [`examples/nest-queue-example`](https://github.com/bymaxone/nest-queue/tree/main/examples/nest-queue-example) —
-> a NestJS app that consumes this library and exercises producers, decorated
-> processors, and a health endpoint against a real Redis.
+> A full reference application lives in
+> [`bymaxone/nest-queue-example`](https://github.com/bymaxone/nest-queue-example) —
+> an API and a web console exercising every public export against a real Redis.
+>
+> The `test/consumer-app` directory in this repository is **not** that. It is a
+> typecheck fixture: a few hundred lines of application-shaped code that CI
+> compiles against the freshly built library on every pull request, to catch an
+> ergonomic break in the decorator API that a signature test cannot see.
 
 ---
 

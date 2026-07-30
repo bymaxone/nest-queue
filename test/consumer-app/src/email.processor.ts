@@ -60,9 +60,7 @@ export class EmailProcessor {
    */
   @Process('digest')
   async handleDigest(job: Job<DigestEmailPayload, void>): Promise<void> {
-    this.logger.log(
-      `Sending digest email to ${job.data.email} with ${job.data.items.length} items`,
-    )
+    this.logger.log(`Sending digest email to ${job.data.email} with ${job.data.items.length} items`)
     // In production, call an email service here
   }
 
