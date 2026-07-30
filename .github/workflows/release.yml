@@ -1,27 +1,49 @@
 name: Release
 
+# Tag-driven release. Pushing a `v*.*.*` tag kicks off the publish flow; the
+# `workflow_dispatch` trigger is kept so an interrupted release can be re-run
+# manually from the Actions tab when needed. This workflow never runs during
+# normal development — only on a version tag.
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*.*.*'
-  workflow_dispatch:
 
-permissions:
-  contents: read
-
+# A release is a destructive, shared-state operation — only one at a time.
 concurrency:
   group: release
   cancel-in-progress: false
 
+# Default to read-only at the workflow level. The publish job widens to
+# `contents: write` (for the GitHub Release) and `id-token: write` (for the OIDC
+# trusted publisher exchange).
+permissions:
+  contents: read
+
 jobs:
   publish:
-    name: Publish to npm
+    name: Publish to npm and create GitHub Release
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # Only publish from a semver tag — a manual workflow_dispatch on a branch must never publish.
     if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+
+    # The `npm-publish` environment gates the run behind a manual approval and is
+    # itself restricted to `v*.*.*` tags (repo Settings → Environments). Even an
+    # accidentally pushed tag cannot publish without an explicit approval click.
+    environment:
+      name: npm-publish
+      url: https://www.npmjs.com/package/@bymax-one/nest-queue
+
+    # Required for npm OIDC trusted publishing (`id-token: write`) and for
+    # `gh release create` (`contents: write`). No `NPM_TOKEN` secret is needed —
+    # the publish exchanges the GitHub OIDC token for a short-lived npm
+    # credential via the Trusted Publisher configured on npmjs.com.
     permissions:
       contents: write
       id-token: write
+
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -30,6 +52,12 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          # Don't leave the contents:write token in .git/config — publish uses
+          # npm OIDC and `gh release` reads GH_TOKEN from env, so no git push
+          # needs the persisted credential.
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
@@ -44,35 +72,82 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify before publish
+      - name: Verify tag matches package.json version
+        # Guards against publishing a tag whose semver does not match the version
+        # committed to package.json — a mismatch always indicates a broken
+        # release and would otherwise ship the wrong metadata.
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION=${GITHUB_REF_NAME#v}
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Verify (typecheck · test:types · lint · tests · build)
         run: pnpm prepublishOnly
 
-      - name: Mutation gate (break 95)
-        run: NODE_OPTIONS=--max-old-space-size=4096 pnpm mutation
-
-      - name: Publish with provenance (OIDC)
-        run: pnpm publish --provenance --no-git-checks
-
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Extract changelog entry
-        id: changelog
-        env:
-          VERSION: ${{ steps.version.outputs.VERSION }}
+      - name: Release-shape gates (bundle size + type resolution + dogfood smoke test)
+        # prepublishOnly runs typecheck/lint/tests/build but NOT these
+        # release-shape gates, and this tag-driven job is the only place the
+        # publish happens. Enforce them here so a tag cannot publish artifacts
+        # that exceed the size budget or have a broken exports/tarball shape.
+        # `check:exports` cannot live in prepublishOnly: it packs the tarball
+        # itself, and the nested pack inside `pnpm publish` resolves to a path
+        # that does not exist.
         run: |
-          awk -v version="$VERSION" \
-            'index($0, "## [" version "]") == 1 {found=1; next} /^## \[/{if(found) exit} found{print}' \
-            CHANGELOG.md > /tmp/release-notes.md
+          pnpm size
+          pnpm check:exports
+          node scripts/dogfood-smoke-test.mjs
+
+      - name: Publish to npm with provenance
+        # OIDC trusted publishing — pnpm delegates to the npm CLI, which exchanges
+        # the GitHub OIDC token (`id-token: write` above) for a short-lived
+        # publish credential. `--no-git-checks` is required because the CI runner
+        # checks out a detached HEAD at the tag SHA.
+        # Skips gracefully when the version is already on npm: npm trusted
+        # publishing requires the package to exist, so the very first release is
+        # published from a maintainer's machine and its tag still runs this job.
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if npm view "@bymax-one/nest-queue@${PKG_VERSION}" version 2>/dev/null | grep -qF "$PKG_VERSION"; then
+            echo "Version ${PKG_VERSION} already published on npm — skipping publish step."
+          else
+            pnpm publish --provenance --no-git-checks
+          fi
+
+      - name: Extract release notes from CHANGELOG
+        # Pulls the section for the current tag out of CHANGELOG.md so the GitHub
+        # Release body stays in sync with the changelog. Falls back to a generic
+        # pointer when the section is not found.
+        id: changelog
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          NOTES=$(awk -v ver="$VERSION" '
+            /^## \[/ {
+              if (found) exit
+              if ($0 ~ "\\[" ver "\\]") { found=1; next }
+            }
+            found { print }
+          ' CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            NOTES="See [CHANGELOG.md](./CHANGELOG.md) for details."
+          fi
+          {
+            echo 'notes<<EOF'
+            echo "$NOTES"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e # v1.1.4
+        # Notes are passed via env var (NOT `${{ ... }}` interpolation) so that
+        # backticks, `$()`, and other shell metacharacters inside the CHANGELOG
+        # cannot be evaluated by bash — a script-injection vector that would
+        # otherwise let CHANGELOG content execute arbitrary commands on the runner.
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: ${{ github.ref_name }}
-          body_path: /tmp/release-notes.md
-          draft: false
-          prerelease: false
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: ${{ steps.changelog.outputs.notes }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "$RELEASE_NOTES"

@@ -32,15 +32,46 @@ jobs:
       mutation-source-globs: '^(src/)'
 
   verify:
+    # The job name is the status-check context required by the repository
+    # ruleset (`nest-queue-pr-and-ci-gates`). Renaming it silently blocks every
+    # PR — the required context stops reporting and merges wait forever. Add
+    # steps here freely; change this string only together with the ruleset.
     name: Verify build + size
     needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: bymaxone/.github/.github/actions/setup-node-pnpm@v1
+      - name: Type-level API tests
+        # Compiles test/types/ against src/, pinning the published signatures so
+        # a refactor that widens or loosens one fails here rather than silently.
+        run: pnpm test:types
       - name: Build all subpaths
         run: pnpm build
+      - name: Verify build output integrity
+        # Confirms every declared subpath produced both ESM and CJS bundles plus
+        # declarations in both formats. A missing artifact indicates a tsup
+        # misconfiguration that would ship a broken package to npm — and the
+        # `.d.cts` files in particular are what the `exports` map hands to a
+        # CommonJS consumer.
+        run: |
+          for subpath in server shared; do
+            for ext in mjs cjs d.ts d.cts; do
+              if [ ! -f "dist/$subpath/index.$ext" ]; then
+                echo "Missing dist/$subpath/index.$ext"
+                exit 1
+              fi
+            done
+          done
+          echo "Both subpaths produced ESM + CJS + .d.ts + .d.cts"
+      - name: Verify published type resolution
+        # The type-level API tests compile `src`, so they cannot catch a broken
+        # `exports` map: a consumer resolving the package through the packed
+        # tarball may still land on declarations for the wrong module format.
+        # `attw` packs the tarball and resolves every entrypoint the way each
+        # module resolution mode would.
+        run: pnpm check:exports
       - name: Bundle size budget
         run: pnpm size
 
@@ -50,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: bymaxone/.github/.github/actions/setup-node-pnpm@v1
       - name: Pre-pull pinned Redis image (cache for Testcontainers)
         run: docker pull redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
@@ -63,7 +94,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: bymaxone/.github/.github/actions/setup-node-pnpm@v1
       - name: Build library
         run: pnpm build
@@ -78,7 +109,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
       - name: Scan for verified secrets

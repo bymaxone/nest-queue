@@ -40,39 +40,51 @@ The phase order respects the dependency graph (Appendix A): connection before qu
 
 ### 1.2 Guiding principles
 
-| Principle | Practical application |
-|---|---|
-| **TS strict, zero `any`** | `strict: true`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`. Exceptions (BullMQ signatures that use `any`) are re-exported as `unknown` on the lib's public API. |
-| **JSDoc on every exported symbol** | Every `export` (class, function, interface, constant) carries JSDoc with `@example` where applicable. |
-| **English in code** | Identifiers, comments, JSDoc, error messages — all English. Docs under `docs/` are in English. |
-| **Zero `dependencies`** | `package.json` ships `"dependencies": {}`. Everything via peer dep — reduces supply chain surface. |
-| **Dependency inversion over the connection** | The lib accepts injected Redis (Mode A) or opens its own (Mode B). **Never reads env vars directly**. |
-| **Safe defaults** | `attempts: 3`, exponential backoff, `concurrency: 2`, 24h/7d retention. Override per option, always. |
-| **End-to-end typing** | `enqueue<TData, TResult>()`, `Job<TData, TResult>`, generic decorators. No `Job<any, any>` in the public API. |
-| **Fail fast, clear message** | Invalid options blow up in `forRoot()` with an actionable message, not via subtle runtime failure. |
-| **No deep barrel re-exports** | `src/server/index.ts` explicitly references each export — better tree-shaking. |
-| **Clean Code sizing & SRP** | Functions ≤ 50 lines, files ≤ 800 lines (200–400 typical); one responsibility per file/function; split by responsibility when over the limit. |
-| **Official docs first — never from memory** | Before coding against any library/SDK/CLI (BullMQ, ioredis, NestJS), re-verify the current official docs (`context7` → official site). Trained memory goes stale; BullMQ's API moves fast. |
-| **Layered architecture & reuse** | Every source file carries an `@fileoverview` + `@layer` header; reuse `@bymax-one/*` libs and BullMQ rather than reimplementing; DRY. |
-| **BullMQ floor `^5.16.0`** | The peer dep floor is `bullmq ^5.16.0` (where the Job Schedulers API landed; current release `5.79.1`). Because the lib uses Job Schedulers (not the removed `addRepeatable` API), it is forward-compatible with v6; promotion to `^5.16.0 \|\| ^6` happens once the E2E suite is green on v6 (see §6.5). |
-| **Conventional Commits** | `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`. Drives the semver bump on release. |
+| Principle                                    | Practical application                                                                                                                                                                                                                                                                                     |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **TS strict, zero `any`**                    | `strict: true`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`. Exceptions (BullMQ signatures that use `any`) are re-exported as `unknown` on the lib's public API.                                                                                                                             |
+| **JSDoc on every exported symbol**           | Every `export` (class, function, interface, constant) carries JSDoc with `@example` where applicable.                                                                                                                                                                                                     |
+| **English in code**                          | Identifiers, comments, JSDoc, error messages — all English. Docs under `docs/` are in English.                                                                                                                                                                                                            |
+| **Zero `dependencies`**                      | `package.json` ships `"dependencies": {}`. Everything via peer dep — reduces supply chain surface.                                                                                                                                                                                                        |
+| **Dependency inversion over the connection** | The lib accepts injected Redis (Mode A) or opens its own (Mode B). **Never reads env vars directly**.                                                                                                                                                                                                     |
+| **Safe defaults**                            | `attempts: 3`, exponential backoff, `concurrency: 2`, 24h/7d retention. Override per option, always.                                                                                                                                                                                                      |
+| **End-to-end typing**                        | `enqueue<TData, TResult>()`, `Job<TData, TResult>`, generic decorators. No `Job<any, any>` in the public API.                                                                                                                                                                                             |
+| **Fail fast, clear message**                 | Invalid options blow up in `forRoot()` with an actionable message, not via subtle runtime failure.                                                                                                                                                                                                        |
+| **No deep barrel re-exports**                | `src/server/index.ts` explicitly references each export — better tree-shaking.                                                                                                                                                                                                                            |
+| **Clean Code sizing & SRP**                  | Functions ≤ 50 lines, files ≤ 800 lines (200–400 typical); one responsibility per file/function; split by responsibility when over the limit.                                                                                                                                                             |
+| **Official docs first — never from memory**  | Before coding against any library/SDK/CLI (BullMQ, ioredis, NestJS), re-verify the current official docs (`context7` → official site). Trained memory goes stale; BullMQ's API moves fast.                                                                                                                |
+| **Layered architecture & reuse**             | Every source file carries an `@fileoverview` + `@layer` header; reuse `@bymax-one/*` libs and BullMQ rather than reimplementing; DRY.                                                                                                                                                                     |
+| **BullMQ floor `^5.16.0`**                   | The peer dep floor is `bullmq ^5.16.0` (where the Job Schedulers API landed; current release `5.79.1`). Because the lib uses Job Schedulers (not the removed `addRepeatable` API), it is forward-compatible with v6; promotion to `^5.16.0 \|\| ^6` happens once the E2E suite is green on v6 (see §6.5). |
+| **Conventional Commits**                     | `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`. Drives the semver bump on release.                                                                                                                                                                                                              |
 
 ### 1.3 Phase dashboard
 
 > **Status legend:** 📋 ToDo · 🔄 In Progress · 👀 Review · ✅ Done · ⛔ Blocked · 🟡 Partial
 
 **Overall progress:** ✅ 5 / 5 phases (100%) — 35 / 35 tasks (100%)
-**Active phase:** none (release-ready)
+**Active phase:** none (released)
 **Blocked:** none
 
-| ID | Phase | Status | Progress | Complexity | Last updated |
-|---|---|---|---|---|---|
-| 1 | [Foundation + ConnectionResolver + base QueueService](./tasks/phase-01-foundation.md) | ✅ Done | 8 / 8 | MEDIUM | 2026-06-26 |
-| 2 | [Workers — decorators + WorkerRegistry + Discovery](./tasks/phase-02-workers.md) | ✅ Done | 6 / 6 | MEDIUM | 2026-06-26 |
-| 3 | [Flows + Job Schedulers + Deduplication/Telemetry + Metrics](./tasks/phase-03-flows-schedulers-metrics.md) | ✅ Done | 6 / 6 | MEDIUM | 2026-06-27 |
-| 4 | [forRootAsync + Graceful Shutdown + E2E + Mutation](./tasks/phase-04-async-shutdown-e2e.md) | ✅ Done | 7 / 7 | HIGH | 2026-06-27 |
-| 5 | [Release v0.1.0 — docs, CI/CD, supply chain, publish](./tasks/phase-05-release.md) | ✅ Done | 8 / 8 | LOW | 2026-06-27 |
-| | **Total** | **✅ 5 / 5 phases** | **35 / 35 tasks** | — | — |
+> **Release outcome (2026-07-30).** The package shipped as **`1.0.0`**, not the `0.1.0`
+> this plan targets throughout. The version was raised during the release-readiness
+> audit to match the sibling `@bymax-one/*` libraries, which all start at `1.0.0`: a
+> `0.x` would signal an instability the 100%-coverage and 98.99%-mutation bar does not
+> match, and SemVer only starts carrying meaning at `1.0`. The `0.1.0` references below
+> are the historical record of what was planned; the shipped contract is
+> `technical_specification.md` and `CHANGELOG.md`.
+>
+> The same audit added the gates this plan did not anticipate — `check:exports` (attw),
+> `test:types`, and the dogfood smoke test — after finding that the `exports` map handed
+> ESM declarations to CommonJS consumers on both subpaths.
+
+| ID  | Phase                                                                                                      | Status              | Progress          | Complexity | Last updated |
+| --- | ---------------------------------------------------------------------------------------------------------- | ------------------- | ----------------- | ---------- | ------------ |
+| 1   | [Foundation + ConnectionResolver + base QueueService](./tasks/phase-01-foundation.md)                      | ✅ Done             | 8 / 8             | MEDIUM     | 2026-06-26   |
+| 2   | [Workers — decorators + WorkerRegistry + Discovery](./tasks/phase-02-workers.md)                           | ✅ Done             | 6 / 6             | MEDIUM     | 2026-06-26   |
+| 3   | [Flows + Job Schedulers + Deduplication/Telemetry + Metrics](./tasks/phase-03-flows-schedulers-metrics.md) | ✅ Done             | 6 / 6             | MEDIUM     | 2026-06-27   |
+| 4   | [forRootAsync + Graceful Shutdown + E2E + Mutation](./tasks/phase-04-async-shutdown-e2e.md)                | ✅ Done             | 7 / 7             | HIGH       | 2026-06-27   |
+| 5   | [Release v0.1.0 — docs, CI/CD, supply chain, publish](./tasks/phase-05-release.md)                         | ✅ Done             | 8 / 8             | LOW        | 2026-06-27   |
+|     | **Total**                                                                                                  | **✅ 5 / 5 phases** | **35 / 35 tasks** | —          | —            |
 
 > **No time estimate** — this plan targets execution by **AI agents**, so duration in human days does not apply. Relative complexity per phase is documented above and detailed per sub-step in the [Complexity Matrix in Appendix B](#appendix-b--complexity-matrix); use these signals to prioritize careful human review on HIGH-complexity phases.
 
@@ -267,7 +279,11 @@ Copy from `nest-auth/` / `nest-logger/` and adapt (`nest-auth` → `nest-queue`,
   },
   "packageManager": "pnpm@11.0.0",
   "engines": { "node": ">=24.0.0" },
-  "publishConfig": { "access": "public", "provenance": true, "registry": "https://registry.npmjs.org/" }
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  }
 }
 ```
 
@@ -355,8 +371,7 @@ src/shared/
  * Snapshot statuses BullMQ exposes via `Queue.getJobCounts()`.
  * Kept in sync with bullmq's internal status set.
  */
-export type JobStatus =
-  | 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'paused'
+export type JobStatus = 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'paused'
 ```
 
 **Skeleton — `src/shared/types/queue-metrics.types.ts`:**
@@ -367,8 +382,11 @@ import type { JobStatus } from './job-status.types'
 /** Instantaneous snapshot of a queue's job counts. */
 export interface QueueMetrics {
   queue: string
-  counts: Record<Extract<JobStatus, 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'paused'>, number>
-  collectedAt: string  // ISO 8601 UTC
+  counts: Record<
+    Extract<JobStatus, 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'paused'>,
+    number
+  >
+  collectedAt: string // ISO 8601 UTC
 }
 ```
 
@@ -714,8 +732,8 @@ export const DEFAULT_WORKER_CONCURRENCY = 2 as const
 export const DEFAULT_JOB_OPTIONS = {
   attempts: 3,
   backoff: { type: 'exponential', delay: 2000 },
-  removeOnComplete: { age: 24 * 3600, count: 1000 },  // 24h, 1000 entries
-  removeOnFail: { age: 7 * 24 * 3600 },                // 7d
+  removeOnComplete: { age: 24 * 3600, count: 1000 }, // 24h, 1000 entries
+  removeOnFail: { age: 7 * 24 * 3600 }, // 7d
 } as const satisfies JobsOptions
 
 export const DEFAULT_CONNECTION_READY_TIMEOUT_MS = 10_000 as const
@@ -790,11 +808,10 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 export function assertBlockingConnection(client: Redis): void {
   const actual = (client.options ?? {}).maxRetriesPerRequest
   if (actual !== null) {
-    throw new QueueException(
-      QUEUE_ERROR_CODES.CONNECTION_REQUIRES_NULL_RETRIES,
-      500,
-      { actualValue: actual, expectedValue: null },
-    )
+    throw new QueueException(QUEUE_ERROR_CODES.CONNECTION_REQUIRES_NULL_RETRIES, 500, {
+      actualValue: actual,
+      expectedValue: null,
+    })
   }
 }
 
@@ -835,7 +852,13 @@ export class QueueException extends HttpException {
     details?: Record<string, unknown>,
   ) {
     super(
-      { error: { code, message: QUEUE_ERROR_MESSAGES[code] ?? 'Queue error', details: details ?? null } },
+      {
+        error: {
+          code,
+          message: QUEUE_ERROR_MESSAGES[code] ?? 'Queue error',
+          details: details ?? null,
+        },
+      },
       statusCode,
     )
   }
@@ -874,7 +897,9 @@ export class ConnectionResolver implements OnModuleDestroy {
       this.mode = 'mode-a-byo'
       this.client = cfg.client
       if (!isClientUsable(this.client)) {
-        throw new QueueException(QUEUE_ERROR_CODES.CONNECTION_INVALID, 500, { status: this.client.status })
+        throw new QueueException(QUEUE_ERROR_CODES.CONNECTION_INVALID, 500, {
+          status: this.client.status,
+        })
       }
       const probe = duplicateConnection(this.client)
       try {
@@ -890,16 +915,23 @@ export class ConnectionResolver implements OnModuleDestroy {
     // maxRetriesPerRequest:null by duplicateConnection().
     this.mode = 'mode-b-owned'
     const timeoutMs = this.options.connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS
-    this.client = 'url' in cfg
-      ? new Redis(cfg.url, { ...(cfg.options ?? {}), lazyConnect: false })
-      : new Redis({ ...cfg.options, lazyConnect: false })
+    this.client =
+      'url' in cfg
+        ? new Redis(cfg.url, { ...(cfg.options ?? {}), lazyConnect: false })
+        : new Redis({ ...cfg.options, lazyConnect: false })
 
     await this.waitReady(timeoutMs)
   }
 
-  getClient(): Redis { return this.client }
-  getMode(): QueueConnectionMode { return this.mode }
-  isOwned(): boolean { return this.mode === 'mode-b-owned' }
+  getClient(): Redis {
+    return this.client
+  }
+  getMode(): QueueConnectionMode {
+    return this.mode
+  }
+  isOwned(): boolean {
+    return this.mode === 'mode-b-owned'
+  }
 
   async onModuleDestroy(): Promise<void> {
     if (this.isOwned() && this.client) {
@@ -920,8 +952,14 @@ export class ConnectionResolver implements OnModuleDestroy {
         this.client.off('ready', onReady)
         this.client.off('error', onError)
       }
-      const onReady = (): void => { cleanup(); resolve() }
-      const onError = (err: Error): void => { cleanup(); reject(err) }
+      const onReady = (): void => {
+        cleanup()
+        resolve()
+      }
+      const onError = (err: Error): void => {
+        cleanup()
+        reject(err)
+      }
       this.client.once('ready', onReady)
       this.client.once('error', onError)
     })
@@ -982,7 +1020,9 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
  */
 export function validateOptions(opts: BymaxQueueModuleOptions): void {
   if (!opts.connection) {
-    throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, 500, { reason: 'connection is required' })
+    throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, 500, {
+      reason: 'connection is required',
+    })
   }
   // Mutually-exclusive: cannot pass both `client` AND `url`/`options`.
   const cfg = opts.connection as Record<string, unknown>
@@ -990,18 +1030,26 @@ export function validateOptions(opts: BymaxQueueModuleOptions): void {
   const hasUrl = 'url' in cfg
   const hasOptionsOnly = !hasClient && !hasUrl && 'options' in cfg
   if (!hasClient && !hasUrl && !hasOptionsOnly) {
-    throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, 500, { reason: 'connection must specify client | url | options' })
+    throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, 500, {
+      reason: 'connection must specify client | url | options',
+    })
   }
-  if (hasClient && (hasUrl || 'options' in cfg && !hasOptionsOnly)) {
-    throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, 500, { reason: 'connection.client is mutually exclusive with url/options' })
+  if (hasClient && (hasUrl || ('options' in cfg && !hasOptionsOnly))) {
+    throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, 500, {
+      reason: 'connection.client is mutually exclusive with url/options',
+    })
   }
   const drainTimeout = opts.shutdown?.drainTimeoutMs
   if (drainTimeout !== undefined && drainTimeout <= 0) {
-    throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, 500, { reason: 'shutdown.drainTimeoutMs must be > 0' })
+    throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, 500, {
+      reason: 'shutdown.drainTimeoutMs must be > 0',
+    })
   }
   const cacheTtl = opts.metrics?.cacheTtlMs
   if (cacheTtl !== undefined && cacheTtl < 0) {
-    throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, 500, { reason: 'metrics.cacheTtlMs must be >= 0' })
+    throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, 500, {
+      reason: 'metrics.cacheTtlMs must be >= 0',
+    })
   }
 }
 ```
@@ -1146,7 +1194,9 @@ export class QueueService implements OnModuleDestroy {
     try {
       return await queue.addBulk(jobs as Array<BulkJob<TData>>)
     } catch (err) {
-      throw new QueueException(QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED, 500, { cause: (err as Error).message })
+      throw new QueueException(QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED, 500, {
+        cause: (err as Error).message,
+      })
     }
   }
 
@@ -1171,7 +1221,14 @@ export class QueueService implements OnModuleDestroy {
   /** Default (no-cache) implementation. MetricsService delegates here when metrics are enabled. */
   async getMetrics(queueName: string): Promise<QueueMetrics> {
     const queue = this.getOrCreateQueue(queueName)
-    const counts = await queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused')
+    const counts = await queue.getJobCounts(
+      'waiting',
+      'active',
+      'completed',
+      'failed',
+      'delayed',
+      'paused',
+    )
     return {
       queue: queueName,
       counts: counts as QueueMetrics['counts'],
@@ -1202,7 +1259,9 @@ export class QueueService implements OnModuleDestroy {
   }
 
   /** Internal — returns the cache for QueueLifecycle iteration on shutdown. */
-  getCachedQueues(): ReadonlyMap<string, Queue> { return this.queues }
+  getCachedQueues(): ReadonlyMap<string, Queue> {
+    return this.queues
+  }
 
   async onModuleDestroy(): Promise<void> {
     // QueueLifecycle orchestrates the full shutdown sequence.
@@ -1262,10 +1321,7 @@ import { ConfigurableModuleBuilder, DynamicModule, Module, Provider } from '@nes
 import type { BymaxQueueModuleOptions } from './interfaces/queue-module-options.interface'
 import { validateOptions } from './config/validate-options'
 import { applyDefaults } from './config/resolved-options'
-import {
-  BYMAX_QUEUE_OPTIONS,
-  BYMAX_QUEUE_RESOLVED_OPTIONS,
-} from './bymax-queue.constants'
+import { BYMAX_QUEUE_OPTIONS, BYMAX_QUEUE_RESOLVED_OPTIONS } from './bymax-queue.constants'
 import { ConnectionResolver } from './services/connection-resolver.service'
 import { QueueService } from './services/queue.service'
 
@@ -1274,18 +1330,14 @@ import { QueueService } from './services/queue.service'
  * class methods and the options token (MODULE_OPTIONS_TOKEN). `isGlobal` is mapped to
  * DynamicModule.global via setExtras — there is NO hand-written @Global decorator and NO forFeature stub.
  */
-export const {
-  ConfigurableModuleClass,
-  MODULE_OPTIONS_TOKEN,
-  OPTIONS_TYPE,
-  ASYNC_OPTIONS_TYPE,
-} = new ConfigurableModuleBuilder<BymaxQueueModuleOptions>({ moduleName: 'BymaxQueue' })
-  .setClassMethodName('forRoot')
-  .setExtras(
-    { isGlobal: true },
-    (definition, extras) => ({ ...definition, global: extras.isGlobal }),
-  )
-  .build()
+export const { ConfigurableModuleClass, MODULE_OPTIONS_TOKEN, OPTIONS_TYPE, ASYNC_OPTIONS_TYPE } =
+  new ConfigurableModuleBuilder<BymaxQueueModuleOptions>({ moduleName: 'BymaxQueue' })
+    .setClassMethodName('forRoot')
+    .setExtras({ isGlobal: true }, (definition, extras) => ({
+      ...definition,
+      global: extras.isGlobal,
+    }))
+    .build()
 
 @Module({})
 export class BymaxQueueModule extends ConfigurableModuleClass {
@@ -1325,7 +1377,12 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
     return {
       ...base,
       providers,
-      exports: [QueueService, ConnectionResolver, BYMAX_QUEUE_OPTIONS, BYMAX_QUEUE_RESOLVED_OPTIONS],
+      exports: [
+        QueueService,
+        ConnectionResolver,
+        BYMAX_QUEUE_OPTIONS,
+        BYMAX_QUEUE_RESOLVED_OPTIONS,
+      ],
     }
   }
 }
@@ -1385,13 +1442,27 @@ export { JOB_STATUS } from '../shared'
 
 ```typescript
 describe('ConnectionResolver', () => {
-  it('should accept a Mode A client with maxRetriesPerRequest=null', async () => { /* ... */ })
-  it('should throw CONNECTION_REQUIRES_NULL_RETRIES when client has retries=20', async () => { /* ... */ })
-  it('should throw CONNECTION_INVALID when Mode A client status is "end"', async () => { /* ... */ })
-  it('should open Mode B with URL and reach ready before timeout', async () => { /* ... */ })  // ioredis-mock
-  it('should reject with CONNECTION_TIMEOUT when ready not reached', async () => { /* ... */ })
-  it('should call quit() on Mode B in onModuleDestroy', async () => { /* ... */ })
-  it('should NOT touch Mode A client on shutdown', async () => { /* ... */ })
+  it('should accept a Mode A client with maxRetriesPerRequest=null', async () => {
+    /* ... */
+  })
+  it('should throw CONNECTION_REQUIRES_NULL_RETRIES when client has retries=20', async () => {
+    /* ... */
+  })
+  it('should throw CONNECTION_INVALID when Mode A client status is "end"', async () => {
+    /* ... */
+  })
+  it('should open Mode B with URL and reach ready before timeout', async () => {
+    /* ... */
+  }) // ioredis-mock
+  it('should reject with CONNECTION_TIMEOUT when ready not reached', async () => {
+    /* ... */
+  })
+  it('should call quit() on Mode B in onModuleDestroy', async () => {
+    /* ... */
+  })
+  it('should NOT touch Mode A client on shutdown', async () => {
+    /* ... */
+  })
 })
 ```
 
@@ -1408,9 +1479,11 @@ import { Module } from '@nestjs/common'
 import { BymaxQueueModule, QueueService } from './dist/server/index.mjs'
 
 @Module({
-  imports: [BymaxQueueModule.forRoot({
-    connection: { url: 'redis://localhost:6379' },
-  })],
+  imports: [
+    BymaxQueueModule.forRoot({
+      connection: { url: 'redis://localhost:6379' },
+    }),
+  ],
 })
 class AppModule {}
 
@@ -1545,7 +1618,14 @@ import { WORKER_EVENT_LISTENERS_METADATA_KEY } from './metadata-keys.constants'
 
 /** Worker-local events — fired by THIS worker's process; the handler receives the full `Job`. */
 export type WorkerEventName =
-  | 'completed' | 'failed' | 'progress' | 'active' | 'stalled' | 'closing' | 'closed' | 'error'
+  | 'completed'
+  | 'failed'
+  | 'progress'
+  | 'active'
+  | 'stalled'
+  | 'closing'
+  | 'closed'
+  | 'error'
 
 /**
  * Marks a method as a worker-local event listener. No extra Redis connection is needed —
@@ -1558,7 +1638,11 @@ export function OnWorkerEvent(eventName: WorkerEventName): MethodDecorator {
     const existing: QueueEventListenerMetadata[] =
       Reflect.getMetadata(WORKER_EVENT_LISTENERS_METADATA_KEY, target.constructor) ?? []
     const entry: QueueEventListenerMetadata = { eventName, methodKey: propertyKey }
-    Reflect.defineMetadata(WORKER_EVENT_LISTENERS_METADATA_KEY, [...existing, entry], target.constructor)
+    Reflect.defineMetadata(
+      WORKER_EVENT_LISTENERS_METADATA_KEY,
+      [...existing, entry],
+      target.constructor,
+    )
   }
 }
 ```
@@ -1572,8 +1656,16 @@ import { QUEUE_EVENT_LISTENERS_METADATA_KEY } from './metadata-keys.constants'
 
 /** Canonical BullMQ QueueEvents event names. */
 export type QueueEventName =
-  | 'completed' | 'failed' | 'active' | 'progress' | 'stalled'
-  | 'waiting' | 'delayed' | 'paused' | 'resumed' | 'cleaned'
+  | 'completed'
+  | 'failed'
+  | 'active'
+  | 'progress'
+  | 'stalled'
+  | 'waiting'
+  | 'delayed'
+  | 'paused'
+  | 'resumed'
+  | 'cleaned'
 
 /** Marks a method as a listener for a specific QueueEvents event of the parent @Processor's queue. */
 export function OnQueueEvent(eventName: QueueEventName): MethodDecorator {
@@ -1581,7 +1673,11 @@ export function OnQueueEvent(eventName: QueueEventName): MethodDecorator {
     const existing: QueueEventListenerMetadata[] =
       Reflect.getMetadata(QUEUE_EVENT_LISTENERS_METADATA_KEY, target.constructor) ?? []
     const entry: QueueEventListenerMetadata = { eventName, methodKey: propertyKey }
-    Reflect.defineMetadata(QUEUE_EVENT_LISTENERS_METADATA_KEY, [...existing, entry], target.constructor)
+    Reflect.defineMetadata(
+      QUEUE_EVENT_LISTENERS_METADATA_KEY,
+      [...existing, entry],
+      target.constructor,
+    )
   }
 }
 ```
@@ -1651,7 +1747,9 @@ export class WorkerRegistry implements OnModuleDestroy {
     config: ProgrammaticWorkerConfig<TData, TResult>,
   ): Promise<Worker<TData, TResult>> {
     if (this.workers.has(config.queueName)) {
-      throw new QueueException(QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR, 500, { queueName: config.queueName })
+      throw new QueueException(QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR, 500, {
+        queueName: config.queueName,
+      })
     }
 
     this.validateOptions(config.options)
@@ -1660,9 +1758,15 @@ export class WorkerRegistry implements OnModuleDestroy {
       connection: duplicateConnection(this.connection.getClient()),
       concurrency: config.options?.concurrency ?? DEFAULT_WORKER_CONCURRENCY,
       ...(config.options?.limiter ? { limiter: config.options.limiter } : {}),
-      ...(config.options?.lockDuration !== undefined ? { lockDuration: config.options.lockDuration } : {}),
-      ...(config.options?.stalledInterval !== undefined ? { stalledInterval: config.options.stalledInterval } : {}),
-      ...(config.options?.autorun !== undefined ? { autorun: config.options.autorun } : { autorun: true }),
+      ...(config.options?.lockDuration !== undefined
+        ? { lockDuration: config.options.lockDuration }
+        : {}),
+      ...(config.options?.stalledInterval !== undefined
+        ? { stalledInterval: config.options.stalledInterval }
+        : {}),
+      ...(config.options?.autorun !== undefined
+        ? { autorun: config.options.autorun }
+        : { autorun: true }),
     }
 
     try {
@@ -1670,7 +1774,9 @@ export class WorkerRegistry implements OnModuleDestroy {
       this.workers.set(config.queueName, worker as Worker)
       return worker
     } catch (err) {
-      throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, { cause: (err as Error).message })
+      throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, {
+        cause: (err as Error).message,
+      })
     }
   }
 
@@ -1685,13 +1791,17 @@ export class WorkerRegistry implements OnModuleDestroy {
     options?: WorkerOptions & { useWorkerThreads?: boolean }
   }): Promise<Worker> {
     if (this.workers.has(config.queueName)) {
-      throw new QueueException(QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR, 500, { queueName: config.queueName })
+      throw new QueueException(QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR, 500, {
+        queueName: config.queueName,
+      })
     }
     this.validateOptions(config.options)
     const bullOpts: BullWorkerOptions = {
       connection: duplicateConnection(this.connection.getClient()),
       concurrency: config.options?.concurrency ?? DEFAULT_WORKER_CONCURRENCY,
-      ...(config.options?.useWorkerThreads !== undefined ? { useWorkerThreads: config.options.useWorkerThreads } : {}),
+      ...(config.options?.useWorkerThreads !== undefined
+        ? { useWorkerThreads: config.options.useWorkerThreads }
+        : {}),
     }
     try {
       // BullMQ treats a file path/URL (not a function) as a sandboxed processor.
@@ -1699,7 +1809,9 @@ export class WorkerRegistry implements OnModuleDestroy {
       this.workers.set(config.queueName, worker)
       return worker
     } catch (err) {
-      throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, { cause: (err as Error).message })
+      throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, {
+        cause: (err as Error).message,
+      })
     }
   }
 
@@ -1715,7 +1827,9 @@ export class WorkerRegistry implements OnModuleDestroy {
   }
 
   /** Internal — used by QueueLifecycle to iterate during shutdown. */
-  getAll(): ReadonlyMap<string, Worker> { return this.workers }
+  getAll(): ReadonlyMap<string, Worker> {
+    return this.workers
+  }
 
   async onModuleDestroy(): Promise<void> {
     // Full graceful shutdown is orchestrated by QueueLifecycle.
@@ -1729,10 +1843,14 @@ export class WorkerRegistry implements OnModuleDestroy {
   private validateOptions(opts?: WorkerOptions): void {
     if (!opts) return
     if (opts.concurrency !== undefined && opts.concurrency < 1) {
-      throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, { reason: 'concurrency must be >= 1' })
+      throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, {
+        reason: 'concurrency must be >= 1',
+      })
     }
     if (opts.limiter && (opts.limiter.max < 1 || opts.limiter.duration < 1)) {
-      throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, { reason: 'limiter.max and limiter.duration must be >= 1' })
+      throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, {
+        reason: 'limiter.max and limiter.duration must be >= 1',
+      })
     }
   }
 }
@@ -1794,13 +1912,19 @@ export class QueueEventsRegistry implements OnModuleDestroy {
   getOrCreate(queueName: string): QueueEvents {
     const existing = this.events.get(queueName)
     if (existing) return existing
-    const qe = new QueueEvents(queueName, { connection: duplicateConnection(this.connection.getClient()) })
+    const qe = new QueueEvents(queueName, {
+      connection: duplicateConnection(this.connection.getClient()),
+    })
     this.events.set(queueName, qe)
     return qe
   }
 
-  list(): readonly string[] { return Array.from(this.events.keys()) }
-  getAll(): ReadonlyMap<string, QueueEvents> { return this.events }
+  list(): readonly string[] {
+    return Array.from(this.events.keys())
+  }
+  getAll(): ReadonlyMap<string, QueueEvents> {
+    return this.events
+  }
 
   async onModuleDestroy(): Promise<void> {
     for (const [name, qe] of this.events) {
@@ -1851,11 +1975,16 @@ export class ProcessorDiscoveryService implements OnModuleInit {
       const instance = wrapper.instance
       if (!instance || typeof instance !== 'object') continue
       const target = instance.constructor
-      const processorMeta: ProcessorMetadata | undefined = Reflect.getMetadata(PROCESSOR_METADATA_KEY, target)
+      const processorMeta: ProcessorMetadata | undefined = Reflect.getMetadata(
+        PROCESSOR_METADATA_KEY,
+        target,
+      )
       if (!processorMeta) continue
 
       if (this.registeredQueues.has(processorMeta.queueName)) {
-        throw new QueueException(QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR, 500, { queueName: processorMeta.queueName })
+        throw new QueueException(QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR, 500, {
+          queueName: processorMeta.queueName,
+        })
       }
       this.registeredQueues.add(processorMeta.queueName)
 
@@ -1867,7 +1996,10 @@ export class ProcessorDiscoveryService implements OnModuleInit {
         Reflect.getMetadata(QUEUE_EVENT_LISTENERS_METADATA_KEY, target) ?? []
 
       // Build dispatcher: jobName-specific first, then catch-all.
-      const dispatcher = this.buildDispatcher(instance as Record<string | symbol, unknown>, handlers)
+      const dispatcher = this.buildDispatcher(
+        instance as Record<string | symbol, unknown>,
+        handlers,
+      )
 
       const worker = await this.workers.register({
         queueName: processorMeta.queueName,
@@ -1876,11 +2008,14 @@ export class ProcessorDiscoveryService implements OnModuleInit {
       })
 
       // Worker-local listeners (@OnWorkerEvent) bind to the Worker — full Job, no extra connection.
-      const bind = (instance as Record<string | symbol, unknown>)
+      const bind = instance as Record<string | symbol, unknown>
       for (const { eventName, methodKey } of workerListeners) {
         const fn = bind[methodKey]
         if (typeof fn === 'function') {
-          worker.on(eventName as never, (fn as (...args: unknown[]) => unknown).bind(instance) as never)
+          worker.on(
+            eventName as never,
+            (fn as (...args: unknown[]) => unknown).bind(instance) as never,
+          )
         }
       }
 
@@ -1966,7 +2101,7 @@ return {
   ...base,
   imports: [DiscoveryModule],
   providers: [
-    ...providers,   // existing providers assembled above
+    ...providers, // existing providers assembled above
     WorkerRegistry,
     QueueEventsRegistry,
     ProcessorDiscoveryService,
@@ -2064,7 +2199,13 @@ pnpm test:cov
 // /tmp/smoke-phase2.mjs
 import { NestFactory } from '@nestjs/core'
 import { Module, Injectable } from '@nestjs/common'
-import { BymaxQueueModule, QueueService, Processor, Process, OnQueueEvent } from './dist/server/index.mjs'
+import {
+  BymaxQueueModule,
+  QueueService,
+  Processor,
+  Process,
+  OnQueueEvent,
+} from './dist/server/index.mjs'
 
 @Injectable()
 @Processor('demo', { concurrency: 3 })
@@ -2088,7 +2229,7 @@ class App {}
 const ctx = await NestFactory.createApplicationContext(App)
 const q = ctx.get(QueueService)
 await q.enqueue('demo', 'echo', { hi: 'there' })
-await new Promise(r => setTimeout(r, 1000))  // give worker time
+await new Promise((r) => setTimeout(r, 1000)) // give worker time
 await ctx.close()
 ```
 
@@ -2230,20 +2371,28 @@ export function validateRepeatOptions(repeat: JobSchedulerRepeatOptions): void {
   const hasPattern = 'pattern' in repeat
   const hasEvery = 'every' in repeat
   if (hasPattern === hasEvery) {
-    throw new QueueException(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS, 400, { reason: 'exactly one of pattern | every is required' })
+    throw new QueueException(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS, 400, {
+      reason: 'exactly one of pattern | every is required',
+    })
   }
   if (hasPattern) {
     try {
       CronExpressionParser.parse(repeat.pattern, repeat.tz ? { tz: repeat.tz } : {})
     } catch {
-      throw new QueueException(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS, 400, { reason: 'pattern must be a valid cron expression (5- or 6-field)' })
+      throw new QueueException(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS, 400, {
+        reason: 'pattern must be a valid cron expression (5- or 6-field)',
+      })
     }
   } else if (repeat.every <= 0) {
-    throw new QueueException(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS, 400, { reason: 'every must be > 0' })
+    throw new QueueException(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS, 400, {
+      reason: 'every must be > 0',
+    })
   }
   // BullMQ itself rejects a past endDate — surface it early when present.
   if (repeat.endDate !== undefined && new Date(repeat.endDate).getTime() <= Date.now()) {
-    throw new QueueException(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS, 400, { reason: 'endDate must be in the future' })
+    throw new QueueException(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS, 400, {
+      reason: 'endDate must be in the future',
+    })
   }
 }
 ```
@@ -2333,7 +2482,10 @@ import { QueueService } from './queue.service'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 
-interface CacheEntry { metrics: QueueMetrics; expiresAt: number }
+interface CacheEntry {
+  metrics: QueueMetrics
+  expiresAt: number
+}
 
 @Injectable()
 export class MetricsService {
@@ -2380,7 +2532,8 @@ export class MetricsService {
 ```typescript
 providers.push({
   provide: MetricsService,
-  useFactory: (qs: QueueService) => new MetricsService(qs, resolved.metrics.enabled, resolved.metrics.cacheTtlMs),
+  useFactory: (qs: QueueService) =>
+    new MetricsService(qs, resolved.metrics.enabled, resolved.metrics.cacheTtlMs),
   inject: [QueueService],
 })
 exports.push(MetricsService)
@@ -2461,7 +2614,12 @@ src/server/services/queue.service.spec.ts              # deduplication + telemet
 
 ```javascript
 // Cron Job Scheduler + metrics (idempotent by schedulerId)
-await queue.upsertJobScheduler('cleanup', 'nightly', { pattern: '0 3 * * *', tz: 'America/Sao_Paulo' }, { name: 'cleanup', data: { mode: 'soft' } })
+await queue.upsertJobScheduler(
+  'cleanup',
+  'nightly',
+  { pattern: '0 3 * * *', tz: 'America/Sao_Paulo' },
+  { name: 'cleanup', data: { mode: 'soft' } },
+)
 const metrics = await ctx.get(MetricsService).get('cleanup')
 console.log(metrics)
 // {queue:'cleanup', counts:{...}, collectedAt:'2026-...'}
@@ -2483,6 +2641,7 @@ pnpm typecheck && pnpm lint && pnpm test:cov && pnpm build && pnpm size
 ```
 
 Verify:
+
 - `dist/server/index.mjs` exports `FlowService`, `MetricsService`
 - Bundle still ≤ 18 KiB brotli
 
@@ -2636,7 +2795,9 @@ export class QueueLifecycle implements OnModuleDestroy {
         await this.closeWorkerWithTimeout(worker, drainTimeoutMs)
         drained++
       } catch (err) {
-        this.logger.warn(`Worker "${name}" did not close within ${drainTimeoutMs}ms — forcing close`)
+        this.logger.warn(
+          `Worker "${name}" did not close within ${drainTimeoutMs}ms — forcing close`,
+        )
         await worker.close(true).catch(() => undefined)
       }
     }
@@ -2647,7 +2808,9 @@ export class QueueLifecycle implements OnModuleDestroy {
     // 3. Optional drain
     if (this.resolved.shutdown.drainOnShutdown) {
       for (const [name, queue] of this.queues.getCachedQueues()) {
-        await queue.drain().catch((err) => this.logger.warn(`drain failed for ${name}: ${(err as Error).message}`))
+        await queue
+          .drain()
+          .catch((err) => this.logger.warn(`drain failed for ${name}: ${(err as Error).message}`))
       }
     }
 
@@ -2655,18 +2818,23 @@ export class QueueLifecycle implements OnModuleDestroy {
     await this.flow.onModuleDestroy().catch(() => undefined)
 
     // 5. Close queues
-    for (const [, queue] of this.queues.getCachedQueues()) await queue.close().catch(() => undefined)
+    for (const [, queue] of this.queues.getCachedQueues())
+      await queue.close().catch(() => undefined)
 
     // 6. Disconnect Redis (Mode B only)
     await this.connection.onModuleDestroy().catch(() => undefined)
 
-    this.logger.log(`Queue shutdown complete in ${Date.now() - start}ms (drained ${drained} worker(s))`)
+    this.logger.log(
+      `Queue shutdown complete in ${Date.now() - start}ms (drained ${drained} worker(s))`,
+    )
   }
 
   private async closeWorkerWithTimeout(worker: Worker, timeoutMs: number): Promise<void> {
     await Promise.race([
       worker.close(),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('drain timeout')), timeoutMs)),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('drain timeout')), timeoutMs),
+      ),
     ])
   }
 }
@@ -2739,8 +2907,12 @@ import { Injectable } from '@nestjs/common'
 import { Processor, Process, OnQueueEvent } from '@bymax-one/nest-queue'
 import type { Job } from 'bullmq'
 
-interface EchoData { payload: string }
-interface EchoResult { echoed: string }
+interface EchoData {
+  payload: string
+}
+interface EchoResult {
+  echoed: string
+}
 
 @Injectable()
 @Processor('echo', { concurrency: 2 })
@@ -2787,27 +2959,39 @@ describe('BymaxQueueModule — E2E', () => {
   })
 
   describe('Scenario 2 — graceful shutdown', () => {
-    it('should wait for an in-flight job before closing', async () => { /* enqueue slow job, trigger app.close, assert job completed */ })
+    it('should wait for an in-flight job before closing', async () => {
+      /* enqueue slow job, trigger app.close, assert job completed */
+    })
   })
 
   describe('Scenario 3 — flow with 3 levels', () => {
-    it('should complete all descendants before root', async () => { /* flowService.add tree, await, assert order */ })
+    it('should complete all descendants before root', async () => {
+      /* flowService.add tree, await, assert order */
+    })
   })
 
   describe('Scenario 4 — Job Scheduler fires twice in 10s; re-upsert is idempotent', () => {
-    it('should fire an interval scheduler twice', async () => { /* upsertJobScheduler every: 4000, wait 10s, assert >= 2 completions; re-upsert same schedulerId → still one scheduler */ })
+    it('should fire an interval scheduler twice', async () => {
+      /* upsertJobScheduler every: 4000, wait 10s, assert >= 2 completions; re-upsert same schedulerId → still one scheduler */
+    })
   })
 
   describe('Scenario 5 — failure → exponential retry → eventual success', () => {
-    it('should retry failed jobs up to attempts', async () => { /* counter handler fails twice then succeeds, assert 3 attempts */ })
+    it('should retry failed jobs up to attempts', async () => {
+      /* counter handler fails twice then succeeds, assert 3 attempts */
+    })
   })
 
   describe('Scenario 6 — deduplication collapses rapid enqueues', () => {
-    it('should process only one job for N duplicate enqueues', async () => { /* enqueue N with same deduplication.id, assert one processed */ })
+    it('should process only one job for N duplicate enqueues', async () => {
+      /* enqueue N with same deduplication.id, assert one processed */
+    })
   })
 
   describe('Scenario 7 — connection-role policy', () => {
-    it('should coerce the Mode-A worker connection to maxRetriesPerRequest:null while the Queue connection keeps defaults', async () => { /* inspect duplicated worker conn vs Queue conn */ })
+    it('should coerce the Mode-A worker connection to maxRetriesPerRequest:null while the Queue connection keeps defaults', async () => {
+      /* inspect duplicated worker conn vs Queue conn */
+    })
   })
 })
 ```
@@ -2906,30 +3090,45 @@ pnpm mutation  # optional (pre-release gate)
 ```markdown
 # @bymax-one/nest-queue
 
-[![npm](https://img.shields.io/npm/v/@bymax-one/nest-queue)](...)  [![CI](...)](...)  [![Coverage](...)](...)  [![License: MIT](...)](...)
+[![npm](https://img.shields.io/npm/v/@bymax-one/nest-queue)](...) [![CI](...)](...) [![Coverage](...)](...) [![License: MIT](...)](...)
 
 NestJS dynamic module wrapping BullMQ — typed jobs, flows, job schedulers, deduplication, OpenTelemetry, graceful shutdown.
 
 ## Quick Start
+
 ## Mode A — Bring Your Own Connection (recommended with nest-cache)
+
 ## Mode B — Own Connection
+
 ## API Reference
-  - QueueService
-  - WorkerRegistry (incl. registerSandboxed)
-  - FlowService (opt-in)
-  - MetricsService (opt-in)
+
+- QueueService
+- WorkerRegistry (incl. registerSandboxed)
+- FlowService (opt-in)
+- MetricsService (opt-in)
+
 ## Decorators (@Processor, @Process, @OnWorkerEvent, @OnQueueEvent)
+
 ## Job Schedulers (cron / interval)
+
 ## Deduplication & Telemetry
+
 ## Graceful Shutdown (at-least-once semantics, idempotency, DLQ)
+
 ## Subpaths
+
 | `.` (server) | …
-| `./shared`   | …
+| `./shared` | …
+
 ## Troubleshooting
-  - `CONNECTION_REQUIRES_NULL_RETRIES` → cache config
-  - jobs get stuck → drainTimeoutMs
+
+- `CONNECTION_REQUIRES_NULL_RETRIES` → cache config
+- jobs get stuck → drainTimeoutMs
+
 ## Limitations (link to spec §16)
+
 ## Contributing
+
 ## License
 ```
 
@@ -2961,6 +3160,7 @@ commitlint.config.cjs
 ## [0.1.0] — 2026-XX-XX
 
 ### Added
+
 - `BymaxQueueModule.forRoot()` and `.forRootAsync()` dynamic module (built on `ConfigurableModuleBuilder`; `isGlobal` mapped to `DynamicModule.global` via `setExtras`)
 - `QueueService` with typed `enqueue` (native `deduplication` options), `enqueueBulk`, `getJob`, `getJobs`, `getMetrics`, `pauseQueue/resumeQueue/cleanQueue`, and Job Schedulers `upsertJobScheduler/removeJobScheduler/getJobSchedulers`
 - `@Processor`, `@Process`, `@OnWorkerEvent` (worker-local, full `Job`), `@OnQueueEvent` (global) decorators + automatic discovery via `DiscoveryService`; `job.updateProgress()` + progress event
@@ -3160,6 +3360,7 @@ Phase 5 — Release                                                             
 ```
 
 Parallelization rules:
+
 - **§2.2** and **§2.3** can run in parallel (§2.3 references §2.2 types only in the module options).
 - **§3.1** can happen in parallel with **§3.2** (decorators only write metadata; the registry consumes them in §3.3).
 - **§4.1** / **§4.2** / **§4.3** are independent — three parallel workstreams once §3.7 closes.
@@ -3170,41 +3371,41 @@ Parallelization rules:
 
 ## Appendix B — Complexity Matrix
 
-| Sub-step | Complexity | Justification |
-|---|---|---|
-| §2.1 Scaffold | LOW | Adapted copy of nest-auth/nest-logger; 2 entries instead of 5. |
-| §2.2 Shared types/constants | LOW | Pure types without logic. |
-| §2.3 Interfaces | MEDIUM | The discriminated union `QueueConnectionConfig` needs care for narrowing to work. |
-| §2.4 Constants/DI tokens | LOW | Symbol + constants. |
-| §2.5 ConnectionResolver | HIGH | Dual-mode + validation + timeout + listener cleanup — high blast radius, every downstream test depends on this piece. |
-| §2.6 Resolved options + validate | MEDIUM | Validating an exclusive union (`client` vs `url`/`options`) with clear messages. |
-| §2.7 Base QueueService | MEDIUM | 7 methods + Queue cache; generic typing must propagate through to `Job<TData, TResult>`. |
-| §2.8 forRoot + index + tests + Phase 1 validation | MEDIUM | Integration of every provider + smoke test against local Redis. |
-| §3.1 Decorators | LOW | Only metadata via `Reflect.defineMetadata`. |
-| §3.2 WorkerRegistry | MEDIUM | `register/unregister`, options validation, connection `duplicate()`. |
-| §3.3 Discovery + QueueEventsRegistry | HIGH | Integration with NestJS `DiscoveryService`; jobName-specific vs catch-all dispatcher; binding listeners at runtime. |
-| §3.4 Module integration | LOW | Add providers + imports. |
-| §3.5 Concurrency warning | LOW | Flag + log in discovery. |
-| §3.6 Phase 2 tests | MEDIUM | Mock `DiscoveryService` + BullMQ Worker. |
-| §3.7 Phase 2 validation | LOW | Smoke test against local Redis. |
-| §4.1 FlowService | MEDIUM | Always registered but opt-in via an internal flag; ensureEnabled guard. |
-| §4.2 Job Schedulers | MEDIUM | Cron validation via `cron-parser` (5- and 6-field); map `JobSchedulerRepeatOptions` → BullMQ `upsertJobScheduler`; idempotent re-upsert. |
-| §4.3 MetricsService | MEDIUM | TTL cache + cross-queue aggregation + invalidate. |
-| §4.4 Health pattern docs | LOW | JSDoc/README only. |
-| §4.5 Phase 3 tests | MEDIUM | `jest.useFakeTimers` for TTL. |
-| §4.6 Phase 3 validation | LOW | Smoke test. |
-| §5.1 forRootAsync | HIGH | `useFactory` / `useClass` / `useExisting` / `inject`; must replicate sync exports without duplication. |
-| §5.2 QueueLifecycle | HIGH | Race conditions on shutdown; forced timeout; order matters (workers → events → drain → flow → queues → redis). |
-| §5.3 E2E Testcontainers | HIGH | Container boot, isolation between scenarios (obliterate), timing of async events. |
-| §5.4 Mutation baseline | MEDIUM | Configure Stryker + interpret survivors. |
-| §5.5 Phase 4 tests | MEDIUM | Lifecycle tests with Worker/QueueEvents mocks. |
-| §5.6 Phase 4 validation | LOW | Real `test:e2e`. |
-| §6.1 README | LOW | Documentation. |
-| §6.2 CHANGELOG/SECURITY/CLAUDE/AGENTS | LOW | Boilerplate copied/adapted from other portfolio libs. |
-| §6.3 CI workflows | MEDIUM | Workflows with Docker service + matrix; may break on the first PR. |
-| §6.4 Bundle budgets | LOW | Node script + brotli. |
-| §6.5 BullMQ v6 strategy notes | LOW | Docs only. |
-| §6.6 Publish v0.1.0 | LOW | Validated command sequence. |
+| Sub-step                                          | Complexity | Justification                                                                                                                            |
+| ------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| §2.1 Scaffold                                     | LOW        | Adapted copy of nest-auth/nest-logger; 2 entries instead of 5.                                                                           |
+| §2.2 Shared types/constants                       | LOW        | Pure types without logic.                                                                                                                |
+| §2.3 Interfaces                                   | MEDIUM     | The discriminated union `QueueConnectionConfig` needs care for narrowing to work.                                                        |
+| §2.4 Constants/DI tokens                          | LOW        | Symbol + constants.                                                                                                                      |
+| §2.5 ConnectionResolver                           | HIGH       | Dual-mode + validation + timeout + listener cleanup — high blast radius, every downstream test depends on this piece.                    |
+| §2.6 Resolved options + validate                  | MEDIUM     | Validating an exclusive union (`client` vs `url`/`options`) with clear messages.                                                         |
+| §2.7 Base QueueService                            | MEDIUM     | 7 methods + Queue cache; generic typing must propagate through to `Job<TData, TResult>`.                                                 |
+| §2.8 forRoot + index + tests + Phase 1 validation | MEDIUM     | Integration of every provider + smoke test against local Redis.                                                                          |
+| §3.1 Decorators                                   | LOW        | Only metadata via `Reflect.defineMetadata`.                                                                                              |
+| §3.2 WorkerRegistry                               | MEDIUM     | `register/unregister`, options validation, connection `duplicate()`.                                                                     |
+| §3.3 Discovery + QueueEventsRegistry              | HIGH       | Integration with NestJS `DiscoveryService`; jobName-specific vs catch-all dispatcher; binding listeners at runtime.                      |
+| §3.4 Module integration                           | LOW        | Add providers + imports.                                                                                                                 |
+| §3.5 Concurrency warning                          | LOW        | Flag + log in discovery.                                                                                                                 |
+| §3.6 Phase 2 tests                                | MEDIUM     | Mock `DiscoveryService` + BullMQ Worker.                                                                                                 |
+| §3.7 Phase 2 validation                           | LOW        | Smoke test against local Redis.                                                                                                          |
+| §4.1 FlowService                                  | MEDIUM     | Always registered but opt-in via an internal flag; ensureEnabled guard.                                                                  |
+| §4.2 Job Schedulers                               | MEDIUM     | Cron validation via `cron-parser` (5- and 6-field); map `JobSchedulerRepeatOptions` → BullMQ `upsertJobScheduler`; idempotent re-upsert. |
+| §4.3 MetricsService                               | MEDIUM     | TTL cache + cross-queue aggregation + invalidate.                                                                                        |
+| §4.4 Health pattern docs                          | LOW        | JSDoc/README only.                                                                                                                       |
+| §4.5 Phase 3 tests                                | MEDIUM     | `jest.useFakeTimers` for TTL.                                                                                                            |
+| §4.6 Phase 3 validation                           | LOW        | Smoke test.                                                                                                                              |
+| §5.1 forRootAsync                                 | HIGH       | `useFactory` / `useClass` / `useExisting` / `inject`; must replicate sync exports without duplication.                                   |
+| §5.2 QueueLifecycle                               | HIGH       | Race conditions on shutdown; forced timeout; order matters (workers → events → drain → flow → queues → redis).                           |
+| §5.3 E2E Testcontainers                           | HIGH       | Container boot, isolation between scenarios (obliterate), timing of async events.                                                        |
+| §5.4 Mutation baseline                            | MEDIUM     | Configure Stryker + interpret survivors.                                                                                                 |
+| §5.5 Phase 4 tests                                | MEDIUM     | Lifecycle tests with Worker/QueueEvents mocks.                                                                                           |
+| §5.6 Phase 4 validation                           | LOW        | Real `test:e2e`.                                                                                                                         |
+| §6.1 README                                       | LOW        | Documentation.                                                                                                                           |
+| §6.2 CHANGELOG/SECURITY/CLAUDE/AGENTS             | LOW        | Boilerplate copied/adapted from other portfolio libs.                                                                                    |
+| §6.3 CI workflows                                 | MEDIUM     | Workflows with Docker service + matrix; may break on the first PR.                                                                       |
+| §6.4 Bundle budgets                               | LOW        | Node script + brotli.                                                                                                                    |
+| §6.5 BullMQ v6 strategy notes                     | LOW        | Docs only.                                                                                                                               |
+| §6.6 Publish v0.1.0                               | LOW        | Validated command sequence.                                                                                                              |
 
 > **How to use this matrix:** sub-steps marked **HIGH** demand careful human review before merge and should be broken down into red/green/refactor in the relevant `docs/tasks/phase-NN-*.md` file. **MEDIUM** sub-steps support one task per sub-step with a checklist. **LOW** sub-steps can be grouped if they share context (e.g., all of §6.2 as a single task).
 
@@ -3212,50 +3413,50 @@ Parallelization rules:
 
 ## Appendix C — Reference Configs
 
-| File | Source (canonical) | Adaptation for nest-queue |
-|---|---|---|
-| `tsconfig.json` | `nest-auth/tsconfig.json` | Swap `paths` aliases — 2 subpaths (`@bymax-one/nest-queue`, `@bymax-one/nest-queue/shared`). |
-| `tsconfig.build.json` | `nest-auth/tsconfig.build.json` | Identical (extends tsconfig.json, excludes `**/*.spec.ts`, `test/`). |
-| `tsconfig.server.json` | `nest-auth/tsconfig.server.json` | `include: ['src/server/**/*']`. |
-| `tsconfig.e2e.json` | `nest-auth/tsconfig.e2e.json` | Includes `test/e2e/`; more permissive on `noUnusedParameters` for helpers. |
-| `tsconfig.jest.json` | `nest-auth/tsconfig.jest.json` | Identical. |
-| `jest.config.ts` | `nest-auth/jest.config.ts` | `moduleNameMapper` points to 2 subpaths; 100% line/branch on implemented files. |
-| `jest.coverage.config.ts` | `nest-auth/jest.coverage.config.ts` | Thresholds `100/100/100/100` (line/branch/function/statement). |
-| `jest.e2e.config.ts` | `nest-auth/jest.e2e.config.ts` | `rootDir: 'test/e2e'`; setup for Testcontainers boot. |
-| `jest.stryker.config.ts` | `nest-auth/jest.stryker.config.ts` | Identical. |
-| `stryker.config.json` | `nest-auth/stryker.config.json` | Thresholds: high 99, low 95, break 95 (target 100%). |
-| `tsup.config.ts` | (rewrite) | 2 entries (`server`, `shared`); externals: `bullmq`, `ioredis`, `@nestjs/*`, `reflect-metadata`. |
-| `eslint.config.mjs` | `nest-auth/eslint.config.mjs` | Copy; remove rules specific to `oauth/`, `crypto/`. |
-| `.prettierrc` | `nest-auth/.prettierrc` | Identical (singleQuote, no semicolons, 2-space). |
-| `.gitignore` / `.npmignore` | `nest-auth/.*ignore` | Identical. |
-| `scripts/check-size.mjs` | (rewrite) | 2 entries: `server` 18_432 (18 KiB) brotli, `shared` 2_500 brotli. |
-| `.github/workflows/ci.yml` | `nest-auth/.github/workflows/ci.yml` | Add Docker service for Testcontainers in the `e2e` job. |
-| `.github/workflows/codeql.yml` | `nest-auth/.github/workflows/codeql.yml` | Identical. |
-| `.github/workflows/release.yml` | `nest-auth/.github/workflows/release.yml` | Identical (publish with `--provenance`). |
-| `.github/workflows/scorecard.yml` | `nest-auth/.github/workflows/scorecard.yml` | Identical (OpenSSF Scorecard, target ≥ 7.0). |
-| `.github/workflows/osv-scanner.yml` | `nest-auth/.github/workflows/osv-scanner.yml` | OSV-Scanner dependency vulnerability scan (PR + weekly). |
-| `commitlint.config.cjs` | `nest-auth/commitlint.config.cjs` | Identical (Conventional Commits). |
-| `.github/copilot-instructions.md` + `instructions/*` + `agents/agent-code-reviewer.agent.md` | `nest-auth/.github/...` | Copy; adjust references to `nest-queue` docs. |
+| File                                                                                         | Source (canonical)                            | Adaptation for nest-queue                                                                        |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `tsconfig.json`                                                                              | `nest-auth/tsconfig.json`                     | Swap `paths` aliases — 2 subpaths (`@bymax-one/nest-queue`, `@bymax-one/nest-queue/shared`).     |
+| `tsconfig.build.json`                                                                        | `nest-auth/tsconfig.build.json`               | Identical (extends tsconfig.json, excludes `**/*.spec.ts`, `test/`).                             |
+| `tsconfig.server.json`                                                                       | `nest-auth/tsconfig.server.json`              | `include: ['src/server/**/*']`.                                                                  |
+| `tsconfig.e2e.json`                                                                          | `nest-auth/tsconfig.e2e.json`                 | Includes `test/e2e/`; more permissive on `noUnusedParameters` for helpers.                       |
+| `tsconfig.jest.json`                                                                         | `nest-auth/tsconfig.jest.json`                | Identical.                                                                                       |
+| `jest.config.ts`                                                                             | `nest-auth/jest.config.ts`                    | `moduleNameMapper` points to 2 subpaths; 100% line/branch on implemented files.                  |
+| `jest.coverage.config.ts`                                                                    | `nest-auth/jest.coverage.config.ts`           | Thresholds `100/100/100/100` (line/branch/function/statement).                                   |
+| `jest.e2e.config.ts`                                                                         | `nest-auth/jest.e2e.config.ts`                | `rootDir: 'test/e2e'`; setup for Testcontainers boot.                                            |
+| `jest.stryker.config.ts`                                                                     | `nest-auth/jest.stryker.config.ts`            | Identical.                                                                                       |
+| `stryker.config.json`                                                                        | `nest-auth/stryker.config.json`               | Thresholds: high 99, low 95, break 95 (target 100%).                                             |
+| `tsup.config.ts`                                                                             | (rewrite)                                     | 2 entries (`server`, `shared`); externals: `bullmq`, `ioredis`, `@nestjs/*`, `reflect-metadata`. |
+| `eslint.config.mjs`                                                                          | `nest-auth/eslint.config.mjs`                 | Copy; remove rules specific to `oauth/`, `crypto/`.                                              |
+| `.prettierrc`                                                                                | `nest-auth/.prettierrc`                       | Identical (singleQuote, no semicolons, 2-space).                                                 |
+| `.gitignore` / `.npmignore`                                                                  | `nest-auth/.*ignore`                          | Identical.                                                                                       |
+| `scripts/check-size.mjs`                                                                     | (rewrite)                                     | 2 entries: `server` 18_432 (18 KiB) brotli, `shared` 2_500 brotli.                               |
+| `.github/workflows/ci.yml`                                                                   | `nest-auth/.github/workflows/ci.yml`          | Add Docker service for Testcontainers in the `e2e` job.                                          |
+| `.github/workflows/codeql.yml`                                                               | `nest-auth/.github/workflows/codeql.yml`      | Identical.                                                                                       |
+| `.github/workflows/release.yml`                                                              | `nest-auth/.github/workflows/release.yml`     | Identical (publish with `--provenance`).                                                         |
+| `.github/workflows/scorecard.yml`                                                            | `nest-auth/.github/workflows/scorecard.yml`   | Identical (OpenSSF Scorecard, target ≥ 7.0).                                                     |
+| `.github/workflows/osv-scanner.yml`                                                          | `nest-auth/.github/workflows/osv-scanner.yml` | OSV-Scanner dependency vulnerability scan (PR + weekly).                                         |
+| `commitlint.config.cjs`                                                                      | `nest-auth/commitlint.config.cjs`             | Identical (Conventional Commits).                                                                |
+| `.github/copilot-instructions.md` + `instructions/*` + `agents/agent-code-reviewer.agent.md` | `nest-auth/.github/...`                       | Copy; adjust references to `nest-queue` docs.                                                    |
 
 ---
 
 ## Appendix D — Glossary
 
-| Term | Meaning in this lib |
-|---|---|
-| **Mode A** | Dual-mode connection — caller passes a ready `Redis` (typical: `BYMAX_CACHE_QUEUE_REDIS` from `nest-cache`). The lib does not close it. |
-| **Mode B** | Dual-mode connection — caller passes `url` or `options`; the lib opens its own `ioredis` with `maxRetriesPerRequest: null` and closes it on shutdown. |
+| Term                           | Meaning in this lib                                                                                                                                                                                                          |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Mode A**                     | Dual-mode connection — caller passes a ready `Redis` (typical: `BYMAX_CACHE_QUEUE_REDIS` from `nest-cache`). The lib does not close it.                                                                                      |
+| **Mode B**                     | Dual-mode connection — caller passes `url` or `options`; the lib opens its own `ioredis` with `maxRetriesPerRequest: null` and closes it on shutdown.                                                                        |
 | **DEFAULT_WORKER_CONCURRENCY** | Constant = 2 — a non-serial starting point vs BullMQ's silent `1`, not a magic optimum. Tune by workload: raise for I/O-bound handlers; for CPU-bound work keep it low and move to a sandboxed processor (§6.8 of the spec). |
-| **Drain timeout** | `options.shutdown.drainTimeoutMs` (default 30s) — window for workers to finish in-flight jobs before force-close. |
-| **drainOnShutdown** | DEV-ONLY flag that wipes `waiting`/`delayed` jobs on shutdown. Default `false`. |
-| **Job Scheduler** | Recurring job — cron (`pattern: '0 3 * * *'`) or interval (`every: 60000`), via `upsertJobScheduler`. Idempotent by `schedulerId`; supersedes the deprecated `addRepeatable` API (removed in BullMQ v6). |
-| **Flow** | Tree of jobs with parent/child relations — the parent waits for all children to complete. Opt-in via `flows.enabled`. |
-| **Discovery** | Scan of the Nest container (`DiscoveryService`) looking for classes with `PROCESSOR_METADATA_KEY` metadata to register workers on `onModuleInit`. |
-| **QueueEvents** | A dedicated BullMQ connection that receives events (`completed`, `failed`, …). One instance per queue, lazily created by `QueueEventsRegistry`. |
-| **Testcontainers** | JS lib that boots Docker containers during tests — used in the E2E suite for real Redis. |
+| **Drain timeout**              | `options.shutdown.drainTimeoutMs` (default 30s) — window for workers to finish in-flight jobs before force-close.                                                                                                            |
+| **drainOnShutdown**            | DEV-ONLY flag that wipes `waiting`/`delayed` jobs on shutdown. Default `false`.                                                                                                                                              |
+| **Job Scheduler**              | Recurring job — cron (`pattern: '0 3 * * *'`) or interval (`every: 60000`), via `upsertJobScheduler`. Idempotent by `schedulerId`; supersedes the deprecated `addRepeatable` API (removed in BullMQ v6).                     |
+| **Flow**                       | Tree of jobs with parent/child relations — the parent waits for all children to complete. Opt-in via `flows.enabled`.                                                                                                        |
+| **Discovery**                  | Scan of the Nest container (`DiscoveryService`) looking for classes with `PROCESSOR_METADATA_KEY` metadata to register workers on `onModuleInit`.                                                                            |
+| **QueueEvents**                | A dedicated BullMQ connection that receives events (`completed`, `failed`, …). One instance per queue, lazily created by `QueueEventsRegistry`.                                                                              |
+| **Testcontainers**             | JS lib that boots Docker containers during tests — used in the E2E suite for real Redis.                                                                                                                                     |
 
 ---
 
 > **Next step:** the per-phase task files under `docs/tasks/phase-NN-*.md` are derived from this plan applying the rule from §1.6 — one task per sub-step (or sub-divided into red/green/refactor for `HIGH` sub-steps).
-</content>
-</invoke>
+> </content>
+> </invoke>

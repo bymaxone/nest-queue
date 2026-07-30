@@ -26,10 +26,10 @@ by email.
 
 ## Supported Versions
 
-| Version | Support |
-|---|---|
-| `0.1.x` | Active — security fixes applied |
-| `< 0.1.0` | Pre-release — no support |
+| Version   | Support                         |
+| --------- | ------------------------------- |
+| `1.0.x`   | Active — security fixes applied |
+| `< 1.0.0` | Pre-release — no support        |
 
 ---
 
@@ -48,6 +48,16 @@ by email.
   `reflect-metadata`, `bullmq-otel`) — report those upstream to their maintainers
 - Vulnerabilities that require direct access to the Redis instance
 - Issues in the `examples/` directory (demonstration code, not published)
+
+---
+
+## Provenance
+
+The first release of a package cannot carry an npm provenance attestation: npm
+trusted publishing requires the package to already exist on the registry, so
+`1.0.0` was published from a maintainer's machine. Every release from `1.0.1`
+onward is published by the release workflow via OIDC and carries a signed SLSA
+attestation, verifiable with `npm audit signatures`.
 
 ---
 

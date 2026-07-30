@@ -8,11 +8,11 @@ Agent guidance for `@bymax-one/nest-queue`. This file mirrors `CLAUDE.md` and ap
 
 Before making any change, read these sections (use partial-read tools where available — the files are large):
 
-| Document | When to read |
-|---|---|
-| `docs/technical_specification.md` | Architecture, API contracts, design decisions |
-| `docs/development_plan.md` §1.2 | Guiding principles and coding standards |
-| `docs/tasks/` (relevant phase file) | Per-task acceptance criteria |
+| Document                            | When to read                                  |
+| ----------------------------------- | --------------------------------------------- |
+| `docs/technical_specification.md`   | Architecture, API contracts, design decisions |
+| `docs/development_plan.md` §1.2     | Guiding principles and coding standards       |
+| `docs/tasks/` (relevant phase file) | Per-task acceptance criteria                  |
 
 ---
 
@@ -34,16 +34,24 @@ Before making any change, read these sections (use partial-read tools where avai
 - Recurring jobs: `upsertJobScheduler`/`removeJobScheduler`/`getJobSchedulers` **only** — never `addRepeatable`/`removeRepeatable`.
 - `maxRetriesPerRequest: null` is applied **only** to worker/QueueEvents connections.
 - Cron patterns delegated to BullMQ's `cron-parser` — no hand-rolled regex.
+- The configured `prefix` must reach **`Queue`, `Worker`, `QueueEvents` and `FlowProducer`**. BullMQ defaults an omitted prefix to `bull`, so a partial application puts producers and consumers on separate keyspaces — jobs are enqueued and never consumed, with nothing thrown.
+- Every injectable constructor parameter carries an explicit `@Inject(TOKEN)`. The package ships as an esbuild bundle, which does not emit `design:paramtypes`, so reflection-based resolution passes here and fails in a consumer's build.
 
 ---
 
 ## Quality gates
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build && pnpm size
+pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && \
+  pnpm build && pnpm size && pnpm check:exports && pnpm smoke
 ```
 
 100% line/branch coverage on every implemented file is a hard gate on every PR.
+
+`test:types` pins the published signatures; `check:exports` resolves every entrypoint
+through the packed tarball (it cannot live in `prepublishOnly` — attw packs the tarball
+itself); `smoke` is the only gate that exercises the **built** artifact, which is where DI
+and `exports` defects surface.
 
 ---
 
