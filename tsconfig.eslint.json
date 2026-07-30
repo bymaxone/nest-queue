@@ -4,6 +4,6 @@
     "noEmit": true,
     "types": ["node", "jest", "reflect-metadata"]
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "test/**/*.ts"],
   "exclude": ["node_modules", "dist", "coverage"]
 }

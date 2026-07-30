@@ -24,7 +24,14 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "verbatimModuleSyntax": false
+    "verbatimModuleSyntax": false,
+    // The type-level API tests import through the package specifiers a consumer
+    // would use, so the assertions read exactly like consumer code. Mapping them
+    // to source keeps `pnpm test:types` independent of a prior `pnpm build`.
+    "paths": {
+      "@bymax-one/nest-queue": ["./src/server/index.ts"],
+      "@bymax-one/nest-queue/shared": ["./src/shared/index.ts"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "coverage", "**/*.spec.ts"]

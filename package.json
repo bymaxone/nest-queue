@@ -1,6 +1,6 @@
 {
   "name": "@bymax-one/nest-queue",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "NestJS dynamic module wrapping BullMQ — typed jobs, flows, job schedulers, deduplication, OpenTelemetry, graceful shutdown",
   "author": "Bymax One <support@bymax.one>",
   "license": "MIT",
@@ -20,34 +20,63 @@
     "README.md",
     "CHANGELOG.md"
   ],
+  "main": "./dist/server/index.cjs",
+  "module": "./dist/server/index.mjs",
+  "types": "./dist/server/index.d.cts",
   "exports": {
     ".": {
-      "types": "./dist/server/index.d.ts",
-      "import": "./dist/server/index.mjs",
-      "require": "./dist/server/index.cjs"
+      "import": {
+        "types": "./dist/server/index.d.ts",
+        "default": "./dist/server/index.mjs"
+      },
+      "require": {
+        "types": "./dist/server/index.d.cts",
+        "default": "./dist/server/index.cjs"
+      }
     },
     "./shared": {
-      "types": "./dist/shared/index.d.ts",
-      "import": "./dist/shared/index.mjs",
-      "require": "./dist/shared/index.cjs"
+      "import": {
+        "types": "./dist/shared/index.d.ts",
+        "default": "./dist/shared/index.mjs"
+      },
+      "require": {
+        "types": "./dist/shared/index.d.cts",
+        "default": "./dist/shared/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "shared": [
+        "./dist/shared/index.d.cts"
+      ]
     }
   },
   "scripts": {
     "build": "pnpm clean && tsup",
-    "lint": "eslint src",
-    "lint:fix": "eslint src --fix",
+    "lint": "eslint src scripts test",
+    "lint:fix": "eslint src scripts test --fix",
     "test": "jest",
     "test:cov": "jest --coverage",
+    "test:watch": "jest --watch",
     "test:e2e": "jest --config jest.e2e.config.ts",
+    "test:all": "pnpm test && pnpm test:e2e",
     "test:cov:all": "jest --config jest.coverage.config.ts --coverage",
+    "test:types": "tsc --noEmit -p tsconfig.typetest.json",
     "mutation": "stryker run",
+    "mutation:incremental": "stryker run --incremental",
     "mutation:dry-run": "stryker run --dryRunOnly",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.server.json",
     "size": "node scripts/check-size.mjs",
+    "smoke": "node scripts/dogfood-smoke-test.mjs",
+    "check:exports": "attw --pack .",
     "clean": "rm -rf dist coverage",
-    "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm lint && pnpm test:cov:all && pnpm build",
-    "release": "pnpm publish --provenance"
+    "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && pnpm build",
+    "release": "pnpm publish --provenance",
+    "prepare": "husky"
   },
+  "dependencies": {},
   "peerDependencies": {
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
@@ -62,6 +91,7 @@
     }
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
     "@commitlint/cli": "^19.5.0",
     "@commitlint/config-conventional": "^19.5.0",
     "@eslint/js": "^9.13.0",
@@ -75,10 +105,12 @@
     "bullmq": "^5.79.1",
     "eslint": "^9.13.0",
     "eslint-config-prettier": "^9.1.0",
+    "husky": "^9.1.7",
     "ioredis": "5.10.1",
     "ioredis-mock": "^8.9.0",
     "jest": "^30.0.0",
     "jest-environment-node": "^30.4.1",
+    "lint-staged": "^17.2.0",
     "prettier": "^3.3.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
@@ -104,13 +136,21 @@
     "graceful-shutdown",
     "job"
   ],
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,cjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
   "packageManager": "pnpm@11.0.0",
   "engines": {
     "node": ">=24.0.0"
   },
   "publishConfig": {
     "access": "public",
-    "provenance": true,
     "registry": "https://registry.npmjs.org/"
   }
 }
