@@ -19,9 +19,10 @@ trusted publishing requires the package to already exist.
   install. `msgpackr-extract` is a native optional dependency of BullMQ, and pnpm
   blocks build scripts by default — pnpm 10 warns and installs anyway, pnpm 11
   turns the same block into an error, so it appears on a pnpm upgrade with no
-  change on the consumer's side. Names whose dependency it is, gives both the
-  interactive and the declarative approval, and notes that skipping the build is
-  fine because `msgpackr` falls back to a pure-JavaScript implementation.
+  change on the consumer's side. The entry says whose dependency it is, shows both
+  the interactive and the declarative way to approve it, and notes that skipping
+  the build is fine because `msgpackr` falls back to a pure-JavaScript
+  implementation.
 
 ### Internal
 
