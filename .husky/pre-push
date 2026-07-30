@@ -1,4 +1,3 @@
-#!/usr/bin/env sh
 # Intentionally empty — do NOT delete this file.
 #
 # Husky's shim (.husky/_/h) bails with `[ ! -f "$s" ] && exit 0` before it sources
@@ -8,3 +7,7 @@
 #
 # The repo itself has no pre-push work of its own: CI gates the suite, and
 # lint-staged already ran at commit time.
+#
+# No shebang, here or in the sibling hooks: a husky v9 hook file is a plain command
+# list, sourced by the generated shim in .husky/_/ which carries the
+# `#!/usr/bin/env sh` itself. A shebang in a user hook file is the deprecated v8 form.

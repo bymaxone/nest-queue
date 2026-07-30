@@ -1830,10 +1830,10 @@ The package has **no** direct dependencies (`"dependencies": {}`). All functiona
 
 At the time of writing, the current BullMQ release is **`5.79.1`**. The lib's floor is **`^5.16.0`** because that is where the Job Schedulers API (the only recurring-jobs API this lib exposes, §8) landed.
 
-| BullMQ          | Status                                                                                                                                                                  | Decision             |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ---------------------------------------- | ---------------------------------------------------- |
-| **v5 (≥ 5.16)** | Current stable. Every API the lib uses (`Queue`, `Worker`, `FlowProducer`, `JobsOptions`, `getJobCounts`, `upsertJobScheduler`, `deduplication`, `Telemetry`) is GA.    | ✅ Official support. |
-| **v6**          | Removes the legacy repeatable-jobs API. **Because this lib already uses Job Schedulers (not `addRepeatable`), it is forward-compatible by design.** Promote to `^5.16.0 |                      | ^6.0.0` once the e2e suite passes on v6. | 🟢 Pre-positioned — no public-API breakage expected. |
+| BullMQ          | Status                                                                                                                                                                                                                | Decision                                             |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| **v5 (≥ 5.16)** | Current stable. Every API the lib uses (`Queue`, `Worker`, `FlowProducer`, `JobsOptions`, `getJobCounts`, `upsertJobScheduler`, `deduplication`, `Telemetry`) is GA.                                                  | ✅ Official support.                                 |
+| **v6**          | Removes the legacy repeatable-jobs API. **Because this lib already uses Job Schedulers (not `addRepeatable`), it is forward-compatible by design.** Promote to `^5.16.0 \|\| ^6.0.0` once the e2e suite passes on v6. | 🟢 Pre-positioned — no public-API breakage expected. |
 
 > **Why this matters:** the earlier draft built on `addRepeatable`/`removeRepeatable`, which v6 deletes — that would have forced a breaking change on the first v6 bump. Standardizing on Job Schedulers removes that landmine.
 
