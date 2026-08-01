@@ -1,6 +1,6 @@
 {
   "name": "@bymax-one/nest-queue",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "NestJS dynamic module wrapping BullMQ \u2014 typed jobs, flows, job schedulers, deduplication, OpenTelemetry, graceful shutdown",
   "author": "Bymax One <support@bymax.one>",
   "license": "MIT",

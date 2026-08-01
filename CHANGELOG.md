@@ -7,6 +7,55 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.5] — 2026-08-01
+
+Documentation only. `dist/` is byte-identical to `1.0.4` — verified by diffing a
+fresh build against the published tarball — so there is no runtime change.
+
+### Fixed
+
+- **The README's configuration examples did not compile in a strict project.**
+  Eight snippets passed `process.env.REDIS_URL` where a `string` is required:
+
+  ```
+  TS2322: Type 'string | undefined' is not assignable to type 'string'.
+  ```
+
+  `process.env.X` is `string | undefined` under `strict`, so anyone copying the
+  Quick Start into a strict TypeScript project — the configuration this library
+  itself uses and recommends — got a type error out of the box. Now shown with a
+  fallback, which is what the code has to do anyway:
+
+  ```ts
+  connection: {
+    url: process.env.REDIS_URL ?? 'redis://localhost:6379'
+  }
+  ```
+
+  Found by `pnpm check:published`, added in the same release, which compiles the
+  README's own snippets against the built package. Nobody had reported it, and
+  nothing before this would have.
+
+### Added
+
+- **`pnpm check:published`** — a gate that verifies the published surface matches
+  the documentation, before a tag rather than after it. It scaffolds a throwaway
+  consumer, symlinks the package into its own `node_modules` so resolution runs
+  through the `exports` map into `dist/`, and then checks that the README's links
+  resolve, that its TypeScript snippets and the type tests compile against the
+  built package, and that every `v*.*.*` tag has a `## [x.y.z]` CHANGELOG section.
+
+  Each of those exists because its absence let a defect reach npm: the 404 link
+  corrected in `1.0.3`, the exported type that rejected the README's own snippet
+  corrected in `1.0.4`, and a deleted heading that would have turned release notes
+  into the generic fallback.
+
+  It runs in CI, in `release.yml`, and inside `prepublishOnly` — the last one
+  because the first publish of a package is manual by design, which is precisely
+  the path that bypasses the tag workflow.
+
+---
+
 ## [1.0.4] — 2026-08-01
 
 ### Fixed
@@ -262,6 +311,9 @@ v6 peer range.
 
 ---
 
+[1.0.5]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.5
+[1.0.4]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.4
+[1.0.3]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.3
 [1.0.2]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.2
 [1.0.1]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.1
 [1.0.0]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.0
