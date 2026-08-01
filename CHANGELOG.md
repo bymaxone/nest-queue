@@ -7,6 +7,37 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.3] — 2026-08-01
+
+Documentation only. `dist/` is byte-identical to `1.0.2` — verified by unpacking
+the published tarball and diffing it against a fresh build — so there is no
+runtime change of any kind for consumers.
+
+### Fixed
+
+- **The "Example App" link in the README pointed at a path that no longer
+  exists.** It resolved to
+  `github.com/bymaxone/nest-queue/tree/main/examples/nest-queue-example`, a
+  directory that was renamed to `test/consumer-app` in this repository. The link
+  returned **404** for anyone reading the package page on npm, which is where a
+  README link matters most and where a broken one is least visible to us.
+
+  It now points at [`bymaxone/nest-queue-example`](https://github.com/bymaxone/nest-queue-example),
+  the actual reference application.
+
+### Changed
+
+- **The README no longer implies that `test/consumer-app` is a demo.** The two
+  artifacts had been sharing one name, and only one of them is something to copy
+  from:
+
+  |                                 | What it is                                                                                                                                                                                                |
+  | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `bymaxone/nest-queue-example`   | The reference application — an API and a web console exercising every public export against a real Redis. **Start here.**                                                                                 |
+  | `test/consumer-app` (this repo) | A typecheck fixture. CI compiles it against the freshly built library on every pull request to catch an ergonomic break in the decorator API that a signature test cannot see. Not published, not a demo. |
+
+---
+
 ## [1.0.2] — 2026-07-30
 
 ### Security
