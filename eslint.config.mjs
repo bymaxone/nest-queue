@@ -36,7 +36,12 @@ export default tseslint.config(
       // `no-undef` only knows the globals it is told about. Declared rather than
       // silenced with an inline disable, so the next script that uses it is
       // covered too.
-      globals: { console: 'readonly', process: 'readonly', fetch: 'readonly' },
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        fetch: 'readonly',
+        AbortSignal: 'readonly',
+      },
     },
     rules: {
       '@typescript-eslint/explicit-function-return-type': 'off',
