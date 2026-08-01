@@ -18,6 +18,7 @@ import type { Job } from 'bullmq'
 // type position (`typeof X`), so nothing here emits a runtime import.
 import type {
   BymaxQueueModule,
+  BymaxQueueModuleAsyncOptions,
   BymaxQueueModuleOptions,
   BulkJob,
   BYMAX_QUEUE_OPTIONS,
@@ -186,4 +187,77 @@ export type _CronPatternIsString = Expect<
 // The interval arm is milliseconds — a number, never a duration string.
 export type _IntervalIsNumber = Expect<
   Equal<Extract<JobSchedulerRepeatOptions, { every: number }>['every'], number>
+>
+
+// ---------------------------------------------------------------------------
+// Async options: the factory a consumer is documented to write must be
+// assignable to the exported interface.
+//
+// This is pinned because it was not, and nothing caught it. The interface
+// declared `(...args: unknown[])`, and a parameter typed `unknown` accepts no
+// narrower parameter under `strictFunctionTypes` — so `useFactory: (client:
+// Redis) => …`, the form the README and the module's own `@example` both show,
+// failed against `BymaxQueueModuleAsyncOptions` while compiling fine when
+// passed inline to `forRootAsync` (which NestJS types through
+// `ASYNC_OPTIONS_TYPE`). An exported type that rejects the documented usage of
+// the thing it describes is a defect in the published surface, and only a
+// consumer who annotates the object rather than inlining it would have hit it.
+// ---------------------------------------------------------------------------
+
+/** Stand-in for an injected provider; any nominal object type would do. */
+interface InjectedClient {
+  readonly connect: () => void
+}
+
+// The documented shape: a factory naming the type it expects to be injected.
+export type _AsyncFactoryAcceptsTypedParameter = Expect<
+  Extends<
+    { useFactory: (client: InjectedClient) => BymaxQueueModuleOptions },
+    BymaxQueueModuleAsyncOptions
+  >
+>
+
+// An async factory is equally acceptable — the return type is a union with the promise.
+export type _AsyncFactoryAcceptsPromise = Expect<
+  Extends<
+    { useFactory: (client: InjectedClient) => Promise<BymaxQueueModuleOptions> },
+    BymaxQueueModuleAsyncOptions
+  >
+>
+
+// Several injected providers, in the order `inject` declares them.
+export type _AsyncFactoryAcceptsSeveralParameters = Expect<
+  Extends<
+    { useFactory: (client: InjectedClient, prefix: string) => BymaxQueueModuleOptions },
+    BymaxQueueModuleAsyncOptions
+  >
+>
+
+// A factory that injects nothing.
+export type _AsyncFactoryAcceptsZeroParameters = Expect<
+  Extends<{ useFactory: () => BymaxQueueModuleOptions }, BymaxQueueModuleAsyncOptions>
+>
+
+// The factory stays CALLABLE with arguments. Method syntax buys the bivariance
+// that makes the cases above assignable; a `never[]` rest parameter would buy
+// the same assignability and silently cost this, since `never` accepts no
+// argument. NestJS calls the factory with the resolved `inject` values, and a
+// consumer may call it directly in a unit test.
+export type _AsyncFactoryStaysCallable = Expect<
+  Equal<
+    ReturnType<NonNullable<BymaxQueueModuleAsyncOptions['useFactory']>>,
+    Promise<BymaxQueueModuleOptions> | BymaxQueueModuleOptions
+  >
+>
+export type _AsyncFactoryAcceptsAnArgumentWhenCalled = Expect<
+  Extends<[InjectedClient], Parameters<NonNullable<BymaxQueueModuleAsyncOptions['useFactory']>>>
+>
+
+// The pre-1.0.4 variadic form still fits: widening the parameter type kept every
+// factory that already compiled, so no consumer has to touch working code.
+export type _AsyncFactoryStillAcceptsVariadicUnknown = Expect<
+  Extends<
+    { useFactory: (...args: unknown[]) => BymaxQueueModuleOptions },
+    BymaxQueueModuleAsyncOptions
+  >
 >

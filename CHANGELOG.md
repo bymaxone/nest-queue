@@ -7,6 +7,61 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.4] — 2026-08-01
+
+### Fixed
+
+- **`BymaxQueueModuleAsyncOptions.useFactory` rejected the factory this library
+  documents.** It was declared `(...args: unknown[]) => …`, and a parameter typed
+  `unknown` accepts no narrower parameter under `strictFunctionTypes`. So the
+  shape shown in the README and in `BymaxQueueModule`'s own `@example`:
+
+  ```ts
+  useFactory: (client: Redis) => ({ connection: { client } })
+  ```
+
+  failed to typecheck **against the exported interface**:
+
+  ```
+  TS2322: Type '(client: Redis) => …' is not assignable to
+          type '(...args: unknown[]) => …'
+  ```
+
+  Scope, precisely: `forRootAsync` is typed by NestJS's `ASYNC_OPTIONS_TYPE`, not
+  by this interface, so passing the object **inline** always compiled. Only a
+  consumer who annotated it — extracting the options into a
+  `const opts: BymaxQueueModuleAsyncOptions = { … }` — hit the error. The
+  interface was stricter than the module it describes.
+
+  It is now declared with **method syntax**. `strictFunctionTypes` makes
+  parameters contravariant for function-typed _properties_ but leaves method
+  parameters bivariant, so the interface accepts a factory that names its
+  injected types. This **widens** what is accepted: every factory that compiled
+  before still does, the variadic `(...args: unknown[])` form included. Nothing
+  needs changing in consumer code.
+
+  Method syntax rather than a looser parameter type, because the factory has to
+  stay **callable**: NestJS invokes it with the values `inject` resolves, and a
+  consumer may call it directly in a unit test. A `never[]` rest parameter would
+  have bought the same assignability and silently cost that —
+  `options.useFactory(client)` fails with `TS2345: Argument of type 'Redis' is
+not assignable to parameter of type 'never'`.
+
+  Pinned by seven cases in `test/types/public-api.test-d.ts` — typed parameter,
+  async, several parameters, zero parameters, the pre-1.0.4 variadic form, and
+  two for callability — where `useFactory` was previously pinned by nothing,
+  which is why this went unnoticed. Red-checked against **both** rejected
+  signatures: the original property form fails the assignability cases, and
+  `never[]` fails the callability ones.
+
+  No runtime change, verified rather than asserted: diffed against the published
+  `1.0.3` tarball, all four emitted runtime files (`server` and `shared`, `.mjs`
+  and `.cjs`) are byte-identical, and only `dist/server/index.d.ts` / `.d.cts`
+  differ. The altered source declares types only, so it produces no Stryker
+  mutants and the 99.06% score stands.
+
+---
+
 ## [1.0.3] — 2026-08-01
 
 Documentation only. `dist/` is byte-identical to `1.0.2` — verified by unpacking

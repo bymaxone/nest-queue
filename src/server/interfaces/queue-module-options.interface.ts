@@ -51,8 +51,29 @@ export interface BymaxQueueOptionsFactory {
 
 /** Asynchronous configuration mirroring the NestJS async dynamic-module pattern. */
 export interface BymaxQueueModuleAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
-  /** Factory returning the module options. */
-  useFactory?: (...args: unknown[]) => Promise<BymaxQueueModuleOptions> | BymaxQueueModuleOptions
+  /**
+   * Factory returning the module options. Its parameters are whatever `inject`
+   * resolves to, so declare them with the types you expect:
+   *
+   * ```ts
+   * useFactory: (client: Redis) => ({ connection: { client } })
+   * ```
+   *
+   * Declared with **method syntax** on purpose. `strictFunctionTypes` makes
+   * parameters contravariant for function-typed *properties* but leaves method
+   * parameters bivariant, so this accepts a factory that names its injected
+   * types — which a property typed `(...args: unknown[]) => …` rejects, since
+   * `unknown` is assignable from no narrower parameter. That rejection is what
+   * made the form above fail against this interface while compiling when passed
+   * inline to `forRootAsync`.
+   *
+   * Bivariance is the right trade here rather than a looser parameter type:
+   * NestJS resolves these arguments from `inject` at runtime, so no signature
+   * can make them statically safe, and method syntax keeps the factory
+   * **callable** — `options.useFactory(client)` typechecks, which a
+   * `never[]` rest parameter would have broken.
+   */
+  useFactory?(...args: unknown[]): Promise<BymaxQueueModuleOptions> | BymaxQueueModuleOptions
   /** Class implementing the options factory. */
   useClass?: Type<BymaxQueueOptionsFactory>
   /** Existing provider implementing the options factory. */

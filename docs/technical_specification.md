@@ -656,8 +656,16 @@ export interface BymaxQueueOptionsFactory {
 }
 
 export interface BymaxQueueModuleAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
-  /** Factory function that returns options */
-  useFactory?: (...args: unknown[]) => Promise<BymaxQueueModuleOptions> | BymaxQueueModuleOptions
+  /**
+   * Factory function that returns options. Declared with METHOD syntax:
+   * `strictFunctionTypes` makes parameters contravariant for function-typed
+   * properties but leaves method parameters bivariant, so this accepts the
+   * documented `useFactory: (client: Redis) => …`, which a property typed
+   * `(...args: unknown[]) => …` rejects. Method syntax also keeps the factory
+   * callable — `options.useFactory(client)` typechecks. Pinned by
+   * `test/types/public-api.test-d.ts`.
+   */
+  useFactory?(...args: unknown[]): Promise<BymaxQueueModuleOptions> | BymaxQueueModuleOptions
 
   /** Class implementing BymaxQueueOptionsFactory */
   useClass?: Type<BymaxQueueOptionsFactory>
