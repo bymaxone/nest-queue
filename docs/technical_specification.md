@@ -2525,7 +2525,7 @@ Enqueue + process + typed result; bounded graceful shutdown (finish in-flight, f
 
 ### 19.4 Dogfood example
 
-`test/consumer-app` compiles application-shaped code against the built library (Mode A with `@bymax-one/nest-cache`, a `@Processor`, a Job Scheduler, a flow, and a `/health` queue endpoint), resolved through the `exports` map exactly as a consumer would. It runs on every pull request. It is a gate, not a demo — the reference application is the separate `bymaxone/nest-queue-example` repository.
+`test/consumer-app` compiles application-shaped code against the built library (Mode A with a dedicated `ioredis` client supplied by a local `RedisModule`, a `@Processor`, a Job Scheduler, a flow, and a `/health` queue endpoint), resolved through the `exports` map exactly as a consumer would. It runs on every pull request. It is a gate, not a demo — the reference application is the separate `bymaxone/nest-queue-example` repository.
 
 ---
 
