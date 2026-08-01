@@ -12,7 +12,7 @@ Phases 1–4 are complete: the full library is implemented and tested behind a 1
 
 Phase 5 ships the library publicly. It adds **no new runtime logic** — only the documentation, the repo-as-config governance files, the CI/CD and supply-chain workflows, the bundle-size gate, the pre-release mutation gate, the dogfood example, and the `0.1.0` publish to npm with provenance. The defining premise is that for a public NestJS/BullMQ library the **supply chain is part of the threat model**: the posture is explicit and verifiable end to end (SHA-pinned actions, least-privilege workflow permissions, TruffleHog secret scanning, OSV-Scanner advisory scanning, OpenSSF Scorecard transparency, committed lockfile, OIDC provenance), so a downstream consumer can trust what shipped and that it was built by this repo's release workflow.
 
-When Phase 5 is done: `README.md`/`CHANGELOG.md`/`SECURITY.md`/`CLAUDE.md`/`AGENTS.md` and the four Copilot review files are in place; `commitlint.config.cjs` enforces Conventional Commits; `ci.yml`/`codeql.yml`/`scorecard.yml`/`osv-scanner.yml`/`release.yml` are green and hardened; the `server` bundle is ≤ 18 KiB brotli and `shared` ≤ 2.5 KiB; the Stryker mutation score meets `break 95` and is recorded in `docs/mutation_testing_results.md`; the `nest-queue-example` dogfood app consumes the published surface; and `@bymax-one/nest-queue@0.1.0` is live on npm with an OIDC provenance attestation. **The public API surface is frozen at what `src/server/index.ts` and `src/shared/index.ts` already export.**
+When Phase 5 is done: `README.md`/`CHANGELOG.md`/`SECURITY.md`/`CLAUDE.md`/`AGENTS.md` and the four Copilot review files are in place; `commitlint.config.cjs` enforces Conventional Commits; `ci.yml`/`codeql.yml`/`scorecard.yml`/`osv-scanner.yml`/`release.yml` are green and hardened; the `server` bundle is ≤ 18 KiB brotli and `shared` ≤ 2.5 KiB; the Stryker mutation score meets `break 95` and is recorded in `docs/mutation_testing_results.md`; the `test/consumer-app` dogfood fixture consumes the built surface; and `@bymax-one/nest-queue@0.1.0` is live on npm with an OIDC provenance attestation. **The public API surface is frozen at what `src/server/index.ts` and `src/shared/index.ts` already export.**
 
 ---
 
@@ -48,7 +48,7 @@ When Phase 5 is done: `README.md`/`CHANGELOG.md`/`SECURITY.md`/`CLAUDE.md`/`AGEN
 | 5.3 | CI/CD + supply-chain workflows (ci/codeql/scorecard/osv-scanner/release)                        | ✅ Done | P0       | L    | 5.2                               |
 | 5.4 | Bundle budget + size gate (`scripts/check-size.mjs`)                                            | ✅ Done | P0       | S    | 4.7                               |
 | 5.5 | Mutation gate run (Stryker `break 95`) + mutation docs                                          | ✅ Done | P0       | M    | 4.7                               |
-| 5.6 | `nest-queue-example` dogfood app                                                                | ✅ Done | P1       | L    | 5.1, 5.3                          |
+| 5.6 | `test/consumer-app` dogfood fixture                                                             | ✅ Done | P1       | L    | 5.1, 5.3                          |
 | 5.7 | BullMQ v6 promotion notes (CHANGELOG version policy + README limitations)                       | ✅ Done | P1       | S    | 5.1, 5.2                          |
 | 5.8 | Publish `v0.1.0` (tag → release workflow → verify npm)                                          | ✅ Done | P0       | M    | 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7 |
 
@@ -588,7 +588,7 @@ Completion Protocol:
 
 ---
 
-### Task 5.6 — `nest-queue-example` dogfood app
+### Task 5.6 — `test/consumer-app` dogfood fixture
 
 - **Status**: ✅ Done
 - **Priority**: P1
@@ -597,7 +597,7 @@ Completion Protocol:
 
 #### Description
 
-Build the `nest-queue-example` dogfood application that consumes the published surface end-to-end — Mode A with `@bymax-one/nest-cache`, a `@Processor`, a Job Scheduler, a flow, and a `/health` queue endpoint — and runs in CI before a release is finalized so a contract change that breaks a consumer fails CI.
+Build the `test/consumer-app` dogfood fixture that consumes the built surface end-to-end — Mode A with a dedicated `ioredis` client, a `@Processor`, a Job Scheduler, a flow, and a `/health` queue endpoint — and runs in CI before a release is finalized so a contract change that breaks a consumer fails CI.
 
 #### Acceptance criteria
 
@@ -634,7 +634,7 @@ REQUIRED READING (only these sections):
   (the subpaths the example imports).
 
 TASK
-Build the `nest-queue-example` dogfood app and wire its build+lint into CI.
+Build the `test/consumer-app` dogfood fixture and wire its build+lint into CI.
 
 DELIVERABLES
 
@@ -854,6 +854,6 @@ and mark the project's release complete. 7. Append `- 5.8 ✅ <YYYY-MM-DD> — <
 - 5.3 ✅ 2026-06-27 — CI hardened: TruffleHog, E2E, Codecov; release.yml OIDC provenance + mutation gate; example CI job; all actions SHA-pinned
 - 5.4 ✅ 2026-06-27 — scripts/check-size.mjs: server 11 881 B / 18 432 B budget OK; shared 406 B / 2 500 B budget OK
 - 5.5 ✅ 2026-06-27 — Stryker 98.99% (break 95 satisfied); docs/mutation_testing_plan.md + docs/mutation_testing_results.md in place with 6 provable-equivalent survivors documented
-- 5.6 ✅ 2026-06-27 — nest-queue-example dogfood: Mode A, @Processor, upsertJobScheduler, FlowService flow, /health endpoint; builds + lints clean
+- 5.6 ✅ 2026-06-27 — test/consumer-app dogfood fixture: Mode A, @Processor, upsertJobScheduler, FlowService flow, /health endpoint; builds + lints clean
 - 5.7 ✅ 2026-06-27 — BullMQ version policy in CHANGELOG; v6 forward-compatibility note in README Limitations; no addRepeatable usage confirmed
 - 5.8 ✅ 2026-06-27 — package.json bumped to 0.1.0; release.yml OIDC provenance inert until tag; PR opened on feat/phase-5-release; tag and publish held for human approval
