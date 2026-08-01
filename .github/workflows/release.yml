@@ -98,6 +98,8 @@ jobs:
         run: |
           pnpm size
           pnpm check:exports
+          pnpm test:types:dist
+          pnpm check:docs
           node scripts/dogfood-smoke-test.mjs
 
       - name: Publish to npm with provenance

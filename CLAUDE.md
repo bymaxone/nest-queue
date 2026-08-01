@@ -45,13 +45,16 @@ Before making any change, read these sections (use `Read` with `offset`/`limit` 
 
 ```bash
 pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && \
-  pnpm build && pnpm size && pnpm check:exports && pnpm smoke
+  pnpm build && pnpm size && pnpm check:exports && pnpm test:types:dist && \
+  pnpm check:docs && pnpm smoke
 ```
 
 100% line/branch coverage on every implemented file is a hard gate. Mutation testing runs automatically post-merge on `main` via the shared reusable (`bymaxone/.github` → node-lib-ci) plus an optional manual `pnpm mutation`.
 
 - **`test:types`** compiles `test/types/public-api.test-d.ts`, which pins the published signatures. A new export, a new generic parameter, or a new union member belongs there.
 - **`check:exports`** runs `attw` against the packed tarball. It must **not** be added to `prepublishOnly`: attw packs the tarball itself, and the nested pack inside `pnpm publish` fails with `ENOENT`.
+- **`test:types:dist`** compiles the same type tests a second time, resolving the package through its `exports` map into `dist/` instead of through the tsconfig `paths` mapping to `src`. `test:types` alone cannot see a divergence between what the source declares and what the published `.d.ts` says — which is where the exported-type defect corrected in `1.0.4` lived.
+- **`check:docs`** reads the README's links, compiles its TypeScript snippets against the built package, and cross-checks every `v*.*.*` tag against a `## [x.y.z]` CHANGELOG section. Each of those three checks exists because its absence let a defect reach npm: a 404 link in `1.0.3`, a type that rejected the README's own snippet in `1.0.4`, and a deleted heading that would have turned release notes into the generic fallback.
 - **`smoke`** resolves the tarball from a real consumer in ESM _and_ CJS. It is the only gate that exercises the **built** artifact, so it is what catches DI or `exports` defects the source-based suite cannot see.
 
 ---

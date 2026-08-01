@@ -32,7 +32,11 @@ export default tseslint.config(
     files: ['**/*.mjs', '**/*.cjs'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {
-      globals: { console: 'readonly', process: 'readonly' },
+      // `fetch` is a Node global from 18 onward and this package requires 24, but
+      // `no-undef` only knows the globals it is told about. Declared rather than
+      // silenced with an inline disable, so the next script that uses it is
+      // covered too.
+      globals: { console: 'readonly', process: 'readonly', fetch: 'readonly' },
     },
     rules: {
       '@typescript-eslint/explicit-function-return-type': 'off',
