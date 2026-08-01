@@ -42,6 +42,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # `check:published` cross-checks every release tag against a CHANGELOG
+          # section. The default checkout is shallow and carries no tags, so the
+          # check would find nothing and pass — the silent no-op it exists to
+          # prevent. The script also fetches tags itself; this makes it explicit
+          # rather than dependent on the runner having credentials to do so.
+          fetch-depth: 0
       - uses: bymaxone/.github/.github/actions/setup-node-pnpm@v1
       - name: Type-level API tests
         # Compiles test/types/ against src/, pinning the published signatures so
