@@ -601,16 +601,16 @@ Build the `test/consumer-app` dogfood fixture that consumes the built surface en
 
 #### Acceptance criteria
 
-- [ ] The example wires `BymaxQueueModule.forRootAsync()` in **Mode A**, injecting a BullMQ-dedicated `ioredis` client from `@bymax-one/nest-cache` (`{ client: queueRedis }`).
+- [ ] The fixture wires `BymaxQueueModule.forRootAsync()` in **Mode A**, injecting a BullMQ-dedicated `ioredis` client supplied by a local `RedisModule` (`{ client: queueRedis }`).
 - [ ] It contains at least one `@Processor` + `@Process` handler, one Job Scheduler registered via `upsertJobScheduler` (cron or interval), one flow via the opt-in `FlowService`, and a `/health` endpoint that returns queue metrics.
-- [ ] The example builds and (where a Redis service is available) runs register-style enqueue → process happy paths; it is built + linted in a dedicated CI job so it cannot rot.
-- [ ] The example consumes the package by its public subpaths (`@bymax-one/nest-queue`, `@bymax-one/nest-queue/shared`), not deep imports.
-- [ ] The example is demonstration code (not published); a short README documents how to run it; timeless comments, no phase/task references.
+- [ ] The fixture builds and (where a Redis service is available) runs register-style enqueue → process happy paths; it is built + linted in a dedicated CI job so it cannot rot.
+- [ ] The fixture consumes the package by its public subpaths (`@bymax-one/nest-queue`, `@bymax-one/nest-queue/shared`), not deep imports.
+- [ ] The fixture is a compile-time gate, not a demo, and is never published; its README says so plainly and points at the separate reference application; timeless comments, no phase/task references.
 
 #### Files to create / modify
 
 - `test/consumer-app/` (a runnable NestJS app + `README.md`)
-- `.github/workflows/ci.yml` (an example build+lint job)
+- `.github/workflows/ci.yml` (a dedicated fixture typecheck job)
 
 #### Agent prompt
 
@@ -619,7 +619,7 @@ You are a senior NestJS engineer working on the nest-queue project.
 
 PROJECT: @bymax-one/nest-queue — a public NestJS/BullMQ module. The dogfood example consumes the
 published surface end-to-end and runs in CI so a contract change that breaks a consumer fails the
-build. It mirrors the recommended Mode-A integration with @bymax-one/nest-cache. Node >= 24, pnpm 11.
+build. It mirrors the recommended Mode-A integration with a caller-supplied client. Node >= 24, pnpm 11.
 
 CURRENT PHASE: 5 (Release) — Task 5.6 of 8 (MIDDLE)
 
@@ -629,7 +629,7 @@ PRECONDITIONS
 
 REQUIRED READING (only these sections):
 - `docs/technical_specification.md` § 19.4 "Dogfood example" (the exact consumer shape: Mode A with
-  nest-cache, a @Processor, a Job Scheduler, a flow, a /health endpoint).
+  a dedicated ioredis client, a @Processor, a Job Scheduler, a flow, a /health endpoint).
 - `docs/technical_specification.md` § 21 (the differentiators the example demonstrates) and § 14
   (the subpaths the example imports).
 
@@ -640,7 +640,7 @@ DELIVERABLES
 
 1. `test/consumer-app/` — a runnable NestJS app that:
    - Wires `BymaxQueueModule.forRootAsync()` in Mode A, injecting a BullMQ-dedicated `ioredis` client
-     from `@bymax-one/nest-cache` (`useFactory: (queueRedis) => ({ connection: { client: queueRedis } })`).
+     from a local `RedisModule` (`useFactory: (queueRedis) => ({ connection: { client: queueRedis } })`).
    - Defines a `@Processor('email')` + `@Process()` handler.
    - Registers one Job Scheduler via `QueueService.upsertJobScheduler` (cron or interval).
    - Defines one flow via the opt-in `FlowService`.

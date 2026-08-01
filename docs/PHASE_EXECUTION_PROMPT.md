@@ -408,10 +408,10 @@ and the Bymax Code-Craft Standard.
   provides that role itself.
 - **Current BullMQ API only** — recurring jobs via `upsertJobScheduler`/`removeJobScheduler`/
   `getJobSchedulers`; **never** `addRepeatable`/`removeRepeatable` (removed in v6). Cron parsing is
-  delegated to BullMQ (no `cron-parser` direct dep, no hand-rolled regex). `cleanQueue(queueName, grace,
-limit, status?)` mirrors `clean(grace, limit, type)`. Sandboxed processors are file-based
-  (`registerSandboxed`, no NestJS DI) — there is no `sandboxed: boolean`. The public surface never
-  exposes a method BullMQ has deprecated.
+  delegated to BullMQ (no `cron-parser` direct dep, no hand-rolled regex).
+  `cleanQueue(queueName, grace, limit, status?)` mirrors `clean(grace, limit, type)`. Sandboxed
+  processors are file-based (`registerSandboxed`, no NestJS DI) — there is no `sandboxed: boolean`.
+  The public surface never exposes a method BullMQ has deprecated.
 - **Module via `ConfigurableModuleBuilder`** — `forRoot`/`forRootAsync`; `isGlobal` mapped to
   `DynamicModule.global` via `setExtras`. No hand-written `@Global()`, no `forFeature` stub.
 - **Official docs first (context7)** before using any library/SDK/CLI — never from memory.
