@@ -51,8 +51,27 @@ export interface BymaxQueueOptionsFactory {
 
 /** Asynchronous configuration mirroring the NestJS async dynamic-module pattern. */
 export interface BymaxQueueModuleAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
-  /** Factory returning the module options. */
-  useFactory?: (...args: unknown[]) => Promise<BymaxQueueModuleOptions> | BymaxQueueModuleOptions
+  /**
+   * Factory returning the module options. Its parameters are whatever `inject`
+   * resolves to, so declare them with the types you expect:
+   *
+   * ```ts
+   * useFactory: (client: Redis) => ({ connection: { client } })
+   * ```
+   *
+   * The rest parameter is `never[]` rather than `unknown[]` so that a narrower
+   * factory is assignable. A parameter typed `unknown` accepts no narrower
+   * parameter under `strictFunctionTypes`, which made the form above — the one
+   * this library documents — fail to typecheck against this interface, while
+   * the same object passed inline to `forRootAsync` compiled. `never` is the
+   * bottom type, so it is assignable to any parameter type and every factory
+   * shape fits; `any[]` would do the same but is banned in this codebase.
+   *
+   * NestJS itself resolves the arguments at runtime, so no type here can make
+   * them safe — the honest choice is a signature that does not reject valid
+   * factories while pretending to.
+   */
+  useFactory?: (...args: never[]) => Promise<BymaxQueueModuleOptions> | BymaxQueueModuleOptions
   /** Class implementing the options factory. */
   useClass?: Type<BymaxQueueOptionsFactory>
   /** Existing provider implementing the options factory. */

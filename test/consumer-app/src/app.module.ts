@@ -32,37 +32,18 @@ import { HealthController } from './health.controller.js'
     }),
     BymaxQueueModule.forRootAsync({
       inject: [QUEUE_REDIS_CLIENT],
-      // The variadic signature and the narrowing below are NOT a style choice.
-      // `BymaxQueueModuleAsyncOptions.useFactory` is declared as
-      // `(...args: unknown[]) => …`, and a parameter of type `unknown` accepts
-      // no narrower parameter under `strictFunctionTypes` — so the shape both
-      // the README and the module's own `@example` show,
-      // `useFactory: (client: Redis) => …`, does not compile:
-      //
-      //   TS2322: Type '(client: Redis) => …' is not assignable to
-      //           type '(...args: unknown[]) => …'
-      //
-      // This is the fixture doing its job: it reproduces what a consumer must
-      // actually write. Tidying it away here would hide the defect rather than
-      // fix it. Once the declared parameter type accepts a narrower factory,
-      // this collapses to the one-liner the documentation already promises.
-      useFactory: (...args: unknown[]) => {
-        const queueRedis = args[0]
-        if (!(queueRedis instanceof Redis)) {
-          throw new TypeError(
-            `BymaxQueueModule.forRootAsync expected the QUEUE_REDIS_CLIENT provider ` +
-              `to resolve to an ioredis client, but received ${typeof queueRedis}. ` +
-              `Check that RedisModule is imported and exports QUEUE_REDIS_CLIENT.`,
-          )
-        }
-        return {
-          connection: { client: queueRedis },
-          isGlobal: true,
-          flows: { enabled: true },
-          metrics: { enabled: true, cacheTtlMs: 5_000 },
-          shutdown: { drainTimeoutMs: 30_000 },
-        }
-      },
+      // The parameter is named with the type `inject` resolves to, which is the
+      // shape the README and the module's own `@example` document. It compiles
+      // because `BymaxQueueModuleAsyncOptions.useFactory` takes `never[]`; while
+      // it took `unknown[]`, this exact line was rejected and the fixture had to
+      // narrow a variadic `unknown[]` by hand.
+      useFactory: (queueRedis: Redis) => ({
+        connection: { client: queueRedis },
+        isGlobal: true,
+        flows: { enabled: true },
+        metrics: { enabled: true, cacheTtlMs: 5_000 },
+        shutdown: { drainTimeoutMs: 30_000 },
+      }),
     }),
   ],
   controllers: [HealthController],

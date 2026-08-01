@@ -7,7 +7,48 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [1.0.3] — 2026-08-01
+## [1.0.4] — 2026-08-01
+
+### Fixed
+
+- **`BymaxQueueModuleAsyncOptions.useFactory` rejected the factory this library
+  documents.** It was declared `(...args: unknown[]) => …`, and a parameter typed
+  `unknown` accepts no narrower parameter under `strictFunctionTypes`. So the
+  shape shown in the README and in `BymaxQueueModule`'s own `@example`:
+
+  ```ts
+  useFactory: (client: Redis) => ({ connection: { client } })
+  ```
+
+  failed to typecheck **against the exported interface**:
+
+  ```
+  TS2322: Type '(client: Redis) => …' is not assignable to
+          type '(...args: unknown[]) => …'
+  ```
+
+  Scope, precisely: `forRootAsync` is typed by NestJS's `ASYNC_OPTIONS_TYPE`, not
+  by this interface, so passing the object **inline** always compiled. Only a
+  consumer who annotated it — extracting the options into a
+  `const opts: BymaxQueueModuleAsyncOptions = { … }` — hit the error. The
+  interface was stricter than the module it describes.
+
+  The parameter is now `never[]`. `never` is the bottom type, so it is assignable
+  to any parameter type and every factory shape fits, without `any`. This
+  **widens** the accepted type: every factory that compiled before still does,
+  including the variadic `(...args: unknown[])` form. Nothing needs changing in
+  consumer code.
+
+  Pinned by five cases in `test/types/public-api.test-d.ts` — typed parameter,
+  async, several parameters, zero parameters, and the pre-1.0.4 variadic form —
+  which previously pinned nothing for `useFactory`, and is why this went
+  unnoticed. Verified by reverting the signature: the new cases fail.
+
+  No runtime change, verified rather than asserted: diffed against the published
+  `1.0.3` tarball, all four emitted runtime files (`server` and `shared`, `.mjs`
+  and `.cjs`) are byte-identical, and only `dist/server/index.d.ts` / `.d.cts`
+  differ. The altered source declares types only, so it produces no Stryker
+  mutants and the 99.06% score stands.
 
 Documentation only. `dist/` is byte-identical to `1.0.2` — verified by unpacking
 the published tarball and diffing it against a fresh build — so there is no
