@@ -149,7 +149,7 @@ import { BymaxQueueModule } from '@bymax-one/nest-queue'
 @Module({
   imports: [
     BymaxQueueModule.forRoot({
-      connection: { url: process.env.REDIS_URL },
+      connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
       isGlobal: true,
     }),
   ],
@@ -259,7 +259,7 @@ Mode B lets the library own the Redis connections. Pass either a URL or raw iore
 ```typescript
 // URL form
 BymaxQueueModule.forRoot({
-  connection: { url: process.env.REDIS_URL },
+  connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
   isGlobal: true,
 })
 
@@ -267,9 +267,9 @@ BymaxQueueModule.forRoot({
 BymaxQueueModule.forRoot({
   connection: {
     options: {
-      host: process.env.REDIS_HOST,
+      host: process.env.REDIS_HOST ?? 'localhost',
       port: Number(process.env.REDIS_PORT),
-      password: process.env.REDIS_PASSWORD,
+      password: process.env.REDIS_PASSWORD ?? undefined,
       tls: {},
     },
   },
@@ -345,7 +345,7 @@ Enable flows in the module options and inject the service:
 
 ```typescript
 BymaxQueueModule.forRoot({
-  connection: { url: process.env.REDIS_URL },
+  connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
   flows: { enabled: true },
 })
 
@@ -370,7 +370,7 @@ Provide a per-queue snapshot with a configurable TTL cache:
 
 ```typescript
 BymaxQueueModule.forRoot({
-  connection: { url: process.env.REDIS_URL },
+  connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
   metrics: { enabled: true, cacheTtlMs: 5_000 },
 })
 
@@ -562,7 +562,7 @@ Pass a `bullmq-otel` telemetry instance (optional peer dep) to trace spans from 
 import { BullMQOtel } from 'bullmq-otel'
 
 BymaxQueueModule.forRoot({
-  connection: { url: process.env.REDIS_URL },
+  connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
   telemetry: new BullMQOtel('my-service', tracer),
 })
 ```
@@ -602,7 +602,7 @@ Tune `drainTimeoutMs` when jobs may run longer than 30 s:
 
 ```typescript
 BymaxQueueModule.forRoot({
-  connection: { url: process.env.REDIS_URL },
+  connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
   shutdown: { drainTimeoutMs: 60_000 },
 })
 ```

@@ -45,13 +45,15 @@ Before making any change, read these sections (use `Read` with `offset`/`limit` 
 
 ```bash
 pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && \
-  pnpm build && pnpm size && pnpm check:exports && pnpm smoke
+  pnpm build && pnpm size && pnpm check:exports && pnpm check:published && pnpm smoke
 ```
 
 100% line/branch coverage on every implemented file is a hard gate. Mutation testing runs automatically post-merge on `main` via the shared reusable (`bymaxone/.github` → node-lib-ci) plus an optional manual `pnpm mutation`.
 
 - **`test:types`** compiles `test/types/public-api.test-d.ts`, which pins the published signatures. A new export, a new generic parameter, or a new union member belongs there.
 - **`check:exports`** runs `attw` against the packed tarball. It must **not** be added to `prepublishOnly`: attw packs the tarball itself, and the nested pack inside `pnpm publish` fails with `ENOENT`.
+- **`check:published`** scaffolds a throwaway consumer, symlinks the package into its own `node_modules` so resolution runs through the `exports` map into `dist/`, and then verifies three things. The README's links resolve and its internal anchors match real headings. The README's TypeScript snippets **and** `test/types/` compile against the built package — `test:types` maps the package to `./src` through tsconfig `paths` and can never see a divergence between the source and the published `.d.ts`, which is where the exported-type defect corrected in `1.0.4` lived. And every `v*.*.*` tag has a `## [x.y.z]` CHANGELOG section, tags being an outside source of truth the file cannot contradict about itself. Each check exists because its absence let a defect reach npm.
+  It also runs inside `prepublishOnly`, so a manual `pnpm publish` cannot bypass it. Unlike `check:exports` it does not pack a tarball, so the nested-pack problem does not apply. In CI the job must check out with `fetch-depth: 0`, or the tag cross-check finds nothing and passes silently.
 - **`smoke`** resolves the tarball from a real consumer in ESM _and_ CJS. It is the only gate that exercises the **built** artifact, so it is what catches DI or `exports` defects the source-based suite cannot see.
 
 ---
