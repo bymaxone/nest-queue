@@ -52,7 +52,7 @@ This spec follows the cross-portfolio Bymax public-library standard (the same on
 7. **Repo-as-config files are mandatory deliverables** and appear in the package tree: `SECURITY.md`, `CLAUDE.md`, `AGENTS.md`, `commitlint.config.cjs`, and the four Copilot review files (`.github/copilot-instructions.md`, `.github/instructions/code.instructions.md`, `.github/instructions/tests.instructions.md`, `.github/agents/agent-code-reviewer.agent.md`).
 8. **Planning docs are English and kept in sync with this spec:** `development_plan.md` holds the phased plan + status dashboard, and detailed executable tasks live one-file-per-phase under `docs/tasks/phase-NN-<slug>.md` (the rust-auth layout). Each phase file carries a JIRA-style task index, acceptance criteria, exact file paths, and a self-contained agent prompt per task.
 9. **CI hard gates:** lint + typecheck + 100% coverage, CodeQL, OpenSSF Scorecard ≥ 7.0, OSV-Scanner, TruffleHog OSS (secret scan), and npm publish with **provenance** (OIDC trusted publishing). GitHub Actions are pinned by commit SHA.
-10. **A dogfood example app** (`nest-queue-example`) consumes the published package end-to-end before each release.
+10. **A consumer-shaped typecheck fixture** (`test/consumer-app`) compiles application code against the built package on every pull request.
 
 ---
 
@@ -2525,7 +2525,7 @@ Enqueue + process + typed result; bounded graceful shutdown (finish in-flight, f
 
 ### 19.4 Dogfood example
 
-`nest-queue-example` consumes the published tarball end-to-end (Mode A with `@bymax-one/nest-cache`, a `@Processor`, a Job Scheduler, a flow, and a `/health` queue endpoint) and runs in CI before a release is finalized.
+`test/consumer-app` compiles application-shaped code against the built library (Mode A with a dedicated `ioredis` client supplied by a local `RedisModule`, a `@Processor`, a Job Scheduler, a flow, and a `/health` queue endpoint), resolved through the `exports` map exactly as a consumer would. It runs on every pull request. It is a gate, not a demo — the reference application is the separate `bymaxone/nest-queue-example` repository.
 
 ---
 

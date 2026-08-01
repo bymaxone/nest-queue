@@ -75,7 +75,7 @@ main loop and keeps the chain alive between phases.
 
 **Why ONE implementer at a time is non-negotiable.** The lib's own test suite is bounded,
 but the Phase 4 **E2E suite spins a real Redis via Testcontainers** (one container) and the
-Phase 5 **`nest-queue-example` dogfood consumes the lib via `file:`** (every Jest worker
+Phase 5 **`test/consumer-app` dogfood fixture consumes the lib from the workspace** (every Jest worker
 reloads the package into its own module graph). Two phases building/testing at once — or
 fanned-out test agents — multiply memory by `workers × runners × agents` and saturate cores.
 **Never run two implementers, never fan out parallel test agents, and keep Jest `maxWorkers`
@@ -155,7 +155,7 @@ subagent you spawn, set the Agent tool `model`:
       Phase 2 (Workers — @Processor/@Process/@OnWorkerEvent/@OnQueueEvent + WorkerRegistry +
         DiscoveryService wiring on the established foundation),
       Phase 5 (Release — README/CHANGELOG/SECURITY/CLAUDE/AGENTS + 4 Copilot files, finalize CI,
-        bundle budgets, mutation gate, nest-queue-example dogfood, publish).
+        bundle budgets, mutation gate, test/consumer-app dogfood fixture, publish).
   • Fix subagents: ESCALATE to Opus (omit `model`) when a phase stalls on review/CI findings,
     even if its implementer was Sonnet — ESPECIALLY for any /security-review finding and for the
     DiscoveryService wiring / shutdown-race logic.
@@ -401,21 +401,23 @@ These derive from `docs/development_plan.md` (§1.2 Guiding principles, §1.4 Gl
 and the Bymax Code-Craft Standard.
 
 ### Dependencies & API surface
+
 - **Zero runtime deps** — `package.json` ships `"dependencies": {}`. `bullmq ^5.16`, `ioredis ^5`,
   `@nestjs/common ^11`, `@nestjs/core ^11`, `reflect-metadata ^0.2` are **peer** deps; `bullmq-otel ^1`
   is an **optional** peer (`peerDependenciesMeta`). **`@nestjs/bullmq` is NOT a dependency** — this lib
   provides that role itself.
 - **Current BullMQ API only** — recurring jobs via `upsertJobScheduler`/`removeJobScheduler`/
   `getJobSchedulers`; **never** `addRepeatable`/`removeRepeatable` (removed in v6). Cron parsing is
-  delegated to BullMQ (no `cron-parser` direct dep, no hand-rolled regex). `cleanQueue(queueName, grace,
-  limit, status?)` mirrors `clean(grace, limit, type)`. Sandboxed processors are file-based
-  (`registerSandboxed`, no NestJS DI) — there is no `sandboxed: boolean`. The public surface never
-  exposes a method BullMQ has deprecated.
+  delegated to BullMQ (no `cron-parser` direct dep, no hand-rolled regex).
+  `cleanQueue(queueName, grace, limit, status?)` mirrors `clean(grace, limit, type)`. Sandboxed
+  processors are file-based (`registerSandboxed`, no NestJS DI) — there is no `sandboxed: boolean`.
+  The public surface never exposes a method BullMQ has deprecated.
 - **Module via `ConfigurableModuleBuilder`** — `forRoot`/`forRootAsync`; `isGlobal` mapped to
   `DynamicModule.global` via `setExtras`. No hand-written `@Global()`, no `forFeature` stub.
 - **Official docs first (context7)** before using any library/SDK/CLI — never from memory.
 
 ### Security (Appendix B)
+
 - **Per-role connection policy** — `maxRetriesPerRequest: null` ONLY on the duplicated worker/QueueEvents
   connection (`duplicate({ maxRetriesPerRequest: null })`); the Queue/FlowProducer connection keeps default
   retries. Mode A fails fast if a worker connection can't be coerced. Blocking commands are
@@ -431,10 +433,12 @@ and the Bymax Code-Craft Standard.
   OpenSSF Scorecard ≥ 7.0, committed lockfile, npm publish with **provenance** (OIDC trusted publishing).
 
 ### Error handling
+
 - **Typed errors only** — `QueueException` over the error catalog; response shape
   `{ error: { code, message, details } }`; HTTP status derived from the code map. No stringly-typed errors.
 
 ### Quality floor
+
 - **TS strict, zero `any`** (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`).
 - **100% line + branch coverage** on every implemented file (`pnpm test:cov:all`, `jest.coverage.config.ts`
   thresholds `100/100/100/100`) — hard gate.
@@ -451,13 +455,15 @@ and the Bymax Code-Craft Standard.
   implemented files, size budgets); `release.yml` is tag-driven and inert until Phase 5.
 
 ### Memory safety
+
 - **One implementer at a time; one suite at a time; bounded Jest workers** (`maxWorkers: '50%'` baked into
   the configs; `NODE_OPTIONS=--max-old-space-size=4096`). One Testcontainers Redis at a time (Phase 4 E2E).
 - **Never fan out parallel `Agent`/`Workflow` runs that execute a test suite**; never run multiple suites at
-  once. The Phase-5 `nest-queue-example` dogfood consumes the lib via `file:`, so its smoke reloads the
+  once. The Phase-5 `test/consumer-app` dogfood fixture consumes the lib from the workspace, so its smoke reloads the
   package into every Jest worker — keep it bounded too.
 
 ### Comments, git & commits
+
 - **Timeless, English-only comments** — never reference `Phase N` / `Task N` / plan stages in committed
   source, JSDoc, or `.github/**` docs-as-config (the runbook and the planning docs may; shipped code/config
   may not).
@@ -471,8 +477,10 @@ and the Bymax Code-Craft Standard.
 ## 5. Operational playbook (the lessons, as concrete procedure)
 
 ### 5.1 Merge gate — a conjunction, after a bounded grace window
+
 Never merge the instant CI goes green. A second bot review can land ~90 s after a push; merging too early
 turns it into a stray follow-up PR. Merge only when ALL hold:
+
 - **CI green** — `gh pr checks <N> --json bucket` shows **0 fail and 0 pending** (the pipeline has many
   required jobs — install, typecheck, lint, test:cov:all, build, size, e2e, codeql, scorecard, osv-scanner,
   secret-scan — all must pass).
@@ -484,6 +492,7 @@ turns it into a stray follow-up PR. Merge only when ALL hold:
   elapsed — do not eyeball it).
 
 After a fix-push, the poll has **two valid exit criteria**:
+
 - `COPILOT_REREVIEWED` — a review with `submittedAt` > HEAD `committedDate` arrived, **or**
 - `GRACE_NO_REVIEW` — `reviewRequests` empty **and** the grace window has elapsed with no new review (covers
   PRs where the bot doesn't re-review).
@@ -492,12 +501,14 @@ Don't idle during the window — sync main, read the next phase, pre-draft threa
 immediate when the gate opens.
 
 ### 5.2 Resolving bot threads (anti-stale)
+
 - **Re-fetch thread IDs FRESH each time**, and check `viewerCanResolve`. Thread IDs change when the bot
   re-reviews a new commit; reusing an old ID returns `NOT_FOUND` and looks (falsely) like a permission error.
 - **Respond + resolve one call at a time** — do NOT batch GraphQL mutations (one failure cancels its
   siblings). Verify `isResolved: true` before declaring a thread done. Cite the **real fix SHA** in each reply.
 
 ### 5.3 Autonomy backbone — never end a turn with a "dead gap"
+
 - The chain stays alive only while there is **always** either a tracked background job pending **or** a
   `ScheduleWakeup` armed. End a turn with neither and nothing re-invokes the loop — the chain stalls waiting
   for a human.
@@ -510,6 +521,7 @@ immediate when the gate opens.
   run are slow — give those phases a wider window before declaring death.
 
 ### 5.4 Worktree discipline
+
 - **Every file-writing subagent runs in its own worktree** (`isolation: "worktree"`), **one agent per
   directory**. Two agents in the same tree collide — uncommitted edits mix and the husky hook breaks on the
   blended tree (recovery: kill both, `git reset --hard` + `git clean -fd`, re-run isolated).
@@ -517,11 +529,12 @@ immediate when the gate opens.
   refuses the same branch in two worktrees. Remove the prior worktree first: `git worktree remove <path> --force`.
 - **Clean up on merge — always delete the merged PR's own branch** from BOTH the remote and the local repo.
   Order: `gh pr merge --squash --delete-branch` → `git worktree remove <path> --force` → `git branch -D
-  <branch>` → `git push origin --delete <branch>` (fallback) → verify with `git ls-remote --heads origin
-  <branch>` AND `git branch --list <branch>` (both must print nothing — §STEP 4). Prune stale worktrees:
+<branch>` → `git push origin --delete <branch>` (fallback) → verify with `git ls-remote --heads origin
+<branch>` AND `git branch --list <branch>` (both must print nothing — §STEP 4). Prune stale worktrees:
   `git worktree prune`.
 
 ### 5.5 Anti-hallucination — verify, never trust narration
+
 - An agent's final message **can confabulate state** (claims fixes it didn't make, invents a SHA). **Always
   confirm real state via git/gh**, never via the agent's prose.
 - **`TaskList` is unreliable here** (has returned empty with jobs still active). The real "still running"
@@ -530,6 +543,7 @@ immediate when the gate opens.
   the output files your **bash polls** write.
 
 ### 5.6 Concrete `gh` signal vocabulary
+
 - **CI status:** `gh pr checks <N> --repo bymaxone/nest-queue --json bucket` → count `pass` / `fail` / `pending`.
 - **Pending review:** `gh pr view <N> --json reviewRequests` (empty = nothing queued).
 - **Re-review detection:** `reviews[].submittedAt` vs `commits[-1].committedDate`.
@@ -547,8 +561,9 @@ All 5 phases run in **this** repo (`bymaxone/nest-queue`). The sequence (see `do
 `Phase 1` Foundation: module (ConfigurableModuleBuilder) + ConnectionResolver (per-role retries) + base
 QueueService — **CI created from day one** → `Phase 2` Workers: `@Processor`/`@Process`/`@OnWorkerEvent`/
 `@OnQueueEvent` + WorkerRegistry (+ `registerSandboxed`) + DiscoveryService → `Phase 3` Flows + Job Schedulers
-+ Deduplication + Telemetry + Metrics → `Phase 4` forRootAsync + Graceful Shutdown + E2E (Testcontainers Redis)
-+ Mutation baseline → **`Phase 5` Release v0.1.0**.
+
+- Deduplication + Telemetry + Metrics → `Phase 4` forRootAsync + Graceful Shutdown + E2E (Testcontainers Redis)
+- Mutation baseline → **`Phase 5` Release v0.1.0**.
 
 Dependency notes: the track is linear (1 → 2 → 3 → 4 → 5); every phase's `Depends on` references resolve to
 earlier task IDs (verified). Phase 4 is the highest-complexity phase (the shutdown drain race + the 7 E2E
@@ -559,12 +574,11 @@ Job Schedulers, deduplication, telemetry, graceful shutdown, the "why over `@nes
 troubleshooting), `CHANGELOG.md`/`SECURITY.md`/`CLAUDE.md`/`AGENTS.md` + the four Copilot review files +
 `commitlint.config.cjs`; FINALIZE & harden the CI workflows (created in Phase 1); enforce the bundle budgets;
 run the Stryker mutation gate (`break 95`) and record `docs/mutation_testing_results.md`; build the
-`nest-queue-example` dogfood app that consumes the published surface end-to-end (Mode A with
-`@bymax-one/nest-cache`, a `@Processor`, a Job Scheduler, a flow, a `/health` queue endpoint); then tag and
+`test/consumer-app` dogfood fixture that consumes the built surface end-to-end (Mode A with a
+dedicated `ioredis` client, a `@Processor`, a Job Scheduler, a flow, a `/health` queue endpoint); then tag and
 `pnpm publish --provenance` (OIDC trusted publishing). When all of Phase 1–5 are ✅ and CI is green on main,
 the orchestrator reports completion and STOPS.
 
 > **CI is not a final phase here — it exists from Phase 1** and gates every single PR. The job names are
 > contractual (branch protection references them); do not rename them mid-roadmap. (Publishing is this repo's
 > job; a separate `nest-queue-example` repo, if later split out, would consume the published package.)
-```

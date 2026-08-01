@@ -47,7 +47,7 @@ by email.
 - Vulnerabilities in peer dependencies (`bullmq`, `ioredis`, `@nestjs/*`,
   `reflect-metadata`, `bullmq-otel`) — report those upstream to their maintainers
 - Vulnerabilities that require direct access to the Redis instance
-- Issues in the `examples/` directory (demonstration code, not published)
+- Issues in `test/` (fixtures and the consumer-app typecheck harness, not published)
 
 ---
 

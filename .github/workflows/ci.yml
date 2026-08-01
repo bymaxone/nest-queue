@@ -88,8 +88,8 @@ jobs:
       - name: E2E tests
         run: pnpm test:e2e
 
-  example:
-    name: Build & lint example
+  consumer-app:
+    name: Consumer app typecheck
     needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -98,10 +98,16 @@ jobs:
       - uses: bymaxone/.github/.github/actions/setup-node-pnpm@v1
       - name: Build library
         run: pnpm build
-      - name: Build example
-        run: pnpm --filter nest-queue-example build
-      - name: Lint example
-        run: pnpm --filter nest-queue-example lint
+      - name: Typecheck the consumer app
+        # Compiles application-shaped code — a decorated @Processor class, a module
+        # wired through forRootAsync, a controller — against the FRESHLY BUILT
+        # library, resolved through the `exports` map exactly as a consumer would.
+        # This is the only gate that catches an ergonomic break in the decorator
+        # API: `test:types` compiles against `src` via `paths`, and the dogfood
+        # smoke test only checks runtime resolution.
+        run: pnpm --filter nest-queue-consumer-app build
+      - name: Lint the consumer app
+        run: pnpm --filter nest-queue-consumer-app lint
 
   secret-scan:
     name: Secret scan

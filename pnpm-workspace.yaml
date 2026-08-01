@@ -1,6 +1,6 @@
 packages:
   - '.'
-  - 'examples/*'
+  - 'test/consumer-app'
 
 verifyDepsBeforeRun: false
 onlyBuiltDependencies:
