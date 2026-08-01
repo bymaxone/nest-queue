@@ -1,6 +1,6 @@
 /**
- * @fileoverview Documentation gate — proves the README and CHANGELOG describe the
- * package that is actually about to ship.
+ * @fileoverview Published-surface gate — proves the README, the CHANGELOG and the exported
+ * types describe the package that is actually about to ship.
  * @layer scripts
  *
  * Every check here exists because its absence let a defect reach npm:
@@ -18,7 +18,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -27,9 +27,18 @@ const PKG = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 const README = readFileSync(join(ROOT, 'README.md'), 'utf8')
 const CHANGELOG = readFileSync(join(ROOT, 'CHANGELOG.md'), 'utf8')
 
-/** Where snippets are compiled: inside the consumer fixture, so `@bymax-one/*` resolves
- * through the published `exports` map against `dist/`, exactly as a consumer would. */
-const SNIPPET_DIR = join(ROOT, 'test', 'consumer-app', '.docs-snippets')
+/** A throwaway consumer built by this script. Nothing outside it is touched, and
+ * it is portable: the sibling libraries have no consumer fixture to borrow.
+ *
+ * The package is symlinked into its own `node_modules` so TypeScript resolves it
+ * through the published `exports` map into `dist/` — exactly what a consumer
+ * sees — while peers still resolve by walking up to the repository's own
+ * `node_modules`. */
+const GATE_DIR = join(ROOT, '.docs-gate')
+
+/** The published type tests, compiled here against `dist/` as well. Empty when a
+ * library has none — the check then covers only the README snippets. */
+const TYPE_TESTS_GLOB = existsSync(join(ROOT, 'test', 'types')) ? '../test/types/**/*.ts' : '*.ts'
 
 const failures = []
 /** Record a failure without stopping, so one run reports every problem. */
@@ -159,6 +168,41 @@ function checkChangelog() {
 }
 
 // ---------------------------------------------------------------------------
+// A throwaway consumer, so everything below resolves through `exports` → dist/.
+// ---------------------------------------------------------------------------
+
+/** Create `.docs-gate/` with the package symlinked into its own `node_modules`.
+ * `paths` is emptied: the repository tsconfig maps the package name to `./src`,
+ * which is precisely the mapping that has to be out of the way here. */
+function scaffoldConsumer() {
+  rmSync(GATE_DIR, { recursive: true, force: true })
+  const scope = join(GATE_DIR, 'node_modules', ...PKG.name.split('/').slice(0, -1))
+  mkdirSync(scope, { recursive: true })
+  symlinkSync(ROOT, join(GATE_DIR, 'node_modules', PKG.name), 'dir')
+  writeFileSync(
+    join(GATE_DIR, 'tsconfig.json'),
+    `${JSON.stringify(
+      {
+        extends: '../tsconfig.json',
+        compilerOptions: {
+          noEmit: true,
+          rootDir: '..',
+          baseUrl: '.',
+          paths: {},
+          noUnusedLocals: false,
+          // A README snippet may name a handler parameter it does not use; that is
+          // prose, not an API defect.
+          noUnusedParameters: false,
+        },
+        include: ['*.ts', TYPE_TESTS_GLOB],
+      },
+      null,
+      2,
+    )}\n`,
+  )
+}
+
+// ---------------------------------------------------------------------------
 // 3. The README's own snippets compile against the built package.
 // ---------------------------------------------------------------------------
 
@@ -172,23 +216,10 @@ function checkSnippets() {
     return
   }
 
-  rmSync(SNIPPET_DIR, { recursive: true, force: true })
-  mkdirSync(SNIPPET_DIR, { recursive: true })
+  scaffoldConsumer()
   subjects.forEach((code, i) => {
-    writeFileSync(join(SNIPPET_DIR, `snippet-${String(i + 1).padStart(2, '0')}.ts`), code)
+    writeFileSync(join(GATE_DIR, `snippet-${String(i + 1).padStart(2, '0')}.ts`), code)
   })
-  writeFileSync(
-    join(SNIPPET_DIR, 'tsconfig.json'),
-    `${JSON.stringify(
-      {
-        extends: '../tsconfig.json',
-        compilerOptions: { noEmit: true, rootDir: '.', noUnusedLocals: false },
-        include: ['*.ts'],
-      },
-      null,
-      2,
-    )}\n`,
-  )
 
   // A README snippet is written for a reader, not for a compiler: it may use a
   // variable introduced by the paragraph above it. Those diagnostics say nothing
@@ -200,7 +231,7 @@ function checkSnippets() {
   const isForeignModule = (line) => /error TS2307/.test(line) && !line.includes(PKG.name)
 
   try {
-    execFileSync('npx', ['tsc', '-p', SNIPPET_DIR], { cwd: ROOT, stdio: 'pipe' })
+    execFileSync('npx', ['tsc', '-p', GATE_DIR], { cwd: ROOT, stdio: 'pipe' })
     console.log(`  snippets: ${subjects.length} README snippets compile against dist/`)
   } catch (err) {
     const lines = `${err.stdout ?? ''}${err.stderr ?? ''}`
@@ -224,13 +255,13 @@ function checkSnippets() {
           : ''),
     )
   } finally {
-    rmSync(SNIPPET_DIR, { recursive: true, force: true })
+    rmSync(GATE_DIR, { recursive: true, force: true })
   }
 }
 
 // ---------------------------------------------------------------------------
 
-console.log(`Documentation gate — ${PKG.name}@${PKG.version}`)
+console.log(`Published-surface gate — ${PKG.name}@${PKG.version}`)
 await checkLinks()
 checkChangelog()
 checkSnippets()
@@ -240,4 +271,4 @@ if (failures.length > 0) {
   for (const f of failures) console.error(`  - ${f}`)
   process.exit(1)
 }
-console.log('\n✔ README and CHANGELOG describe the package that is about to ship.')
+console.log('\n✔ The documentation and the exported types match the built package.')

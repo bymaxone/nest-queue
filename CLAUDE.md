@@ -45,8 +45,7 @@ Before making any change, read these sections (use `Read` with `offset`/`limit` 
 
 ```bash
 pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && \
-  pnpm build && pnpm size && pnpm check:exports && pnpm test:types:dist && \
-  pnpm check:docs && pnpm smoke
+  pnpm build && pnpm size && pnpm check:exports && pnpm check:published && pnpm smoke
 ```
 
 100% line/branch coverage on every implemented file is a hard gate. Mutation testing runs automatically post-merge on `main` via the shared reusable (`bymaxone/.github` → node-lib-ci) plus an optional manual `pnpm mutation`.

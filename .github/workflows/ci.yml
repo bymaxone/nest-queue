@@ -72,18 +72,15 @@ jobs:
         # `attw` packs the tarball and resolves every entrypoint the way each
         # module resolution mode would.
         run: pnpm check:exports
-      - name: Verify the built package against the type tests
-        # `pnpm test:types` maps `@bymax-one/nest-queue` to `./src` through
-        # tsconfig `paths`, so it checks what the source declares and can never
-        # see a divergence between that and the `.d.ts` a consumer receives.
-        # This run resolves through the `exports` map into `dist/` instead, which
-        # is where the exported-type defect corrected in 1.0.4 was hiding.
-        run: pnpm test:types:dist
-      - name: Verify the documentation describes this package
-        # Reads the README's links, compiles its TypeScript snippets against the
-        # built package, and cross-checks every released tag against a CHANGELOG
-        # section. Each of those caught a defect only after it had been published.
-        run: pnpm check:docs
+      - name: Verify the published surface matches the documentation
+        # Three checks that each exist because a defect reached npm without them:
+        # the README's links resolve; its TypeScript snippets and the type tests
+        # compile against `dist/` resolved through the `exports` map (`test:types`
+        # maps the package to `./src`, so it cannot see a divergence between the
+        # source and the shipped `.d.ts`); and every `v*.*.*` tag has a CHANGELOG
+        # section, the tags being the outside source of truth a file cannot
+        # contradict about itself.
+        run: pnpm check:published
       - name: Bundle size budget
         run: pnpm size
 
