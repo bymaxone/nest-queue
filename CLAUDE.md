@@ -58,6 +58,18 @@ pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && \
 
 ---
 
+## Documentation changes ship
+
+**`README.md` and `CHANGELOG.md` are in `files`, so they are part of the published package.** A documentation fix that stays on `main` leaves the npm page — where people actually read it — still wrong. So a change to any shipped file gets a **patch release**, not a "next time" note:
+
+- Bump the version and add the `## [x.y.z]` CHANGELOG section in the same pull request.
+- State plainly that `dist/` is unchanged and **verify it** rather than asserting it: unpack the published tarball and diff it against a fresh build. "Documentation only" is a claim about the artifact, and the artifact is checkable.
+- It is a **patch**. There is no feature, and a minor would reach exactly the same installs anyway, since `^1.0.4` accepts `1.1.0` as readily as `1.0.5`.
+
+Files outside `files` — `scripts/`, `.github/`, `docs/`, `CLAUDE.md`, config — do not ship and do not justify a release on their own.
+
+---
+
 ## Public API surface
 
 The public surface is frozen at what `src/server/index.ts` and `src/shared/index.ts` export. Do not add or remove exports without a deliberate versioned decision.
