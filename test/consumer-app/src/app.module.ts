@@ -34,9 +34,11 @@ import { HealthController } from './health.controller.js'
       inject: [QUEUE_REDIS_CLIENT],
       // The parameter is named with the type `inject` resolves to, which is the
       // shape the README and the module's own `@example` document. It compiles
-      // because `BymaxQueueModuleAsyncOptions.useFactory` takes `never[]`; while
-      // it took `unknown[]`, this exact line was rejected and the fixture had to
-      // narrow a variadic `unknown[]` by hand.
+      // because `BymaxQueueModuleAsyncOptions.useFactory` is declared with method
+      // syntax, whose parameters stay bivariant under `strictFunctionTypes`.
+      // While it was a function-typed property taking `unknown[]`, this exact
+      // line was rejected and the fixture had to narrow a variadic `unknown[]`
+      // by hand.
       useFactory: (queueRedis: Redis) => ({
         connection: { client: queueRedis },
         isGlobal: true,
