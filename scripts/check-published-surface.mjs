@@ -93,7 +93,14 @@ async function checkLinks() {
         if (res.status === 405 || res.status === 403 || res.status === 429) {
           res = await fetch(probe, { method: 'GET', redirect: 'follow', headers })
         }
-        return res.ok ? null : `${url} → HTTP ${res.status}`
+        if (res.ok) return null
+        // A package page 404s until the first publish. Reported, never fatal:
+        // failing here would block the very release that makes the link true.
+        if (res.status === 404 && probe !== url) {
+          console.log(`  note: ${url} is not live yet — expected until the first publish`)
+          return null
+        }
+        return `${url} → HTTP ${res.status}`
       } catch (err) {
         return `${url} → ${err instanceof Error ? err.message : String(err)}`
       }
@@ -217,15 +224,42 @@ function checkSnippets() {
   }
 
   scaffoldConsumer()
+  /** file name → its source, so a diagnostic can be traced back to the snippet. */
+  const sources = new Map()
   subjects.forEach((code, i) => {
-    writeFileSync(join(GATE_DIR, `snippet-${String(i + 1).padStart(2, '0')}.ts`), code)
+    const name = `snippet-${String(i + 1).padStart(2, '0')}.ts`
+    sources.set(name, code)
+    writeFileSync(join(GATE_DIR, name), code)
   })
 
   // A README snippet is written for a reader, not for a compiler: it may use a
   // variable introduced by the paragraph above it. Those diagnostics say nothing
   // about the published API, so they are counted and reported rather than
   // failing the build — and never dropped silently.
-  const CONTEXT_ONLY = new Set(['TS2304', 'TS7006', 'TS18004', 'TS2531', 'TS2532'])
+  const CONTEXT_ONLY = new Set([
+    'TS2304',
+    'TS2552',
+    'TS7006',
+    'TS18004',
+    'TS2531',
+    'TS2532',
+    // Parse-level: a snippet that elides code with `…` or shows a bare `return`
+    // is prose, not a program.
+    'TS1108',
+    'TS1109',
+  ])
+  /** `Property 'x' does not exist on type 'Y'` is an API defect when `Y` comes
+   * from the package, and snippet noise when `Y` is a class the snippet declares
+   * itself and abbreviates — a README example routinely writes `this.repo`
+   * without spelling out the constructor that injects it. Decided by looking for
+   * the declaration in the same snippet rather than by guessing from the code. */
+  const isAbbreviatedLocalType = (line, sources) => {
+    const m = /Property '[^']+' does not exist on type '([^']+)'/.exec(line)
+    if (!m) return false
+    const file = /^([^(]+)\(/.exec(line)?.[1]
+    const own = sources.get(file?.split('/').pop() ?? '') ?? ''
+    return new RegExp(`\\b(class|interface|type)\\s+${m[1]}\\b`).test(own)
+  }
   /** An import of some OTHER package the fixture does not install — a documented
    * optional integration. Reported as uncovered, not as a failure. */
   const isForeignModule = (line) => /error TS2307/.test(line) && !line.includes(PKG.name)
@@ -239,7 +273,10 @@ function checkSnippets() {
       .split('\n')
       .filter((l) => /error TS\d+/.test(l))
     const real = lines.filter(
-      (l) => !CONTEXT_ONLY.has((/error (TS\d+)/.exec(l) ?? [])[1]) && !isForeignModule(l),
+      (l) =>
+        !CONTEXT_ONLY.has((/error (TS\d+)/.exec(l) ?? [])[1]) &&
+        !isForeignModule(l) &&
+        !isAbbreviatedLocalType(l, sources),
     )
     const context = lines.length - real.length
     if (real.length > 0) {
