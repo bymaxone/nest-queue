@@ -657,14 +657,15 @@ export interface BymaxQueueOptionsFactory {
 
 export interface BymaxQueueModuleAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
   /**
-   * Factory function that returns options. `never[]` rather than `unknown[]`:
-   * a parameter typed `unknown` accepts no narrower parameter under
-   * `strictFunctionTypes`, which made the documented `useFactory: (client:
-   * Redis) => …` fail against this interface even though the same object
-   * compiled when passed inline to `forRootAsync`. `never` is the bottom type,
-   * so every factory shape is assignable. Pinned by `test/types/public-api.test-d.ts`.
+   * Factory function that returns options. Declared with METHOD syntax:
+   * `strictFunctionTypes` makes parameters contravariant for function-typed
+   * properties but leaves method parameters bivariant, so this accepts the
+   * documented `useFactory: (client: Redis) => …`, which a property typed
+   * `(...args: unknown[]) => …` rejects. Method syntax also keeps the factory
+   * callable — `options.useFactory(client)` typechecks. Pinned by
+   * `test/types/public-api.test-d.ts`.
    */
-  useFactory?: (...args: never[]) => Promise<BymaxQueueModuleOptions> | BymaxQueueModuleOptions
+  useFactory?(...args: unknown[]): Promise<BymaxQueueModuleOptions> | BymaxQueueModuleOptions
 
   /** Class implementing BymaxQueueOptionsFactory */
   useClass?: Type<BymaxQueueOptionsFactory>

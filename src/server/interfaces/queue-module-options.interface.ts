@@ -59,19 +59,21 @@ export interface BymaxQueueModuleAsyncOptions extends Pick<ModuleMetadata, 'impo
    * useFactory: (client: Redis) => ({ connection: { client } })
    * ```
    *
-   * The rest parameter is `never[]` rather than `unknown[]` so that a narrower
-   * factory is assignable. A parameter typed `unknown` accepts no narrower
-   * parameter under `strictFunctionTypes`, which made the form above — the one
-   * this library documents — fail to typecheck against this interface, while
-   * the same object passed inline to `forRootAsync` compiled. `never` is the
-   * bottom type, so it is assignable to any parameter type and every factory
-   * shape fits; `any[]` would do the same but is banned in this codebase.
+   * Declared with **method syntax** on purpose. `strictFunctionTypes` makes
+   * parameters contravariant for function-typed *properties* but leaves method
+   * parameters bivariant, so this accepts a factory that names its injected
+   * types — which a property typed `(...args: unknown[]) => …` rejects, since
+   * `unknown` is assignable from no narrower parameter. That rejection is what
+   * made the form above fail against this interface while compiling when passed
+   * inline to `forRootAsync`.
    *
-   * NestJS itself resolves the arguments at runtime, so no type here can make
-   * them safe — the honest choice is a signature that does not reject valid
-   * factories while pretending to.
+   * Bivariance is the right trade here rather than a looser parameter type:
+   * NestJS resolves these arguments from `inject` at runtime, so no signature
+   * can make them statically safe, and method syntax keeps the factory
+   * **callable** — `options.useFactory(client)` typechecks, which a
+   * `never[]` rest parameter would have broken.
    */
-  useFactory?: (...args: never[]) => Promise<BymaxQueueModuleOptions> | BymaxQueueModuleOptions
+  useFactory?(...args: unknown[]): Promise<BymaxQueueModuleOptions> | BymaxQueueModuleOptions
   /** Class implementing the options factory. */
   useClass?: Type<BymaxQueueOptionsFactory>
   /** Existing provider implementing the options factory. */

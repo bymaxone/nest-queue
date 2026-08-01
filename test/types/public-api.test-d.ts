@@ -238,6 +238,21 @@ export type _AsyncFactoryAcceptsZeroParameters = Expect<
   Extends<{ useFactory: () => BymaxQueueModuleOptions }, BymaxQueueModuleAsyncOptions>
 >
 
+// The factory stays CALLABLE with arguments. Method syntax buys the bivariance
+// that makes the cases above assignable; a `never[]` rest parameter would buy
+// the same assignability and silently cost this, since `never` accepts no
+// argument. NestJS calls the factory with the resolved `inject` values, and a
+// consumer may call it directly in a unit test.
+export type _AsyncFactoryStaysCallable = Expect<
+  Equal<
+    ReturnType<NonNullable<BymaxQueueModuleAsyncOptions['useFactory']>>,
+    Promise<BymaxQueueModuleOptions> | BymaxQueueModuleOptions
+  >
+>
+export type _AsyncFactoryAcceptsAnArgumentWhenCalled = Expect<
+  Extends<[InjectedClient], Parameters<NonNullable<BymaxQueueModuleAsyncOptions['useFactory']>>>
+>
+
 // The pre-1.0.4 variadic form still fits: widening the parameter type kept every
 // factory that already compiled, so no consumer has to touch working code.
 export type _AsyncFactoryStillAcceptsVariadicUnknown = Expect<
