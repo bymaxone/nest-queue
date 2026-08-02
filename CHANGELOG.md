@@ -7,6 +7,27 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.6] — 2026-08-02
+
+Metadata only. `dist/` is byte-identical to `1.0.5` — verified by diffing a fresh
+build against the published tarball — so there is no runtime change.
+
+### Fixed
+
+- **The npm package page showed no documentation.** `1.0.5` reached the registry
+  with an empty `readme` field, so the page rendered nothing, even though
+  `README.md` was in the tarball all along. Publishing goes through the npm CLI
+  now instead of `pnpm publish`, and this release is what carries the README to
+  the registry.
+
+  The cause is measurable: across the five published `@bymax-one/*` libraries,
+  every package released under pnpm 11 landed with an empty `readme` and no
+  `_npmVersion`, while every one released under pnpm 10 — which delegated to the
+  npm CLI — carries both. `nest-realtime@1.0.1` confirmed it, restoring both
+  fields in a single release by switching the command.
+
+---
+
 ## [1.0.5] — 2026-08-01
 
 Documentation only. `dist/` is byte-identical to `1.0.4` — verified by diffing a
@@ -311,6 +332,7 @@ v6 peer range.
 
 ---
 
+[1.0.6]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.6
 [1.0.5]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.5
 [1.0.4]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.4
 [1.0.3]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.3
