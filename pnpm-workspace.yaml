@@ -30,9 +30,14 @@ allowBuilds:
 overrides:
   'bullmq': '5.81.2'
   'ioredis': '5.11.1'
-  'brace-expansion': '^5.0.8'
+  # Scoped per major, like the js-yaml and undici pairs: unscoped, a 1.x or 2.x
+  # transitive would be forced onto 5.x, whose API minimatch cannot use. Each
+  # line carries its own fix for the DoS that bypasses the earlier mitigation.
+  'brace-expansion@1': '^1.1.18'
+  'brace-expansion@2': '^2.1.4'
+  'brace-expansion@5': '^5.0.9'
   'esbuild': '^0.28.1'
-  'fast-uri': '^3.1.4'
+  'fast-uri': '^3.1.5'
   'find-my-way': '^9.6.1'
   'js-yaml@3': '^3.15.0'
   'js-yaml@4': '^4.3.0'
