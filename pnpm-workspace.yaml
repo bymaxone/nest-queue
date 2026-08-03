@@ -38,4 +38,9 @@ overrides:
   'js-yaml@4': '^4.3.0'
   'protobufjs': '^7.6.5'
   'qs': '^6.15.2'
-  'undici': '^8.9.0'
+  # Scoped by major, like the js-yaml pair above: unscoped, a future transitive on
+  # undici 7.x would be forced onto 8.x. The advisories cover both lines —
+  # `>=7.0.0 <7.29.0` and `>=8.0.0 <8.9.0` — so each is pinned to its own fix, and
+  # a 7.x arriving later lands above the floor rather than below it.
+  'undici@7': '^7.29.0'
+  'undici@8': '^8.9.0'
