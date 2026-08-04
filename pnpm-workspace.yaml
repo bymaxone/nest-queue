@@ -3,10 +3,9 @@ packages:
   - 'test/consumer-app'
 
 verifyDepsBeforeRun: false
-onlyBuiltDependencies:
-  - esbuild
-  - msgpackr-extract
-  - unrs-resolver
+# `allowBuilds` is the only spelling pnpm 11 reads: onlyBuiltDependencies,
+# neverBuiltDependencies and their siblings were removed in v11 and replaced by
+# this map. An unlisted package counts as unreviewed and its scripts are denied.
 allowBuilds:
   esbuild: true
   msgpackr-extract: true
@@ -16,8 +15,8 @@ allowBuilds:
   ssh2: false
 
 # Forced versions, for two distinct reasons. These live here and NOT in
-# package.json: since pnpm 11 the `pnpm` field of package.json is ignored outright,
-# with no warning, so an override placed there silently does nothing.
+# package.json: pnpm 11 no longer reads the `pnpm` field of package.json, so an
+# override placed there does nothing — it warns, but it does nothing.
 #
 # 1. `bullmq` and `ioredis` are collapsed to ONE copy across the workspace. BullMQ's
 #    `ConnectionOptions` accepts an ioredis `Redis`, and that assignment typechecks
