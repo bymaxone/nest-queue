@@ -1618,14 +1618,7 @@ import { WORKER_EVENT_LISTENERS_METADATA_KEY } from './metadata-keys.constants'
 
 /** Worker-local events — fired by THIS worker's process; the handler receives the full `Job`. */
 export type WorkerEventName =
-  | 'completed'
-  | 'failed'
-  | 'progress'
-  | 'active'
-  | 'stalled'
-  | 'closing'
-  | 'closed'
-  | 'error'
+  'completed' | 'failed' | 'progress' | 'active' | 'stalled' | 'closing' | 'closed' | 'error'
 
 /**
  * Marks a method as a worker-local event listener. No extra Redis connection is needed —
@@ -3175,7 +3168,7 @@ commitlint.config.cjs
 - E2E tests with Testcontainers Redis
 ```
 
-**`SECURITY.md`:** follow the OpenSSF template — email security@bymax.one, 90-day disclosure policy, scope (peer deps out of scope).
+**`SECURITY.md`:** follow the OpenSSF template — email support@bymax.one, 90-day disclosure policy, scope (peer deps out of scope).
 
 **`CLAUDE.md` / `AGENTS.md`:** point to `docs/technical_specification.md` + `docs/development_plan.md` + `docs/tasks/` as required reading; reinforce universal rules (TypeScript strict, English, JSDoc, no `any`, no eslint-disable).
 
