@@ -8,7 +8,6 @@
  * @layer server/decorators
  */
 
-import 'reflect-metadata'
 import type { QueueEventListenerMetadata } from '../interfaces/processor-metadata.interface'
 import { QUEUE_EVENT_LISTENERS_METADATA_KEY } from './metadata-keys.constants'
 

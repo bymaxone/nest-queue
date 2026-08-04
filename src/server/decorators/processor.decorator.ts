@@ -5,7 +5,6 @@
  * @layer server/decorators
  */
 
-import 'reflect-metadata'
 import { DEFAULT_WORKER_CONCURRENCY } from '../constants/default-options'
 import type { ProcessorMetadata } from '../interfaces/processor-metadata.interface'
 import type { WorkerOptions } from '../interfaces/worker-options.interface'

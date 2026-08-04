@@ -7,7 +7,6 @@
  * @layer server/decorators
  */
 
-import 'reflect-metadata'
 import type { QueueEventListenerMetadata } from '../interfaces/processor-metadata.interface'
 import { WORKER_EVENT_LISTENERS_METADATA_KEY } from './metadata-keys.constants'
 
@@ -20,14 +19,7 @@ import { WORKER_EVENT_LISTENERS_METADATA_KEY } from './metadata-keys.constants'
  * @see https://docs.bullmq.io/guide/workers/worker-events
  */
 export type WorkerEventName =
-  | 'completed'
-  | 'failed'
-  | 'progress'
-  | 'active'
-  | 'stalled'
-  | 'closing'
-  | 'closed'
-  | 'error'
+  'completed' | 'failed' | 'progress' | 'active' | 'stalled' | 'closing' | 'closed' | 'error'
 
 /**
  * Marks a method as a worker-local event listener for the given event. The
