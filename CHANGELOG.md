@@ -7,6 +7,26 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.8] — 2026-08-04
+
+**Runtime change.** `dist/` differs from `1.0.7`.
+
+### Security
+
+- The Redis credentials are no longer disclosed when a service that holds them is
+  serialized. `connection` moves from a plain field on the resolved options to a
+  non-enumerable accessor, and `ConnectionResolver` keeps the ioredis client and the
+  consumer's module options in ECMAScript private fields, as do the maps holding the
+  `Queue`, `Worker` and `QueueEvents` instances. Those objects were all reachable by
+  walking a service: a `url` carries the password inline, and an ioredis instance carries
+  `options.password` as a plain field, so `JSON.stringify`, object spread and
+  `util.inspect` on `QueueService` emitted the password in plaintext — which is what a
+  structured logger does when it renders a provider it was handed, and what an error
+  reporter does when it captures the scope of a throw.
+
+Reading on purpose is unchanged: `options.connection` resolves as before, and no public
+type or export changed.
+
 ## [1.0.7] — 2026-08-04
 
 **Runtime change.** `dist/` differs from `1.0.6`: the four decorators no longer carry
@@ -369,6 +389,7 @@ v6 peer range.
 
 ---
 
+[1.0.8]: https://github.com/bymaxone/nest-queue/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/bymaxone/nest-queue/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.6
 [1.0.5]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.5

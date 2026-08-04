@@ -28,36 +28,50 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
  */
 @Injectable()
 export class ConnectionResolver {
-  private client: Redis | undefined
+  /**
+   * The resolved Redis client.
+   *
+   * An ECMAScript private field rather than a TypeScript `private` one, which
+   * is erased at runtime: an ioredis instance carries `options.password` as a
+   * plain field, so leaving this enumerable would let anything that serializes
+   * a service holding this resolver walk into the credentials.
+   */
+  #client: Redis | undefined
+
+  /** The consumer's module options, which carry the Redis credentials. */
+  readonly #options: BymaxQueueModuleOptions
+
   private mode: QueueConnectionMode | undefined
 
-  constructor(@Inject(BYMAX_QUEUE_OPTIONS) private readonly options: BymaxQueueModuleOptions) {}
+  constructor(@Inject(BYMAX_QUEUE_OPTIONS) options: BymaxQueueModuleOptions) {
+    this.#options = options
+  }
 
   /** Resolve and validate the connection. Call once during module bootstrap. */
   async init(): Promise<void> {
-    const cfg = this.options.connection
+    const cfg = this.#options.connection
     if ('client' in cfg) {
       this.initModeA(cfg.client)
       return
     }
     this.mode = 'mode-b-owned'
-    this.client =
+    this.#client =
       'url' in cfg
         ? new Redis(cfg.url, { ...(cfg.options ?? {}), lazyConnect: false })
         : new Redis({ ...cfg.options, lazyConnect: false })
     await this.waitReady(
-      this.options.connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS,
+      this.#options.connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS,
     )
   }
 
   /** The resolved Queue-role client. */
   getClient(): Redis {
-    if (!this.client) {
+    if (!this.#client) {
       throw new QueueException(QUEUE_ERROR_CODES.CONNECTION_INVALID, 500, {
         reason: 'not initialized',
       })
     }
-    return this.client
+    return this.#client
   }
 
   /** The resolved connection mode. */
@@ -77,8 +91,8 @@ export class ConnectionResolver {
 
   /** Close the library-owned connection on shutdown; never touch a BYO client. */
   async teardown(): Promise<void> {
-    if (this.isOwned() && this.client) {
-      const client = this.client
+    if (this.isOwned() && this.#client) {
+      const client = this.#client
       await client.quit().catch(() => {
         client.disconnect()
       })
@@ -88,7 +102,7 @@ export class ConnectionResolver {
   /** Validate and adopt a bring-your-own client for the Queue role. */
   private initModeA(client: Redis): void {
     this.mode = 'mode-a-byo'
-    this.client = client
+    this.#client = client
     if (!isClientUsable(client)) {
       throw new QueueException(QUEUE_ERROR_CODES.CONNECTION_INVALID, 500, { status: client.status })
     }

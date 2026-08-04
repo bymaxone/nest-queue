@@ -44,8 +44,10 @@ export interface ResolvedQueueOptions {
  * @returns A frozen, fully-resolved options object.
  */
 export function applyDefaults(opts: BymaxQueueModuleOptions): Readonly<ResolvedQueueOptions> {
-  const base: ResolvedQueueOptions = {
-    connection: opts.connection,
+  const connection = opts.connection
+
+  const base: Omit<ResolvedQueueOptions, 'connection'> &
+    Partial<Pick<ResolvedQueueOptions, 'connection'>> = {
     defaultJobOptions: { ...DEFAULT_JOB_OPTIONS, ...(opts.defaultJobOptions ?? {}) },
     prefix: opts.prefix ?? 'bull',
     queueOptions: opts.queueOptions ?? {},
@@ -58,9 +60,25 @@ export function applyDefaults(opts: BymaxQueueModuleOptions): Readonly<ResolvedQ
       drainTimeoutMs: opts.shutdown?.drainTimeoutMs ?? DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS,
       drainOnShutdown: opts.shutdown?.drainOnShutdown ?? false,
     },
-    connectionReadyTimeoutMs:
-      opts.connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS,
+    connectionReadyTimeoutMs: opts.connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS,
   }
   if (opts.telemetry !== undefined) base.telemetry = opts.telemetry
-  return Object.freeze(base)
+
+  // The connection carries the Redis credentials — a `url` holds the password
+  // inline, an `options` object holds it as a field, and a bring-your-own
+  // `client` holds both on the ioredis instance. This resolved object is
+  // injected into QueueService, WorkerRegistry, QueueEventsRegistry and
+  // QueueLifecycle, so an enumerable `connection` is emitted by anything that
+  // serializes one of them incidentally: a structured logger rendering its
+  // arguments, an error reporter capturing the scope of a throw. Attaching it
+  // as a non-enumerable accessor withholds it from `JSON.stringify`, object
+  // spread and `util.inspect` — including `showHidden`, which still prints a
+  // hidden data property. Reads are unchanged.
+  Object.defineProperty(base, 'connection', {
+    get: (): QueueConnectionConfig => connection,
+    enumerable: false,
+    configurable: false,
+  })
+
+  return Object.freeze(base) as Readonly<ResolvedQueueOptions>
 }

@@ -4,6 +4,7 @@
  */
 
 import { EventEmitter } from 'node:events'
+import { inspect } from 'node:util'
 import type { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
 import { QueueException } from '../errors/queue-exception'
@@ -287,5 +288,24 @@ describe('ConnectionResolver — exception details', () => {
     jest.advanceTimersByTime(1234)
     await assertion
     jest.useRealTimers()
+  })
+  it('keeps the client and the module options out of every serialization path', () => {
+    // The resolver is injected into QueueService, WorkerRegistry,
+    // QueueEventsRegistry and QueueLifecycle. It holds the consumer's module
+    // options — whose `url` carries the Redis password inline — and an ioredis
+    // instance, which carries `options.password` as a plain field. Both were
+    // reachable by walking a service that holds the resolver, which is what a
+    // structured logger or an error reporter does when it renders one.
+    const secret = 'r3d1sPassw0rd-canary'
+    const client = new FakeRedis('ready')
+    redisConstructor.mockReturnValue(asRedis(client))
+    const resolver = new ConnectionResolver({
+      connection: { url: `redis://default:${secret}@127.0.0.1:6379` },
+    })
+
+    expect(Object.keys(resolver)).not.toContain('client')
+    expect(Object.keys(resolver)).not.toContain('options')
+    expect(JSON.stringify(resolver)).not.toContain(secret)
+    expect(inspect(resolver, { depth: null, showHidden: true })).not.toContain(secret)
   })
 })

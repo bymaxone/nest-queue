@@ -98,7 +98,7 @@ interface WorkerEntry {
 @Injectable()
 export class WorkerRegistry {
   private readonly logger = new Logger(WorkerRegistry.name)
-  private readonly entries = new Map<string, WorkerEntry>()
+  readonly #entries = new Map<string, WorkerEntry>()
 
   constructor(
     @Inject(ConnectionResolver) private readonly connection: ConnectionResolver,
@@ -141,7 +141,7 @@ export class WorkerRegistry {
     }
 
     attachDefaultErrorListener(worker, this.logger, 'Worker', queueName)
-    this.entries.set(queueName, { worker, connection: conn })
+    this.#entries.set(queueName, { worker, connection: conn })
     return worker
   }
 
@@ -185,7 +185,7 @@ export class WorkerRegistry {
     }
 
     attachDefaultErrorListener(worker, this.logger, 'Worker', queueName)
-    this.entries.set(queueName, { worker, connection: conn })
+    this.#entries.set(queueName, { worker, connection: conn })
     return worker
   }
 
@@ -197,11 +197,11 @@ export class WorkerRegistry {
    * @param queueName - The queue whose worker should be removed.
    */
   async unregister(queueName: string): Promise<void> {
-    const entry = this.entries.get(queueName)
+    const entry = this.#entries.get(queueName)
     if (!entry) return
     await entry.worker.close()
     await this.closeConnection(entry.connection)
-    this.entries.delete(queueName)
+    this.#entries.delete(queueName)
   }
 
   /**
@@ -210,7 +210,7 @@ export class WorkerRegistry {
    * @returns An immutable array of queue names.
    */
   list(): readonly string[] {
-    return Array.from(this.entries.keys())
+    return Array.from(this.#entries.keys())
   }
 
   /**
@@ -221,7 +221,7 @@ export class WorkerRegistry {
    */
   getAll(): ReadonlyMap<string, Worker> {
     return new Map(
-      Array.from(this.entries, ([name, entry]): [string, Worker] => [name, entry.worker]),
+      Array.from(this.#entries, ([name, entry]): [string, Worker] => [name, entry.worker]),
     )
   }
 
@@ -235,7 +235,7 @@ export class WorkerRegistry {
    */
   getConnections(): ReadonlyMap<string, Redis> {
     return new Map(
-      Array.from(this.entries, ([name, entry]): [string, Redis] => [name, entry.connection]),
+      Array.from(this.#entries, ([name, entry]): [string, Redis] => [name, entry.connection]),
     )
   }
 
@@ -260,7 +260,7 @@ export class WorkerRegistry {
    * @throws {QueueException} `DUPLICATE_PROCESSOR` if the queue is already registered.
    */
   private guardDuplicate(queueName: string): void {
-    if (this.entries.has(queueName)) {
+    if (this.#entries.has(queueName)) {
       throw new QueueException(QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR, 500, { queueName })
     }
   }
