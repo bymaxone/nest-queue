@@ -7,6 +7,43 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.7] — 2026-08-04
+
+**Runtime change.** `dist/` differs from `1.0.6`: the four decorators no longer carry
+a `reflect-metadata` side-effect import, so the built bundle no longer references the
+package at all.
+
+### Fixed
+
+- **The application owns the `reflect-metadata` polyfill.** `@Processor`, `@Process`,
+  `@OnWorkerEvent` and `@OnQueueEvent` each imported it for its side effect. None of
+  the other eight `@bymax-one` libraries does — the polyfill is global state the
+  application initialises once in `main.ts`, and NestJS pulls it in regardless:
+  importing `@nestjs/common` alone takes `Reflect.defineMetadata` from `undefined` to
+  `function`. Nothing here needed to load it.
+
+  Carrying it also contradicted this package's own `"sideEffects": false`, which
+  asserts that no module has a side effect while importing something whose entire
+  purpose is one.
+
+  The cost was measurable in a consumer's bundle: with the import present, esbuild
+  inlines the polyfill, taking a minimal bundle from **53 kB to 95 kB** even when the
+  application had already loaded it.
+
+  Nothing changes for a correctly wired application. The decorators are reachable
+  only through the `.` subpath, whose bundle imports `@nestjs/common` on its first
+  line — so the polyfill is present before any decorator body runs, which the tests
+  and a real consumer both confirm.
+
+### Changed
+
+- **The Quick Start shows the `main.ts` entry point**, with `import 'reflect-metadata'`
+  as its first line, and the peer matrix states plainly that the polyfill belongs to
+  the application. Previously the README named `reflect-metadata` only as a peer, which
+  was survivable while the library loaded it and is not now.
+
+---
+
 ## [1.0.6] — 2026-08-02
 
 Metadata only. `dist/` is byte-identical to `1.0.5` — verified by diffing a fresh
@@ -332,6 +369,7 @@ v6 peer range.
 
 ---
 
+[1.0.7]: https://github.com/bymaxone/nest-queue/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.6
 [1.0.5]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.5
 [1.0.4]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.4

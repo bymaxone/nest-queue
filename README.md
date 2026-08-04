@@ -120,6 +120,12 @@ Both subpaths ship ESM **and** CommonJS with declarations for each format, so a
 | `./shared`   | None                                                                                                      |
 | Optional     | `bullmq-otel ^1` (OpenTelemetry)                                                                          |
 
+> [!IMPORTANT]
+> `reflect-metadata` is a **global polyfill the application owns** — import it once at
+> the top of `main.ts`. This library never imports it, so it cannot be shipped twice
+> into your bundle; NestJS pulls it in as well, which is why a correctly wired
+> application already has it before a decorator runs.
+
 ---
 
 > [!TIP]
@@ -137,7 +143,20 @@ Both subpaths ship ESM **and** CommonJS with declarations for each format, so a
 ## 🚀 Quick Start
 
 ```bash
-pnpm add @bymax-one/nest-queue bullmq ioredis
+pnpm add @bymax-one/nest-queue bullmq ioredis reflect-metadata
+```
+
+`reflect-metadata` is loaded **once by your application**, before anything else — this
+is the standard NestJS entry point and the decorators in this library depend on it:
+
+```typescript
+// main.ts
+import 'reflect-metadata'
+import { NestFactory } from '@nestjs/core'
+import { AppModule } from './app.module'
+
+const app = await NestFactory.create(AppModule)
+await app.listen(3000)
 ```
 
 Wire the module in your root `AppModule`:
