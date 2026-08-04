@@ -20,7 +20,7 @@ Phase 1 produces the **first end-to-end usable slice**: a fully-gated project sc
 2. **Clean Code sizing.** Functions ≤ 50 lines; files ≤ 800 lines (200–400 typical). Split by responsibility when over the limit.
 3. **One responsibility per file/function (SRP); SOLID throughout.** Explicit DI (no implicit metadata wiring beyond NestJS providers); DI tokens are `Symbol`.
 4. **JSDoc on every exported symbol** (class, function, interface, type, constant), with `@example` where it clarifies usage.
-5. **English-only and timeless comments** — no `Phase N`/`Task`/roadmap-stage references inside any committed file (code, config, or docs-as-config). Explain *what* and *why*, never *which roadmap stage*.
+5. **English-only and timeless comments** — no `Phase N`/`Task`/roadmap-stage references inside any committed file (code, config, or docs-as-config). Explain _what_ and _why_, never _which roadmap stage_.
 6. **100% line/branch coverage** on every implemented file (`jest.coverage.config.ts` thresholds `100/100/100/100`). No `eslint-disable`, no `@ts-ignore`, no `@ts-expect-error` to dodge a gate.
 7. **Never create `.gitkeep`/`.keep` or empty-directory placeholders** — directories emerge from real files only (the `index.ts` placeholders in §2.1 are real files).
 8. **Current BullMQ API only.** Built on `ConfigurableModuleBuilder` + `isGlobal`/`setExtras` (no `@Global`, no `forFeature`); recurring jobs use `upsertJobScheduler`/`removeJobScheduler`/`getJobSchedulers` (never `addRepeatable`); `cleanQueue(name, grace, limit, status?)` mirrors BullMQ argument order; per-role `maxRetriesPerRequest` (Queue/FlowProducer keep ioredis default; only duplicated Worker/QueueEvents connections are forced to `null`).
@@ -39,16 +39,16 @@ Phase 1 produces the **first end-to-end usable slice**: a fully-gated project sc
 
 ## Task index
 
-| ID | Task | Status | Priority | Size | Depends on |
-|---|---|---|---|---|---|
-| 1.1 | Project scaffold (build chain, configs, budgets) | ✅ Done | P0 | M | — |
-| 1.2 | Shared types & constants (`src/shared/`) | ✅ Done | P0 | S | 1.1 |
-| 1.3 | Public server interfaces & contracts | ✅ Done | P0 | M | 1.1 |
-| 1.4 | DI tokens, default options & error messages | ✅ Done | P0 | S | 1.1, 1.2 |
-| 1.5 | `ConnectionResolver`, `QueueException` & connection utils | ✅ Done | P0 | L | 1.3, 1.4 |
-| 1.6 | Resolved options + bootstrap validation | ✅ Done | P0 | M | 1.3, 1.4 |
-| 1.7 | Base `QueueService` (cache, enqueue, metrics, control) | ✅ Done | P0 | M | 1.3, 1.5, 1.6 |
-| 1.8 | `BymaxQueueModule.forRoot()`, barrel & unit tests | ✅ Done | P0 | L | 1.1–1.7 |
+| ID  | Task                                                      | Status  | Priority | Size | Depends on    |
+| --- | --------------------------------------------------------- | ------- | -------- | ---- | ------------- |
+| 1.1 | Project scaffold (build chain, configs, budgets)          | ✅ Done | P0       | M    | —             |
+| 1.2 | Shared types & constants (`src/shared/`)                  | ✅ Done | P0       | S    | 1.1           |
+| 1.3 | Public server interfaces & contracts                      | ✅ Done | P0       | M    | 1.1           |
+| 1.4 | DI tokens, default options & error messages               | ✅ Done | P0       | S    | 1.1, 1.2      |
+| 1.5 | `ConnectionResolver`, `QueueException` & connection utils | ✅ Done | P0       | L    | 1.3, 1.4      |
+| 1.6 | Resolved options + bootstrap validation                   | ✅ Done | P0       | M    | 1.3, 1.4      |
+| 1.7 | Base `QueueService` (cache, enqueue, metrics, control)    | ✅ Done | P0       | M    | 1.3, 1.5, 1.6 |
+| 1.8 | `BymaxQueueModule.forRoot()`, barrel & unit tests         | ✅ Done | P0       | L    | 1.1–1.7       |
 
 ---
 
@@ -138,7 +138,7 @@ DELIVERABLES
        "reflect-metadata": "^0.2.0", "bullmq-otel": "^1.0.0"
      },
      "peerDependenciesMeta": { "bullmq-otel": { "optional": true } },
-     "packageManager": "pnpm@11.0.0",
+     "packageManager": "pnpm@11.20.0",
      "engines": { "node": ">=24.0.0" },
      "publishConfig": { "access": "public", "provenance": true, "registry": "https://registry.npmjs.org/" }
    }

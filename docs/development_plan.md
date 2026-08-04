@@ -277,7 +277,7 @@ Copy from `nest-auth/` / `nest-logger/` and adapt (`nest-auth` → `nest-queue`,
   "peerDependenciesMeta": {
     "bullmq-otel": { "optional": true }
   },
-  "packageManager": "pnpm@11.0.0",
+  "packageManager": "pnpm@11.20.0",
   "engines": { "node": ">=24.0.0" },
   "publishConfig": {
     "access": "public",
