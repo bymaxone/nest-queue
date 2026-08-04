@@ -198,7 +198,7 @@ Create the governance and repo-as-config deliverables: `CHANGELOG.md` (Keep-a-Ch
 #### Acceptance criteria
 
 - [ ] `CHANGELOG.md` follows Keep-a-Changelog + SemVer with a complete `## [0.1.0]` `### Added` entry enumerating the shipped surface (module + `forRoot`/`forRootAsync`, `QueueService` incl. Job Schedulers, decorators + discovery, `WorkerRegistry`/`registerSandboxed`, opt-in `FlowService`/`MetricsService`, telemetry passthrough, `QueueLifecycle`, dual-mode connection, the two subpaths, the peer-dep set).
-- [ ] `SECURITY.md` follows the OpenSSF template: security contact `security@bymax.one`, a 90-day coordinated-disclosure policy, supported-versions table, scope (peer deps out of scope), and a reference to OpenSSF Scorecard; reporters asked not to open public issues for vulnerabilities.
+- [ ] `SECURITY.md` follows the OpenSSF template: security contact `support@bymax.one`, a 90-day coordinated-disclosure policy, supported-versions table, scope (peer deps out of scope), and a reference to OpenSSF Scorecard; reporters asked not to open public issues for vulnerabilities.
 - [ ] `CLAUDE.md` and `AGENTS.md` point to `docs/technical_specification.md` + `docs/development_plan.md` + `docs/tasks/` as required reading and reinforce the universal rules (TS strict, English, JSDoc on exports, no `any`, no `eslint-disable`, Conventional Commits, timeless comments); they mirror the structure of the portfolio's `nest-auth` / `nest-logger`.
 - [ ] `commitlint.config.cjs` extends `@commitlint/config-conventional` and documents the project's commit scopes.
 - [ ] The four Copilot review files exist: `.github/copilot-instructions.md` (repo-wide review config), `.github/instructions/code.instructions.md`, `.github/instructions/tests.instructions.md`, `.github/agents/agent-code-reviewer.agent.md`.
@@ -259,7 +259,7 @@ DELIVERABLES
    - E2E tests with Testcontainers Redis
    ```
 
-2. `SECURITY.md` — OpenSSF-style: `security@bymax.one`, 90-day coordinated disclosure, a
+2. `SECURITY.md` — OpenSSF-style: `support@bymax.one`, 90-day coordinated disclosure, a
    supported-versions table, scope (peer deps out of scope), an OpenSSF Scorecard reference; ask
    reporters NOT to open public issues for vulnerabilities.
 
@@ -294,7 +294,7 @@ Verification:
   .github/instructions/code.instructions.md .github/instructions/tests.instructions.md
   .github/agents/agent-code-reviewer.agent.md` — expected: all present.
 - `grep -q '\[0.1.0\]' CHANGELOG.md` — expected: match.
-- `grep -qi 'security@bymax.one' SECURITY.md` — expected: match.
+- `grep -qi 'support@bymax.one' SECURITY.md` — expected: match.
 - `node -e "require('./commitlint.config.cjs')"` — expected: loads without error.
 
 Completion Protocol:
