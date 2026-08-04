@@ -6,7 +6,6 @@
  * @layer server/decorators
  */
 
-import 'reflect-metadata'
 import type { ProcessHandlerMetadata } from '../interfaces/processor-metadata.interface'
 import { PROCESS_HANDLERS_METADATA_KEY } from './metadata-keys.constants'
 
@@ -38,9 +37,7 @@ export function Process(jobName?: string): MethodDecorator {
     const existing = (Reflect.getOwnMetadata(PROCESS_HANDLERS_METADATA_KEY, target.constructor) ??
       []) as ProcessHandlerMetadata[]
     const entry: ProcessHandlerMetadata =
-      jobName !== undefined
-        ? { jobName, methodKey: propertyKey }
-        : { methodKey: propertyKey }
+      jobName !== undefined ? { jobName, methodKey: propertyKey } : { methodKey: propertyKey }
     Reflect.defineMetadata(PROCESS_HANDLERS_METADATA_KEY, [...existing, entry], target.constructor)
   }
 }
