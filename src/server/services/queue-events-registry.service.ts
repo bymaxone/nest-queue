@@ -35,8 +35,8 @@ import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 @Injectable()
 export class QueueEventsRegistry {
   private readonly logger = new Logger(QueueEventsRegistry.name)
-  private readonly events = new Map<string, QueueEvents>()
-  private readonly connections = new Map<string, Redis>()
+  readonly #events = new Map<string, QueueEvents>()
+  readonly #connections = new Map<string, Redis>()
 
   constructor(
     @Inject(ConnectionResolver) private readonly connection: ConnectionResolver,
@@ -52,7 +52,7 @@ export class QueueEventsRegistry {
    * @returns The `QueueEvents` instance for the queue.
    */
   getOrCreate(queueName: string): QueueEvents {
-    const existing = this.events.get(queueName)
+    const existing = this.#events.get(queueName)
     if (existing) return existing
     const conn = duplicateConnection(this.connection.getClient())
     let qe: QueueEvents
@@ -64,8 +64,8 @@ export class QueueEventsRegistry {
       throw err
     }
     attachDefaultErrorListener(qe, this.logger, 'QueueEvents', queueName)
-    this.events.set(queueName, qe)
-    this.connections.set(queueName, conn)
+    this.#events.set(queueName, qe)
+    this.#connections.set(queueName, conn)
     return qe
   }
 
@@ -75,7 +75,7 @@ export class QueueEventsRegistry {
    * @returns An immutable array of queue names.
    */
   list(): readonly string[] {
-    return Array.from(this.events.keys())
+    return Array.from(this.#events.keys())
   }
 
   /**
@@ -84,7 +84,7 @@ export class QueueEventsRegistry {
    * @returns A read-only view of the internal map.
    */
   getAll(): ReadonlyMap<string, QueueEvents> {
-    return this.events
+    return this.#events
   }
 
   /**
@@ -101,6 +101,6 @@ export class QueueEventsRegistry {
    * @returns A read-only snapshot of queue name to duplicated connection.
    */
   getConnections(): ReadonlyMap<string, Redis> {
-    return new Map(this.connections)
+    return new Map(this.#connections)
   }
 }

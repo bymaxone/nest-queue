@@ -51,7 +51,7 @@ type CleanableStatus = 'completed' | 'failed' | 'delayed' | 'wait' | 'active' | 
 @Injectable()
 export class QueueService {
   private readonly logger = new Logger(QueueService.name)
-  private readonly queues = new Map<string, Queue>()
+  readonly #queues = new Map<string, Queue>()
 
   constructor(
     @Inject(ConnectionResolver) private readonly connection: ConnectionResolver,
@@ -70,7 +70,7 @@ export class QueueService {
     queueName: string,
     overrides?: Partial<Omit<QueueOptions, 'connection' | 'prefix'>>,
   ): Queue<TData, TResult> {
-    const existing = this.queues.get(queueName)
+    const existing = this.#queues.get(queueName)
     // The cache is keyed by name and holds default-generic Queues; the caller
     // declares the payload generics, which BullMQ's invariant generics cannot
     // narrow structurally. The cast re-projects the runtime Queue onto the
@@ -86,7 +86,7 @@ export class QueueService {
       ...overrides,
     })
     attachDefaultErrorListener(queue, this.logger, 'Queue', queueName)
-    this.queues.set(queueName, queue)
+    this.#queues.set(queueName, queue)
     return queue as unknown as Queue<TData, TResult>
   }
 
@@ -346,7 +346,7 @@ export class QueueService {
 
   /** Return a read-only view of the cached queues. */
   getCachedQueues(): ReadonlyMap<string, Queue> {
-    return this.queues
+    return this.#queues
   }
 
   /**
@@ -359,9 +359,9 @@ export class QueueService {
    * exists to prevent. `QueueLifecycle` is the only caller.
    */
   async closeAll(): Promise<void> {
-    for (const queue of this.queues.values()) {
+    for (const queue of this.#queues.values()) {
       await queue.close().catch(() => undefined)
     }
-    this.queues.clear()
+    this.#queues.clear()
   }
 }

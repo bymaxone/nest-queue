@@ -3,6 +3,8 @@
  * @layer server/config
  */
 
+import { inspect } from 'node:util'
+
 import type { Telemetry } from 'bullmq'
 import { applyDefaults } from './resolved-options'
 import {
@@ -73,6 +75,37 @@ describe('applyDefaults', () => {
     const telemetry = {} as Telemetry
     const resolved = applyDefaults({ connection: baseConnection, telemetry })
     expect(resolved.telemetry).toBe(telemetry)
+  })
+
+  it('keeps the connection out of every incidental serialization path', () => {
+    // The resolved options are injected into QueueService, WorkerRegistry,
+    // QueueEventsRegistry and QueueLifecycle, so whatever serializes one of
+    // them incidentally reaches this object: a structured logger rendering its
+    // arguments, an error reporter capturing the scope of a throw, an object
+    // spread. A `url` carries the Redis password inline, which is why the
+    // connection is the field that has to be withheld.
+    const secret = 'r3d1sPassw0rd-canary'
+    const resolved = applyDefaults({
+      connection: { url: `redis://default:${secret}@127.0.0.1:6379` },
+    })
+
+    expect(JSON.stringify(resolved)).not.toContain(secret)
+    expect(JSON.stringify({ ...resolved })).not.toContain(secret)
+    expect(inspect(resolved, { depth: null })).not.toContain(secret)
+    // `showHidden` is why the property is an accessor rather than merely a
+    // non-enumerable value: a hidden data property is still printed here.
+    expect(inspect(resolved, { depth: null, showHidden: true })).not.toContain(secret)
+    expect(Object.keys(resolved)).not.toContain('connection')
+  })
+
+  it('still exposes the connection to the resolver that has to dial Redis', () => {
+    // Containment must cost nothing at the supported surface: ConnectionResolver
+    // reads this to build the client, so withholding it from serialization must
+    // not withhold it from property access.
+    const connection: BymaxQueueModuleOptions['connection'] = { url: 'redis://localhost:6379' }
+    const resolved = applyDefaults({ connection })
+
+    expect(resolved.connection).toBe(connection)
   })
 
   it('returns a frozen object that rejects mutation', () => {

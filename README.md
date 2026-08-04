@@ -711,6 +711,14 @@ message, or an exception payload. `QueueException.details` carries only scalar
 configuration values (`{ actualValue, expectedValue, limit, received }`), never a
 connection object and never `job.data`.
 
+They are also not reachable by serializing the objects that hold them. The connection is
+attached to the resolved options as a non-enumerable accessor, and the resolver keeps the
+ioredis client — which carries `options.password` as a plain field — in a private field,
+as do the registries that hold the `Queue`, `Worker` and `QueueEvents` instances. So
+`JSON.stringify`, object spread, `util.inspect` and `util.inspect` with `showHidden` all
+come back without credentials, which is what matters when a structured logger renders a
+provider it was handed or an error reporter captures the scope of a throw.
+
 ### Job data is opaque
 
 The library treats `job.data` as a payload to transport, never to inspect. It is never
@@ -755,16 +763,16 @@ key will do it twice at some point.
 
 ## 🛡️ Security Table
 
-| Layer             | Implementation                                                                                             |
-| ----------------- | ---------------------------------------------------------------------------------------------------------- |
-| Credentials       | Injected options only; never read from `process.env`, never logged, never placed in an exception           |
-| Error payloads    | `QueueException.details` restricted to scalar configuration values — no `job.data`, no connection object   |
-| Job payloads      | Treated as opaque; never deep-merged (prototype-pollution guard), never logged                             |
-| Namespacing       | `prefix` applied uniformly to `Queue`, `Worker`, `QueueEvents` and `FlowProducer`                          |
-| Connection policy | `maxRetriesPerRequest: null` confined to duplicated consumer connections; producers keep fail-fast retries |
-| Delivery          | At-least-once with a bounded drain; unacknowledged work is re-queued by BullMQ's stalled check             |
-| Supply chain      | `dependencies: {}`; SHA-pinned Actions, OSV-Scanner, TruffleHog, OpenSSF Scorecard; npm publish over OIDC  |
-| Input validation  | Options validated at bootstrap; cron patterns validated by BullMQ's own parser, never a hand-rolled regex  |
+| Layer             | Implementation                                                                                                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Credentials       | Injected options only; never read from `process.env`, never logged, never placed in an exception; held in a non-enumerable accessor and private fields, so serializing a service omits them |
+| Error payloads    | `QueueException.details` restricted to scalar configuration values — no `job.data`, no connection object                                                                                    |
+| Job payloads      | Treated as opaque; never deep-merged (prototype-pollution guard), never logged                                                                                                              |
+| Namespacing       | `prefix` applied uniformly to `Queue`, `Worker`, `QueueEvents` and `FlowProducer`                                                                                                           |
+| Connection policy | `maxRetriesPerRequest: null` confined to duplicated consumer connections; producers keep fail-fast retries                                                                                  |
+| Delivery          | At-least-once with a bounded drain; unacknowledged work is re-queued by BullMQ's stalled check                                                                                              |
+| Supply chain      | `dependencies: {}`; SHA-pinned Actions, OSV-Scanner, TruffleHog, OpenSSF Scorecard; npm publish over OIDC                                                                                   |
+| Input validation  | Options validated at bootstrap; cron patterns validated by BullMQ's own parser, never a hand-rolled regex                                                                                   |
 
 > [!IMPORTANT]
 > **Delivery is at-least-once, and `prefix` is not an access boundary.** Handlers must be
