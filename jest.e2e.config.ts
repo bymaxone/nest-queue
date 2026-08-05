@@ -10,6 +10,16 @@ import base from './jest.config.ts'
  */
 const config: Config = {
   ...base,
+  // The fixtures are a consumer simulation and need decorator metadata, which the
+  // unit suite deliberately does without. See tsconfig.e2e-jest.json.
+  transform: {
+    '^.+\\.ts$': [
+      'ts-jest',
+      {
+        tsconfig: 'tsconfig.e2e-jest.json',
+      },
+    ],
+  },
   roots: ['<rootDir>/test/e2e'],
   testMatch: ['<rootDir>/test/e2e/**/*.e2e-spec.ts'],
   collectCoverageFrom: undefined,
