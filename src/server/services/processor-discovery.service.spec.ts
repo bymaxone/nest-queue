@@ -10,8 +10,8 @@ import type { DiscoveryService } from '@nestjs/core'
 import type { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper'
 import type { Job, Worker } from 'bullmq'
 import { ProcessorDiscoveryService } from './processor-discovery.service'
-import { WorkerRegistry } from './worker-registry.service'
-import { QueueEventsRegistry } from './queue-events-registry.service'
+import type { WorkerRegistry } from './worker-registry.service'
+import type { QueueEventsRegistry } from './queue-events-registry.service'
 import { Processor } from '../decorators/processor.decorator'
 import { Process } from '../decorators/process.decorator'
 import { OnWorkerEvent } from '../decorators/on-worker-event.decorator'
@@ -68,7 +68,9 @@ describe('ProcessorDiscoveryService.onModuleInit', () => {
     const workers = mockRegistry({ on: jest.fn() })
     const eventsReg = mockEventsRegistry({ on: jest.fn() })
     const svc = new ProcessorDiscoveryService(discovery, workers, eventsReg)
-    expect(() => { svc.onModuleInit() }).not.toThrow()
+    expect(() => {
+      svc.onModuleInit()
+    }).not.toThrow()
     expect(workers.register).not.toHaveBeenCalled()
   })
 
@@ -103,9 +105,7 @@ describe('ProcessorDiscoveryService.onModuleInit', () => {
       eventsReg,
     )
     svc.onModuleInit()
-    expect(workers.register).toHaveBeenCalledWith(
-      expect.objectContaining({ queueName: 'email' }),
-    )
+    expect(workers.register).toHaveBeenCalledWith(expect.objectContaining({ queueName: 'email' }))
   })
 
   it('throws DUPLICATE_PROCESSOR when two providers target the same queue', () => {
@@ -133,7 +133,9 @@ describe('ProcessorDiscoveryService.onModuleInit', () => {
       workers,
       eventsReg,
     )
-    expect(() => { svc.onModuleInit() }).toThrow(QueueException)
+    expect(() => {
+      svc.onModuleInit()
+    }).toThrow(QueueException)
     try {
       svc.onModuleInit()
     } catch (err) {
@@ -169,7 +171,9 @@ describe('ProcessorDiscoveryService.onModuleInit', () => {
     svc.onModuleInit()
     expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('email'))
     // The warning must state the fallback value and the production-tuning advice.
-    expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('defaulting to concurrency='))
+    expect(loggerWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('defaulting to concurrency='),
+    )
     expect(loggerWarnSpy).toHaveBeenCalledWith(
       expect.stringContaining('explicit concurrency for production workloads'),
     )
@@ -334,7 +338,10 @@ describe('ProcessorDiscoveryService.buildDispatcher', () => {
     // A catch-all (@Process()) handles jobs that don't match any named handler.
     const defaultSpy = jest.fn<Promise<void>, [Job]>().mockResolvedValue(undefined)
     const sendSpy = jest.fn<Promise<void>, [Job]>().mockResolvedValue(undefined)
-    const instance: Record<string | symbol, unknown> = { handleDefault: defaultSpy, sendEmail: sendSpy }
+    const instance: Record<string | symbol, unknown> = {
+      handleDefault: defaultSpy,
+      sendEmail: sendSpy,
+    }
     const handlers = [
       { jobName: 'send-email', methodKey: 'sendEmail' },
       { methodKey: 'handleDefault' },
@@ -365,7 +372,9 @@ describe('ProcessorDiscoveryService.buildDispatcher', () => {
     const job = { name: 'other' } as unknown as Job
 
     // The rejection message must guide the developer to add a matching/catch-all handler.
-    await expect(dispatcher(job)).rejects.toThrow(/add a matching @Process\("name"\) or a catch-all/)
+    await expect(dispatcher(job)).rejects.toThrow(
+      /add a matching @Process\("name"\) or a catch-all/,
+    )
     expect(namedSpy).not.toHaveBeenCalled()
   })
 
@@ -373,10 +382,7 @@ describe('ProcessorDiscoveryService.buildDispatcher', () => {
     // Non-function values on the instance must be skipped gracefully.
     const realSpy = jest.fn<Promise<void>, [Job]>().mockResolvedValue(undefined)
     const instance: Record<string | symbol, unknown> = { realHandler: realSpy, notAFunction: 42 }
-    const handlers = [
-      { methodKey: 'notAFunction' },
-      { jobName: 'ok', methodKey: 'realHandler' },
-    ]
+    const handlers = [{ methodKey: 'notAFunction' }, { jobName: 'ok', methodKey: 'realHandler' }]
     const dispatcher = bareService().buildDispatcher(instance, handlers)
     const job = { name: 'ok' } as unknown as Job
     await dispatcher(job)

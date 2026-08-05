@@ -8,7 +8,7 @@
 
 import { Injectable, Logger } from '@nestjs/common'
 import { FlowProducer, type FlowJob, type JobNode, type Telemetry } from 'bullmq'
-import { ConnectionResolver } from './connection-resolver.service'
+import type { ConnectionResolver } from './connection-resolver.service'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'

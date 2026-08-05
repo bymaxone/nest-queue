@@ -8,7 +8,8 @@
  */
 
 import { Injectable } from '@nestjs/common'
-import { OnWorkerEvent, Process, Processor, QueueService } from '@bymax-one/nest-queue'
+import type { QueueService } from '@bymax-one/nest-queue'
+import { OnWorkerEvent, Process, Processor } from '@bymax-one/nest-queue'
 import type { Job } from 'bullmq'
 
 /** Payload for the risky job that may fail on purpose. */
