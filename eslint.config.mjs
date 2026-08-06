@@ -85,6 +85,20 @@ export default tseslint.config(
     },
   },
   {
+    // The E2E fixtures model a CONSUMER application and are compiled by ts-jest
+    // with `emitDecoratorMetadata` on (tsconfig.e2e-jest.json), because that is
+    // what a NestJS app has. A class named only as a constructor parameter type
+    // is therefore a RUNTIME use there — the metadata references the binding —
+    // even though the same shape is type-only everywhere else in this package,
+    // where the flag is off to match the published bundle. Converting these to
+    // `import type` erases the binding and the fixture's dependency arrives
+    // undefined, which is how the DLQ and flow E2E suites failed once already.
+    files: ['test/e2e/fixtures/**/*.ts'],
+    rules: {
+      '@typescript-eslint/consistent-type-imports': 'off',
+    },
+  },
+  {
     files: ['test/types/**/*.ts'],
     rules: {
       // The invariant-equality helper compares two generic signatures that each
