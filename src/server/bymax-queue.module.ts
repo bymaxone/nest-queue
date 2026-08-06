@@ -37,6 +37,9 @@ import { QueueLifecycle } from './lifecycle/queue-lifecycle.service'
 
 /** Generated configurable-module artifacts; `forRoot`/`forRootAsync` register the module. */
 export const { ConfigurableModuleClass, MODULE_OPTIONS_TOKEN, OPTIONS_TYPE, ASYNC_OPTIONS_TYPE } =
+  // The `moduleName` shapes the generated token's description only — a label read in Nest's DI
+  // error output, never compared against anything. Mutation testing reports it as surviving for
+  // that reason; no Stryker directive attaches inside this builder chain, so the note lives here.
   new ConfigurableModuleBuilder<BymaxQueueModuleOptions>({ moduleName: 'BymaxQueue' })
     .setClassMethodName('forRoot')
     .setFactoryMethodName('createQueueOptions')

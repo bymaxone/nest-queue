@@ -112,6 +112,7 @@ export class QueueLifecycle implements OnModuleDestroy {
         closed,
         new Promise<never>((_resolve, reject) => {
           timer = setTimeout(() => {
+            // Stryker disable next-line StringLiteral: equivalent — this rejection only loses the race; the caller catches it and emits the warning, whose text IS asserted, so the message never reaches an observable surface
             reject(new Error('drain timeout'))
           }, timeoutMs)
         }),

@@ -18,6 +18,25 @@ import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options
 const baseConnection: BymaxQueueModuleOptions['connection'] = { url: 'redis://localhost:6379' }
 
 describe('applyDefaults', () => {
+  // The Redis credentials are withheld behind a non-enumerable ACCESSOR, and `configurable:
+  // false` is the whole guarantee. A configurable accessor can be redefined back into a plain
+  // enumerable value by anything holding the object — which is exactly the serialization the
+  // accessor exists to prevent, and this object is injected into four services. Nothing else in
+  // this suite can tell `false` from `true` here, because every other assertion passes either
+  // way. The same gap existed in three sibling packages.
+  it('pins the withheld connection so it cannot be redefined into view', () => {
+    const resolved = applyDefaults({ connection: { url: 'redis://user:hunter2@localhost:6379' } })
+
+    const descriptor = Object.getOwnPropertyDescriptor(resolved, 'connection')
+    expect(descriptor?.configurable).toBe(false)
+    expect(descriptor?.enumerable).toBe(false)
+    expect(() => {
+      Object.defineProperty(resolved, 'connection', { value: 'rewritten', enumerable: true })
+    }).toThrow(TypeError)
+    expect(JSON.stringify(resolved)).not.toContain('hunter2')
+    expect(inspect(resolved, { showHidden: true })).not.toContain('hunter2')
+  })
+
   it('fills every optional field with its default', () => {
     // A minimal config resolves to a fully-populated options object.
     const resolved = applyDefaults({ connection: baseConnection })
