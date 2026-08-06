@@ -1,0 +1,16 @@
+{
+  // ts-jest config for the E2E suite ONLY.
+  //
+  // The fixtures under `test/e2e/fixtures` model a CONSUMER application, and a
+  // NestJS app has `emitDecoratorMetadata` on by default — its processors inject
+  // by reflected constructor type. The unit suite compiles WITHOUT it, because
+  // esbuild cannot emit it and the published bundle therefore carries none, so a
+  // library class depending on reflected types fails where it is cheap to see.
+  //
+  // Those two requirements are opposite, which is why this file exists instead of
+  // a flag on `tsconfig.jest.json`, which both suites would share.
+  "extends": "./tsconfig.jest.json",
+  "compilerOptions": {
+    "emitDecoratorMetadata": true
+  }
+}

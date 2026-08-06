@@ -1,6 +1,12 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    // The E2E fixtures model a CONSUMER application, and a NestJS app has
+    // `emitDecoratorMetadata` on by default — its processors inject by reflected
+    // type. The library's own source compiles without it (see tsconfig.json),
+    // because esbuild cannot emit it and the published bundle therefore has none.
+    // Keeping it on here is what makes this suite a faithful consumer simulation.
+    "emitDecoratorMetadata": true,
     "noEmit": true,
     "rootDir": ".",
     "noUnusedParameters": false,

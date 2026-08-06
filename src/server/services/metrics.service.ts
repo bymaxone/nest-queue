@@ -8,7 +8,7 @@
 
 import { Injectable } from '@nestjs/common'
 import type { QueueMetrics } from '../../shared/types/queue-metrics.types'
-import { QueueService } from './queue.service'
+import type { QueueService } from './queue.service'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 
