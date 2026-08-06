@@ -95,3 +95,34 @@ NODE_OPTIONS=--max-old-space-size=4096 pnpm exec stryker run --mutate "src/serve
 ```
 
 The HTML and JSON reports are written to `reports/mutation/`.
+
+---
+
+## Re-run — 2026-08-06
+
+| Metric             | Value        |
+| ------------------ | ------------ |
+| **Mutation score** | **99.68 %**  |
+| Surviving mutants  | 2            |
+| Break threshold    | 95 % -> PASS |
+
+The Redis credentials are withheld behind a non-enumerable accessor, and nothing asserted the
+shape of that guarantee: not that the property is non-enumerable, not that redefining it throws,
+and not that the URL's password stays out of both `JSON.stringify` and
+`inspect({ showHidden: true })`. It does now.
+
+`configurable: false` on that accessor is equivalent here — the resolved options are
+`Object.freeze`d on the way out — and the flag stays because the storage package withholds
+credentials the same way WITHOUT freezing, where it is load-bearing.
+
+The remaining survivor is the generated module's `moduleName`, a label in Nest's DI error output
+that is compared against nothing. It stays counted: no Stryker directive attaches inside a
+builder chain, and suppressing it under a form that does not work would be worse than leaving it
+visible.
+
+Every equivalence claim in this section was checked by running the mutant, not by reading it.
+Where a `// Stryker disable next-line` directive was found not to apply — above a `} catch {`, a
+`.replace()` inside a method chain, a multi-line `sort(...)` argument, or anywhere inside a
+builder chain — it was replaced with the block `disable`/`restore` form, or, where that does not
+work either, with a plain comment at the line so the reasoning is visible rather than silently
+ineffective.

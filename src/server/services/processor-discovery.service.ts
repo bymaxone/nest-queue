@@ -75,13 +75,13 @@ export class ProcessorDiscoveryService implements OnModuleInit {
 
     for (const wrapper of providers) {
       const instance: unknown = wrapper.instance
+      // Stryker disable next-line ConditionalExpression: equivalent — a truthy non-object provider is a function, whose `constructor` is `Function` and carries none of the processor metadata read below, so it is skipped either way
       if (!instance || typeof instance !== 'object') continue
 
       const ctor = (instance as WithConstructor).constructor
 
       const processorMeta = Reflect.getOwnMetadata(PROCESSOR_METADATA_KEY, ctor) as
-        | ProcessorMetadata
-        | undefined
+        ProcessorMetadata | undefined
       if (!processorMeta) continue
 
       this.wireProcessor(instance as Record<string | symbol, unknown>, processorMeta)

@@ -77,6 +77,7 @@ export function applyDefaults(opts: BymaxQueueModuleOptions): Readonly<ResolvedQ
   Object.defineProperty(base, 'connection', {
     get: (): QueueConnectionConfig => connection,
     enumerable: false,
+    // Stryker disable next-line BooleanLiteral: equivalent HERE — this object is `Object.freeze`d on the way out, and freezing makes every property non-configurable regardless. The flag stays because it states the guarantee at the point the accessor is defined, and because the sibling packages that withhold secrets the same way are NOT frozen, where it is load-bearing
     configurable: false,
   })
 

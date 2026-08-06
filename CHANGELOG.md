@@ -7,6 +7,22 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.9] — 2026-08-06
+
+**Published-artifact change, not a behavioural one.** `dist/` differs from `1.0.8` — this
+bundler preserves comments and the source gained mutation-suppression notes — but no runtime
+path changed. Measured by building both revisions and diffing the output.
+
+### Documentation
+
+- The mutation badge and README said **99.06%**; the measured score is **99.68%**.
+
+### Tests
+
+- The withheld Redis connection now has the shape of its guarantee asserted: that the property is
+  non-enumerable, that redefining it throws, and that the URL's password stays out of both
+  `JSON.stringify` and `inspect({ showHidden: true })`.
+
 ## [1.0.8] — 2026-08-04
 
 **Runtime change.** `dist/` differs from `1.0.7`.
@@ -389,6 +405,7 @@ v6 peer range.
 
 ---
 
+[1.0.9]: https://github.com/bymaxone/nest-queue/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/bymaxone/nest-queue/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/bymaxone/nest-queue/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/bymaxone/nest-queue/releases/tag/v1.0.6
