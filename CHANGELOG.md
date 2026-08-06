@@ -7,6 +7,29 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.10] — 2026-08-06
+
+**Documentation and tooling only.** `dist/` is byte-identical to `1.0.9`; no source file
+changed.
+
+### Fixed
+
+- The quality bullet claimed "no suppression comments" while the source carries five
+  `// Stryker disable` comments. The claim was about type suppressions and read as false to
+  anyone who grepped for it; it now says what is true — no `@ts-ignore` and no
+  `eslint-disable`.
+
+### Added
+
+- `check:mutants` gate (`scripts/check-mutation-directives.mjs`) — validates every
+  `// Stryker` comment against the grammar Stryker's own parser accepts, rejecting a reason
+  written after `--` instead of a colon (silently dropped, and the report then shows
+  `Ignored using a comment`), a reason wrapped onto a second comment line (the report keeps
+  only the first fragment), and a mutator name Stryker does not know, which matches nothing
+  and so silences nothing. Wired into CI and `prepublishOnly`.
+- `docs/mutation_testing_plan.md` carries the suppression policy now shared, word for word,
+  across the `@bymax-one/nest-*` libraries.
+
 ## [1.0.9] — 2026-08-06
 
 **Published-artifact change, not a behavioural one.** `dist/` differs from `1.0.8` — this
@@ -405,6 +428,7 @@ v6 peer range.
 
 ---
 
+[1.0.10]: https://github.com/bymaxone/nest-queue/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/bymaxone/nest-queue/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/bymaxone/nest-queue/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/bymaxone/nest-queue/compare/v1.0.6...v1.0.7
