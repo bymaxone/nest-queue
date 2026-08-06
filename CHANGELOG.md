@@ -9,8 +9,9 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.0.9] — 2026-08-06
 
-**Runtime change.** `dist/` differs from `1.0.8`: the source carries new mutation-suppression
-comments, and this package's bundler preserves comments.
+**Published-artifact change, not a behavioural one.** `dist/` differs from `1.0.8` — this
+bundler preserves comments and the source gained mutation-suppression notes — but no runtime
+path changed. Measured by building both revisions and diffing the output.
 
 ### Documentation
 
