@@ -19,6 +19,21 @@ changed.
   anyone who grepped for it; it now says what is true — no `@ts-ignore` and no
   `eslint-disable`.
 
+### Security
+
+- **The OSV scan was passing because it had nothing to read.** The workflow ran
+  `osv-scanner` with no `actions/checkout` step, so it walked an empty workspace and
+  reported "No package sources found" and "No lockfiles found" before exiting 0. A green
+  check meant the scanner found no files, which is indistinguishable from finding no
+  vulnerabilities. With the checkout in place it scans the lockfile, which is how the next
+  item was found.
+- **`js-yaml` is patched to the fixed release** (GHSA-5p4m-2wfm-xmqj, CVSS 7.5). The
+  override floors here already scoped it per major but admitted `3.15.0` and `4.3.0`, both
+  covered by the advisory; they are raised to `^3.15.1` and `^4.3.1`. It reaches this repo
+  only through `jest` -> `babel-plugin-istanbul` -> `@istanbuljs/load-nyc-config`, and
+  `dependencies` is empty, so nothing here ships it and no consumer was exposed. `dist/` is
+  unaffected.
+
 ### Added
 
 - `check:mutants` gate (`scripts/check-mutation-directives.mjs`) — validates every

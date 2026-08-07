@@ -38,8 +38,10 @@ overrides:
   'esbuild': '^0.28.1'
   'fast-uri': '^3.1.5'
   'find-my-way': '^9.6.1'
-  'js-yaml@3': '^3.15.0'
-  'js-yaml@4': '^4.3.0'
+  # Floors raised to the fix for GHSA-5p4m-2wfm-xmqj (CVSS 7.5); the previous floors
+  # admitted 3.15.0 and 4.3.0, which the advisory covers.
+  'js-yaml@3': '^3.15.1'
+  'js-yaml@4': '^4.3.1'
   'protobufjs': '^7.6.5'
   'qs': '^6.15.2'
   # Scoped by major, like the js-yaml pair above: unscoped, a future transitive on
