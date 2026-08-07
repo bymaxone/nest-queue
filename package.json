@@ -1,6 +1,6 @@
 {
   "name": "@bymax-one/nest-queue",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "NestJS dynamic module wrapping BullMQ — typed jobs, flows, job schedulers, deduplication, OpenTelemetry, graceful shutdown",
   "author": "Bymax One <support@bymax.one>",
   "license": "MIT",
@@ -56,6 +56,7 @@
   "scripts": {
     "build": "pnpm clean && tsup",
     "check:exports": "attw --pack .",
+    "check:mutants": "node scripts/check-mutation-directives.mjs",
     "check:published": "node scripts/check-published-surface.mjs",
     "clean": "rm -rf dist coverage",
     "lint": "eslint src scripts test",
@@ -64,7 +65,7 @@
     "mutation:dry-run": "stryker run --dryRunOnly",
     "mutation:incremental": "stryker run --incremental",
     "prepare": "husky",
-    "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && pnpm build && pnpm check:published",
+    "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm test:types && pnpm lint && pnpm check:mutants && pnpm test:cov:all && pnpm build && pnpm check:published",
     "release": "npm publish --provenance --access public",
     "size": "node scripts/check-size.mjs",
     "smoke": "node scripts/dogfood-smoke-test.mjs",

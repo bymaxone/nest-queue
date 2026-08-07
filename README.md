@@ -87,7 +87,7 @@ peer dependencies, so you control exact versions and the supply-chain surface st
 - ✅ **Stable error catalog** — namespaced codes exported from both subpaths, so a frontend maps a `code` without importing the server
 - ✅ **Dual-format output** — ESM + CJS with declarations for each format, verified against the packed tarball on every PR
 - ✅ **Opt-in observability** — OpenTelemetry passthrough via `bullmq-otel`, plus a `MetricsService` with a configurable TTL cache
-- ✅ **Typed end to end** — TypeScript `strict` with `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`; zero `any`, no suppression comments
+- ✅ **Typed end to end** — TypeScript `strict` with `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`; zero `any`, no `@ts-ignore` and no `eslint-disable`
 
 ---
 
