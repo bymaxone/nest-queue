@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   ci:
-    uses: bymaxone/.github/.github/workflows/node-lib-ci.yml@bcd95609cd724e6d86168f3dd6e40eff4d2077ad # v1
+    uses: bymaxone/.github/.github/workflows/node-lib-ci.yml@v1
     with:
       run-format-check: false # no format:check script; prettier runs via lint/pre-commit
       run-build: false # build + size verified in the `verify` job below
@@ -49,7 +49,7 @@ jobs:
           # prevent. The script also fetches tags itself; this makes it explicit
           # rather than dependent on the runner having credentials to do so.
           fetch-depth: 0
-      - uses: bymaxone/.github/.github/actions/setup-node-pnpm@bcd95609cd724e6d86168f3dd6e40eff4d2077ad # v1
+      - uses: bymaxone/.github/.github/actions/setup-node-pnpm@v1
       - name: Type-level API tests
         # Compiles test/types/ against src/, pinning the published signatures so
         # a refactor that widens or loosens one fails here rather than silently.
@@ -100,7 +100,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: bymaxone/.github/.github/actions/setup-node-pnpm@bcd95609cd724e6d86168f3dd6e40eff4d2077ad # v1
+      - uses: bymaxone/.github/.github/actions/setup-node-pnpm@v1
       - name: Pre-pull pinned Redis image (cache for Testcontainers)
         run: docker pull redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
       - name: E2E tests
@@ -113,7 +113,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: bymaxone/.github/.github/actions/setup-node-pnpm@bcd95609cd724e6d86168f3dd6e40eff4d2077ad # v1
+      - uses: bymaxone/.github/.github/actions/setup-node-pnpm@v1
       - name: Build library
         run: pnpm build
       - name: Typecheck the consumer app
@@ -145,7 +145,7 @@ jobs:
     # Dependency review needs the dependency graph (public repos, or private + GHAS).
     # Gated on visibility so it starts running automatically once this repo is public.
     if: github.event_name == 'pull_request' && github.event.repository.visibility == 'public'
-    uses: bymaxone/.github/.github/workflows/security.yml@bcd95609cd724e6d86168f3dd6e40eff4d2077ad # v1
+    uses: bymaxone/.github/.github/workflows/security.yml@v1
     with:
       fail-on-severity: high
 
