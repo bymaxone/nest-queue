@@ -111,6 +111,11 @@ export class QueueService {
    * **producers** and do not change the at-least-once guarantee on the
    * **consumer** side.
    *
+   * The deduplication `id` is a shared key across the queue, so a multi-tenant
+   * producer MUST scope it by tenant: keyed on the value alone
+   * (`` `reindex:${term}` ``), tenant A enqueuing a term suppresses tenant B's job
+   * for the same term. Include the tenant (`` `${tenantId}:reindex:${term}` ``).
+   *
    * Deduplication modes (`deduplication: { id, ttl?, extend?, replace?, keepLastIfActive? }`):
    *  - Simple `{ id }` — collapse duplicates until the in-flight job completes or fails.
    *  - Throttle `{ id, ttl }` — ignore duplicates for `ttl` milliseconds.
@@ -124,9 +129,10 @@ export class QueueService {
    * @param data - Typed job payload.
    * @param options - Per-job BullMQ options (priority, delay, `jobId`, `deduplication`, ...).
    * @returns The created job.
-   * @example Throttle: at most one reindex per term every 5 seconds.
+   * @example Throttle: at most one reindex per term every 5 seconds. The dedup key
+   *   carries the tenant so one tenant's term cannot suppress another's.
    *   await queueService.enqueue('search', 'reindex', { term }, {
-   *     deduplication: { id: `reindex:${term}`, ttl: 5_000 },
+   *     deduplication: { id: `${tenantId}:reindex:${term}`, ttl: 5_000 },
    *   })
    */
   async enqueue<TData = unknown, TResult = unknown>(
