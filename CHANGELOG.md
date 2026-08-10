@@ -7,6 +7,37 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.0] — 2026-08-10
+
+**Breaking, shipped as a minor by choice.** The peer ranges move to the next major of each
+Redis/BullMQ package and the `'paused'` job state is removed from the public status surface —
+changes that would normally warrant a major. They ship under a minor because the package has no
+downstream consumer yet; every breaking detail is called out below so a first adopter sees it.
+
+### Changed
+
+- **Peer dependencies migrated to the next major:** `bullmq` `^5` → `^6`, `bullmq-otel` `^1` →
+  `^2`, and `ioredis` `^5` → `^6`. A consumer must upgrade all three together. `ioredis` 6 keeps
+  `'legacy'` reply mapping by default, so BullMQ's reply-shape assumptions are unaffected; it does
+  require Node.js ≥ 20, already covered by this package's `engines`.
+
+### Removed
+
+- **`'paused'` is no longer a job status.** BullMQ 6 dropped `'paused'` from its job-state set —
+  jobs on a paused queue now live in `'wait'`. It is therefore removed from the `JobStatus` union,
+  from the `JOB_STATUS` constant (`JOB_STATUS.PAUSED` no longer exists), and from the
+  `getMetrics().counts` shape, which now reports the five remaining statuses (`waiting`, `active`,
+  `completed`, `failed`, `delayed`). The queue-lifecycle `'paused'`/`'resumed'` **events**
+  (`@OnQueueEvent`) and the `pauseQueue`/`resumeQueue` methods are unchanged — those describe the
+  queue, not a job.
+
+### Internal
+
+- Dev-tooling bumps: `eslint` `^10`, `typescript` `^6`, `@types/node` `^26`, plus `@eslint/js`
+  `^10`. These do not ship and do not change `dist/`. The package's `engines` stays at Node ≥ 24.
+- Mutation gate tightened: Stryker `break`/`high` raised from 95/99 → **100** (the run is at 100%,
+  0 survivors).
+
 ## [1.0.11] — 2026-08-10
 
 **Documentation only.** The shipped declaration comments change (`dts` preserves them); no runtime
@@ -456,6 +487,7 @@ v6 peer range.
 
 ---
 
+[1.2.0]: https://github.com/bymaxone/nest-queue/compare/v1.0.11...v1.2.0
 [1.0.11]: https://github.com/bymaxone/nest-queue/compare/v1.0.10...v1.0.11
 [1.0.10]: https://github.com/bymaxone/nest-queue/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/bymaxone/nest-queue/compare/v1.0.8...v1.0.9

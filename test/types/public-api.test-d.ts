@@ -100,7 +100,7 @@ export type _GetJob = Expect<
   Equal<typeof _fetched, Promise<Job<WelcomePayload, WelcomeResult> | null>>
 >
 
-// The status filter is the six-member union, not a bare `string`: a typo is a
+// The status filter is the five-member union, not a bare `string`: a typo is a
 // compile error rather than a query that silently returns nothing.
 export type _GetJobsStatusArg = Expect<Equal<Parameters<QueueService['getJobs']>[1], JobStatus>>
 
@@ -132,7 +132,7 @@ export type _MetricsCollectedAt = Expect<Equal<QueueMetrics['collectedAt'], stri
 // The union and the constant object stay in sync in BOTH directions: adding a
 // member to one without the other breaks here.
 export type _JobStatusUnion = Expect<
-  Equal<JobStatus, 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'paused'>
+  Equal<JobStatus, 'waiting' | 'active' | 'completed' | 'failed' | 'delayed'>
 >
 export type _JobStatusConstCoversUnion = Expect<
   Equal<(typeof JOB_STATUS)[keyof typeof JOB_STATUS], JobStatus>

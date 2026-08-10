@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Typed BullMQ queues for NestJS</strong><br />
-  <sub>BullMQ 5 · Workers · Flows · Job Schedulers · Deduplication · OpenTelemetry · Graceful Shutdown · Zero Runtime Dependencies</sub>
+  <sub>BullMQ 6 · Workers · Flows · Job Schedulers · Deduplication · OpenTelemetry · Graceful Shutdown · Zero Runtime Dependencies</sub>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 
 ## ✨ Overview
 
-`@bymax-one/nest-queue` is a NestJS dynamic module that wraps **BullMQ 5** behind a typed,
+`@bymax-one/nest-queue` is a NestJS dynamic module that wraps **BullMQ 6** behind a typed,
 opinionated surface. Instead of wiring `ioredis` connections, per-queue registration, and
 `maxRetriesPerRequest` policy by hand, you install one library and get typed producers,
 decorator-based workers, flows, recurring **Job Schedulers**, native deduplication,
@@ -114,11 +114,11 @@ Both subpaths ship ESM **and** CommonJS with declarations for each format, so a
 
 ### Peer dependency matrix
 
-| Subpath      | Required peers                                                                                            |
-| ------------ | --------------------------------------------------------------------------------------------------------- |
-| `.` (server) | `@nestjs/common ^11.0.16`, `@nestjs/core ^11.1.18`, `bullmq ^5.16`, `ioredis ^5`, `reflect-metadata ^0.2` |
-| `./shared`   | None                                                                                                      |
-| Optional     | `bullmq-otel ^1` (OpenTelemetry)                                                                          |
+| Subpath      | Required peers                                                                                             |
+| ------------ | ---------------------------------------------------------------------------------------------------------- |
+| `.` (server) | `@nestjs/common ^11.0.16`, `@nestjs/core ^11.1.18`, `bullmq ^6.0`, `ioredis ^6.0`, `reflect-metadata ^0.2` |
+| `./shared`   | None                                                                                                       |
+| Optional     | `bullmq-otel ^2` (OpenTelemetry)                                                                           |
 
 > [!IMPORTANT]
 > `reflect-metadata` is a **global polyfill the application owns** — import it once at
@@ -785,11 +785,11 @@ key will do it twice at some point.
 
 - **Runtime:** Node.js 24+
 - **Framework:** NestJS 11 (`ConfigurableModuleBuilder` + `setExtras`)
-- **Queue engine:** BullMQ `^5.16` (peer) over `ioredis ^5` (peer)
-- **Telemetry:** `bullmq-otel ^1` (optional peer)
+- **Queue engine:** BullMQ `^6.0` (peer) over `ioredis ^6.0` (peer)
+- **Telemetry:** `bullmq-otel ^2` (optional peer)
 - **Build:** tsup — ESM + CJS per subpath, with `.d.ts` _and_ `.d.cts` declarations
 - **Tests:** Jest + `@testcontainers/redis` (E2E) + Stryker (mutation)
-- **TypeScript:** 5.x strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), zero `any`
+- **TypeScript:** 6.x strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), zero `any`
 
 ---
 
@@ -884,9 +884,9 @@ do not pick them up:
 
 - **NestJS only** — does not work with plain Express, standalone Fastify, or other frameworks.
 - **Node.js only** — Deno and Bun are not supported.
-- **BullMQ `^5.16` (1.x floor)** — v6 promotion is planned once the E2E suite is
-  green on the v5 + v6 matrix; see the BullMQ version policy in
-  [`CHANGELOG.md`](CHANGELOG.md).
+- **BullMQ `^6.0` only** — the library targets BullMQ 6 (with `bullmq-otel ^2` for telemetry)
+  and does not support BullMQ 5; the `'paused'` job state that v6 removed is no longer exposed.
+  See the BullMQ version policy in [`CHANGELOG.md`](CHANGELOG.md).
 - **No Redis Cluster sharding** — BullMQ's cluster support is not exercised by this library.
 - **No built-in DLQ helper** — use the `@OnWorkerEvent('failed')` pattern above.
 - **No Prometheus metrics export** — `getMetrics()` returns snapshots; publish them

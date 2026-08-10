@@ -407,7 +407,7 @@ function checkChangelog() {
   } catch {
     // No network or no remote — the local tags below are then all there is.
   }
-  let released = []
+  let released
   try {
     released = execFileSync('git', ['tag', '--list', 'v*.*.*'], { cwd: ROOT, encoding: 'utf8' })
       .split('\n')
@@ -474,6 +474,9 @@ function scaffoldConsumer() {
           noEmit: true,
           rootDir: '..',
           baseUrl: '.',
+          // `baseUrl` blanks out the inherited `paths`, and TypeScript 6 reports it as the
+          // deprecation error TS5101; the flag accepts it so this generated config compiles.
+          ignoreDeprecations: '6.0',
           paths: {},
           noUnusedLocals: false,
           // A README snippet may name a handler parameter it does not use; that is

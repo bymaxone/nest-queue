@@ -225,7 +225,6 @@ export class QueueService {
       'completed',
       'failed',
       'delayed',
-      'paused',
     )
     return {
       queue: queueName,

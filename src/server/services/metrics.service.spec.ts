@@ -16,7 +16,7 @@ const TTL_MS = 5000
 function snapshot(queue: string): QueueMetrics {
   return {
     queue,
-    counts: { waiting: 1, active: 0, completed: 0, failed: 0, delayed: 0, paused: 0 },
+    counts: { waiting: 1, active: 0, completed: 0, failed: 0, delayed: 0 },
     collectedAt: new Date().toISOString(),
   }
 }
@@ -36,10 +36,7 @@ function makeQueueService(queueNames: string[] = []): MockQueueService {
 }
 
 /** Construct a MetricsService bound to the mock QueueService. */
-function makeService(
-  qs: MockQueueService,
-  enabled = true,
-): MetricsService {
+function makeService(qs: MockQueueService, enabled = true): MetricsService {
   return new MetricsService(qs as unknown as QueueService, enabled, TTL_MS)
 }
 

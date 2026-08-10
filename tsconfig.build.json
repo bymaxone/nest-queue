@@ -3,7 +3,10 @@
   "compilerOptions": {
     "declaration": true,
     "declarationMap": false,
-    "sourceMap": false
+    "sourceMap": false,
+    // tsup's DTS pass sets `baseUrl`, which TypeScript 6 reports as the deprecation error
+    // TS5101; this flag accepts it so the declaration build compiles.
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "coverage", "**/*.spec.ts", "test"]
