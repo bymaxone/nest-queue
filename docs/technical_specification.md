@@ -1,7 +1,7 @@
 # @bymax-one/nest-queue — Complete Technical Specification
 
-> **Spec revision:** 2.1.0 — aligned to the Bymax Lib Standard and to the current BullMQ API
-> **Last updated:** 2026-07-30
+> **Spec revision:** 2.2.0 — aligned to the Bymax Lib Standard and to the current BullMQ API
+> **Last updated:** 2026-08-10
 > **Status:** Implemented — released as `1.0.0`. This document describes the shipped contract; §15 is retained as the historical implementation record.
 > **Type:** Public npm package (`@bymax-one/nest-queue`)
 > **Target engine:** BullMQ `^6.0.0` (validated against `6.0.10`)

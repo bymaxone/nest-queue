@@ -100,7 +100,7 @@ export type _GetJob = Expect<
   Equal<typeof _fetched, Promise<Job<WelcomePayload, WelcomeResult> | null>>
 >
 
-// The status filter is the six-member union, not a bare `string`: a typo is a
+// The status filter is the five-member union, not a bare `string`: a typo is a
 // compile error rather than a query that silently returns nothing.
 export type _GetJobsStatusArg = Expect<Equal<Parameters<QueueService['getJobs']>[1], JobStatus>>
 

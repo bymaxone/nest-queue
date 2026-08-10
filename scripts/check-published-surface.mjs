@@ -474,9 +474,8 @@ function scaffoldConsumer() {
           noEmit: true,
           rootDir: '..',
           baseUrl: '.',
-          // `baseUrl` is required to blank out the inherited `paths`, and
-          // TypeScript 6 deprecates it; the flag keeps the gate compiling until
-          // the mapping-free resolution `paths: {}` implies lands in a later major.
+          // `baseUrl` blanks out the inherited `paths`, and TypeScript 6 reports it as the
+          // deprecation error TS5101; the flag accepts it so this generated config compiles.
           ignoreDeprecations: '6.0',
           paths: {},
           noUnusedLocals: false,

@@ -41,7 +41,7 @@ function isOperationalError(err: unknown): boolean {
 type TypedJob<TData, TResult> = Job<TData, TResult>
 
 /** Status filter accepted by {@link QueueService.cleanQueue}, matching BullMQ. */
-type CleanableStatus = 'completed' | 'failed' | 'delayed' | 'wait' | 'active'
+type CleanableStatus = 'completed' | 'failed' | 'delayed' | 'wait' | 'active' | 'paused'
 
 /**
  * The central interaction point with BullMQ queues. Maintains a per-name `Queue`
