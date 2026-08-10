@@ -10,4 +10,4 @@
  * @example
  * const status: JobStatus = 'waiting'
  */
-export type JobStatus = 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'paused'
+export type JobStatus = 'waiting' | 'active' | 'completed' | 'failed' | 'delayed'

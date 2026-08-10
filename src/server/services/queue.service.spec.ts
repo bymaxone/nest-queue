@@ -289,7 +289,7 @@ describe('QueueService — metrics', () => {
     // getMetrics returns the documented snapshot shape.
     const { service } = makeService()
     service.getOrCreateQueue('email')
-    const counts = { waiting: 1, active: 2, completed: 3, failed: 4, delayed: 5, paused: 6 }
+    const counts = { waiting: 1, active: 2, completed: 3, failed: 4, delayed: 5 }
     queueInstances[0]?.getJobCounts.mockResolvedValue(counts)
 
     const metrics = await service.getMetrics('email')
@@ -300,7 +300,6 @@ describe('QueueService — metrics', () => {
       'completed',
       'failed',
       'delayed',
-      'paused',
     )
     expect(metrics.queue).toBe('email')
     expect(metrics.counts).toEqual(counts)

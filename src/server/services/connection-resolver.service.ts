@@ -6,7 +6,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common'
-import { Redis } from 'ioredis'
+import { Redis, type RedisOptions } from 'ioredis'
 import { BYMAX_QUEUE_OPTIONS } from '../bymax-queue.constants'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
 import type { QueueConnectionMode } from '../interfaces/queue-connection.interface'
@@ -15,6 +15,22 @@ import { duplicateConnection } from '../utils/duplicate-connection'
 import { DEFAULT_CONNECTION_READY_TIMEOUT_MS } from '../constants/default-options'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
+
+/**
+ * The exact options shape ioredis 6's `Redis` constructor accepts.
+ *
+ * `RedisOptions` declares `replyMapping?: ReplyMappingMode | undefined`, but the
+ * constructor overloads intersect it with `{ replyMapping?: ReplyMappingMode }`
+ * (no `undefined`) to infer the reply-mapping generic. Under
+ * `exactOptionalPropertyTypes` a plain `RedisOptions` value is therefore not
+ * assignable to the constructor, so the owned-connection options are built
+ * against this narrowed shape. `NonNullable` reconstructs the constructor's
+ * requirement from the exported type alone, without reaching for an unexported
+ * internal one.
+ */
+type OwnedRedisOptions = Omit<RedisOptions, 'replyMapping'> & {
+  replyMapping?: NonNullable<RedisOptions['replyMapping']>
+}
 
 /**
  * Resolves the Queue-role Redis connection and tracks ownership so the lifecycle
@@ -57,11 +73,23 @@ export class ConnectionResolver {
     this.mode = 'mode-b-owned'
     this.#client =
       'url' in cfg
-        ? new Redis(cfg.url, { ...(cfg.options ?? {}), lazyConnect: false })
-        : new Redis({ ...cfg.options, lazyConnect: false })
+        ? new Redis(cfg.url, this.ownedOptions(cfg.options))
+        : new Redis(this.ownedOptions(cfg.options))
     await this.waitReady(
       this.#options.connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS,
     )
+  }
+
+  /**
+   * Merge the consumer's options with the owned-connection policy
+   * (`lazyConnect: false`, so the client connects eagerly and `init` can wait
+   * for `ready`) and narrow the result to the shape ioredis 6's constructor
+   * accepts. The runtime object is unchanged — the cast only drops the
+   * `undefined` that `RedisOptions.replyMapping` carries and the constructor
+   * rejects.
+   */
+  private ownedOptions(options?: Partial<RedisOptions>): OwnedRedisOptions {
+    return { ...(options ?? {}), lazyConnect: false } as OwnedRedisOptions
   }
 
   /** The resolved Queue-role client. */

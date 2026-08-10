@@ -132,7 +132,7 @@ export type _MetricsCollectedAt = Expect<Equal<QueueMetrics['collectedAt'], stri
 // The union and the constant object stay in sync in BOTH directions: adding a
 // member to one without the other breaks here.
 export type _JobStatusUnion = Expect<
-  Equal<JobStatus, 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'paused'>
+  Equal<JobStatus, 'waiting' | 'active' | 'completed' | 'failed' | 'delayed'>
 >
 export type _JobStatusConstCoversUnion = Expect<
   Equal<(typeof JOB_STATUS)[keyof typeof JOB_STATUS], JobStatus>

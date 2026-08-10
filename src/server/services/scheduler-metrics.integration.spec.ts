@@ -26,16 +26,13 @@ jest.mock('bullmq', () => ({
   Queue: jest.fn().mockImplementation(() => {
     const instance = Object.assign(new EventEmitter(), {
       upsertJobScheduler: jest.fn().mockResolvedValue({ id: 'repeat:nightly:1' } as Job),
-      getJobCounts: jest
-        .fn()
-        .mockResolvedValue({
-          waiting: 2,
-          active: 0,
-          completed: 9,
-          failed: 0,
-          delayed: 1,
-          paused: 0,
-        }),
+      getJobCounts: jest.fn().mockResolvedValue({
+        waiting: 2,
+        active: 0,
+        completed: 9,
+        failed: 0,
+        delayed: 1,
+      }),
       close: jest.fn().mockResolvedValue(undefined),
     }) as MockQueue
     queueInstances.push(instance)

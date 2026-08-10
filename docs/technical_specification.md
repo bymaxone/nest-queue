@@ -4,7 +4,7 @@
 > **Last updated:** 2026-07-30
 > **Status:** Implemented — released as `1.0.0`. This document describes the shipped contract; §15 is retained as the historical implementation record.
 > **Type:** Public npm package (`@bymax-one/nest-queue`)
-> **Target engine:** BullMQ `^5.16.0` (validated against `5.79.1`, the current release at the time of writing)
+> **Target engine:** BullMQ `^6.0.0` (validated against `6.0.10`)
 > **Origin:** Consolidates and supersedes an internal hand-rolled BullMQ helper (~154 LoC) used in a production NestJS app, re-designed as a public, fully-typed library.
 
 ---
@@ -99,7 +99,7 @@ The lib resolves each of these frictions with sensible defaults and a typed API.
 | License   | MIT                                       |
 | Runtime   | Node.js 24+                               |
 | Framework | NestJS 11+ (server)                       |
-| Engine    | BullMQ `^5.16.0` (Job Schedulers API)     |
+| Engine    | BullMQ `^6.0.0` (Job Schedulers API)      |
 | Subpaths  | `.` (server), `./shared`                  |
 | Size      | ≤ 18 KiB brotli (`check-size.mjs` target) |
 
@@ -952,7 +952,7 @@ async getJob<TData = unknown, TResult = unknown>(
  * Fetches jobs by status with pagination.
  *
  * @param queueName - Target queue
- * @param status - Job status filter (waiting | active | completed | failed | delayed | paused)
+ * @param status - Job status filter (waiting | active | completed | failed | delayed)
  * @param start - Starting index (inclusive). Default: 0
  * @param end - Ending index (inclusive). Default: 50
  */
@@ -989,7 +989,6 @@ export interface QueueMetrics {
     completed: number
     failed: number
     delayed: number
-    paused: number
   }
   collectedAt: string // ISO timestamp
 }
@@ -1011,7 +1010,7 @@ async cleanQueue(
   queueName: string,
   gracePeriodMs: number,
   limit: number,
-  status?: 'completed' | 'failed' | 'delayed' | 'wait' | 'active' | 'paused'
+  status?: 'completed' | 'failed' | 'delayed' | 'wait' | 'active'
 ): Promise<string[]>
 ```
 
@@ -1500,7 +1499,6 @@ export interface QueueMetrics {
     completed: number
     failed: number
     delayed: number
-    paused: number
   }
 
   /** ISO timestamp of the moment counts were sampled */
@@ -1516,7 +1514,7 @@ Default implementation — calls `Queue.getJobCounts()` directly on Redis:
 async getMetrics(queueName: string): Promise<QueueMetrics> {
   const queue = this.getOrCreateQueue(queueName)
   const counts = await queue.getJobCounts(
-    'waiting', 'active', 'completed', 'failed', 'delayed', 'paused'
+    'waiting', 'active', 'completed', 'failed', 'delayed'
   )
   return {
     queue: queueName,
@@ -1819,13 +1817,13 @@ The lib was designed with clear boundaries. The items below are the **responsibi
 
 These dependencies must be installed in the host application that uses the server subpath. The package does not include them — it expects them to already exist.
 
-| Package            | Version    | Reason                                                                                           |
-| ------------------ | ---------- | ------------------------------------------------------------------------------------------------ |
-| `@nestjs/common`   | `^11.0.16` | Core framework — decorators, exceptions, providers, `ConfigurableModuleBuilder`                  |
-| `@nestjs/core`     | `^11.1.18` | Core framework — module system, DI container, `DiscoveryService`                                 |
-| `bullmq`           | `^5.16.0`  | Queue engine. `5.16.0` is the floor because it introduced the Job Schedulers API (§8). See §14.5 |
-| `ioredis`          | `^5.0.0`   | Redis client (always present, even in mode A where the consumer passes)                          |
-| `reflect-metadata` | `^0.2.0`   | Metadata reflection for the decorators                                                           |
+| Package            | Version    | Reason                                                                          |
+| ------------------ | ---------- | ------------------------------------------------------------------------------- |
+| `@nestjs/common`   | `^11.0.16` | Core framework — decorators, exceptions, providers, `ConfigurableModuleBuilder` |
+| `@nestjs/core`     | `^11.1.18` | Core framework — module system, DI container, `DiscoveryService`                |
+| `bullmq`           | `^6.0.0`   | Queue engine. See §14.5                                                         |
+| `ioredis`          | `^6.0.0`   | Redis client (always present, even in mode A where the consumer passes)         |
+| `reflect-metadata` | `^0.2.0`   | Metadata reflection for the decorators                                          |
 
 ### 14.2 Direct dependencies
 
@@ -1835,33 +1833,33 @@ The package has **no** direct dependencies (`"dependencies": {}`). All functiona
 
 | Package       | Version  | Needed when                                                               |
 | ------------- | -------- | ------------------------------------------------------------------------- |
-| `bullmq-otel` | `^1.0.0` | Only if you set `options.telemetry` for OpenTelemetry tracing (§4, §16.5) |
+| `bullmq-otel` | `^2.0.0` | Only if you set `options.telemetry` for OpenTelemetry tracing (§4, §16.5) |
 
 `bullmq-otel` is declared in `peerDependenciesMeta` as `optional: true`, so installs do not warn when telemetry is unused. The `./shared` subpath has **zero** peer deps (only TS types).
 
 ### 14.4 Peer Dependencies per Subpath
 
-| Subpath      | Peer Dependencies                                                                                                                    |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `.` (server) | `@nestjs/common ^11.0.16`, `@nestjs/core ^11.1.18`, `bullmq ^5.16`, `ioredis ^5`, `reflect-metadata ^0.2`; optional `bullmq-otel ^1` |
-| `./shared`   | None                                                                                                                                 |
+| Subpath      | Peer Dependencies                                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `.` (server) | `@nestjs/common ^11.0.16`, `@nestjs/core ^11.1.18`, `bullmq ^6.0`, `ioredis ^6.0`, `reflect-metadata ^0.2`; optional `bullmq-otel ^2` |
+| `./shared`   | None                                                                                                                                  |
 
-### 14.5 Decision on BullMQ version (v5 → v6)
+### 14.5 Decision on BullMQ version (v6)
 
-At the time of writing, the current BullMQ release is **`5.79.1`**. The lib's floor is **`^5.16.0`** because that is where the Job Schedulers API (the only recurring-jobs API this lib exposes, §8) landed.
+The library targets **BullMQ `^6.0.0`** (validated against `6.0.10`). It builds exclusively on the Job Schedulers API (the only recurring-jobs surface this lib exposes, §8) — introduced in BullMQ `5.16.0` and retained in v6 — so v6's removal of the legacy repeatable-jobs API never touched it.
 
-| BullMQ          | Status                                                                                                                                                                                                                | Decision                                             |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| **v5 (≥ 5.16)** | Current stable. Every API the lib uses (`Queue`, `Worker`, `FlowProducer`, `JobsOptions`, `getJobCounts`, `upsertJobScheduler`, `deduplication`, `Telemetry`) is GA.                                                  | ✅ Official support.                                 |
-| **v6**          | Removes the legacy repeatable-jobs API. **Because this lib already uses Job Schedulers (not `addRepeatable`), it is forward-compatible by design.** Promote to `^5.16.0 \|\| ^6.0.0` once the e2e suite passes on v6. | 🟢 Pre-positioned — no public-API breakage expected. |
+| BullMQ | Status                                                                                                                                                                                                                   | Decision             |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------- |
+| **v6** | Current target. Every API the lib uses (`Queue`, `Worker`, `FlowProducer`, `JobsOptions`, `getJobCounts`, `upsertJobScheduler`, `deduplication`, `Telemetry`) is GA; the `'paused'` job state v6 removed is not exposed. | ✅ Official support. |
+| **v5** | Not supported — the peer range is `^6.0.0`. The removed `'paused'` job state and the `bullmq-otel ^1` telemetry peer were v5-only.                                                                                       | ❌ Dropped.          |
 
-> **Why this matters:** the earlier draft built on `addRepeatable`/`removeRepeatable`, which v6 deletes — that would have forced a breaking change on the first v6 bump. Standardizing on Job Schedulers removes that landmine.
+> **Why the move was painless:** an earlier draft built on `addRepeatable`/`removeRepeatable`, which v6 deleted — that would have forced a breaking rewrite on the v6 bump. Standardizing on Job Schedulers removed that landmine, so the v5 → v6 move only had to drop the `'paused'` job state (a queue-events concept in v6, not a job state) and widen the peers to `bullmq ^6.0.0` / `bullmq-otel ^2.0.0` / `ioredis ^6.0.0`.
 
-The peer dep in the initial `package.json` is:
+The peer dep in `package.json` is:
 
 ```json
 "peerDependencies": {
-  "bullmq": "^5.16.0"
+  "bullmq": "^6.0.0"
 }
 ```
 
@@ -1912,10 +1910,10 @@ This decision is reviewed in every minor release of the lib.
   "peerDependencies": {
     "@nestjs/common": "^11.0.16",
     "@nestjs/core": "^11.1.18",
-    "bullmq": "^5.16.0",
-    "ioredis": "^5.0.0",
+    "bullmq": "^6.0.0",
+    "ioredis": "^6.0.0",
     "reflect-metadata": "^0.2.0",
-    "bullmq-otel": "^1.0.0"
+    "bullmq-otel": "^2.0.0"
   },
   "peerDependenciesMeta": {
     "bullmq-otel": { "optional": true }
@@ -1978,7 +1976,7 @@ This decision is reviewed in every minor release of the lib.
 **Deliverables:**
 
 1. **Project scaffold**
-   - `package.json` with peer deps (NestJS 11, bullmq `^5.16`, ioredis 5; optional `bullmq-otel`)
+   - `package.json` with peer deps (NestJS 11, bullmq `^6.0`, ioredis `^6.0`; optional `bullmq-otel ^2`)
    - `tsconfig.json`, `tsconfig.build.json`, `tsconfig.server.json`, `tsconfig.e2e.json`, `tsconfig.jest.json`
    - `tsup.config.ts` with 2 entries (`server`, `shared`)
    - Directory structure in `src/`
@@ -2158,11 +2156,11 @@ This decision is reviewed in every minor release of the lib.
 
 ### 16.2 BullMQ
 
-| Limitation                                  | Impact                                                                                    | Alternative                                        |
-| ------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| **BullMQ `^5.16` (0.1.x)**                  | Floor is `5.16` (Job Schedulers); v6 enabled once e2e passes (already forward-compatible) | Track the lib's 1.x release for the `^6` promotion |
-| **No support for legacy Bull (without MQ)** | Apps still using `bull` v4 or earlier need to migrate first                               | Official BullMQ migration guide                    |
-| **No support for Redis Cluster sharding**   | BullMQ has experimental support — the lib does not exercise those paths                   | Manually validate in cluster environments          |
+| Limitation                                  | Impact                                                                             | Alternative                                 |
+| ------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------- |
+| **BullMQ `^6.0` only**                      | Requires BullMQ 6+ (and `bullmq-otel ^2` for telemetry); does not support BullMQ 5 | Stay on BullMQ 6; the lib tracks its majors |
+| **No support for legacy Bull (without MQ)** | Apps still using `bull` v4 or earlier need to migrate first                        | Official BullMQ migration guide             |
+| **No support for Redis Cluster sharding**   | BullMQ has experimental support — the lib does not exercise those paths            | Manually validate in cluster environments   |
 
 ### 16.3 Connection
 
@@ -2548,7 +2546,7 @@ Enqueue + process + typed result; bounded graceful shutdown (finish in-flight, f
 
 ### 20.2 BullMQ engine compatibility
 
-- Floor `bullmq ^5.16.0` (Job Schedulers). Promotion to `^5.16.0 || ^6.0.0` happens once the e2e suite is green on v6; because the lib already uses Job Schedulers (not the removed repeatable API) and no other removed v6 API, no public-API break is expected.
+- Targets `bullmq ^6.0.0` (Job Schedulers). The lib already used Job Schedulers (not the repeatable API v6 removed) and no other removed v6 API, so the v5 → v6 move required no public-API change beyond dropping the `'paused'` job state (§14.5).
 
 ### 20.3 Consumer migration notes
 

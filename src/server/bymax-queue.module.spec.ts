@@ -97,6 +97,14 @@ describe('BymaxQueueModule.forRoot', () => {
     expect(dynamic.imports).toEqual([DiscoveryModule])
   })
 
+  it('derives the option token name from the configured module name', () => {
+    // The `moduleName` handed to the configurable-module builder shapes the generated option
+    // token's identifier. Pinning the concrete name locks that argument: emptying the module
+    // name, or dropping the builder's options object entirely, degrades the token to an opaque
+    // `CONFIGURABLE_MODULE_OPTIONS[<hash>]`, which this exact-match assertion rejects.
+    expect(MODULE_OPTIONS_TOKEN).toBe('BYMAX_QUEUE_MODULE_OPTIONS')
+  })
+
   it('exports the public services and tokens', () => {
     // Consumers can inject the services and option tokens.
     const dynamic = BymaxQueueModule.forRoot(baseOptions)

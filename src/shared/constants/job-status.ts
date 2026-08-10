@@ -17,5 +17,4 @@ export const JOB_STATUS = {
   COMPLETED: 'completed',
   FAILED: 'failed',
   DELAYED: 'delayed',
-  PAUSED: 'paused',
 } as const
