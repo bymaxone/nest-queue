@@ -7,6 +7,19 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.0.11] — 2026-08-10
+
+**Documentation only.** The shipped declaration comments change (`dts` preserves them); no runtime
+code changed.
+
+### Fixed
+
+- The deduplication example — in the `QueueService` JSDoc and in
+  `docs/technical_specification.md` — now scopes the dedup `id` by tenant
+  (`` `${tenantId}:reindex:${term}` ``). The `id` is a shared key across the queue, so a
+  multi-tenant producer keying on the value alone lets one tenant's enqueue suppress another
+  tenant's job for the same value; the example previously demonstrated exactly that.
+
 ## [1.0.10] — 2026-08-06
 
 **Documentation and tooling only.** `dist/` is byte-identical to `1.0.9`; no source file
