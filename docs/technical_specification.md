@@ -1010,7 +1010,7 @@ async cleanQueue(
   queueName: string,
   gracePeriodMs: number,
   limit: number,
-  status?: 'completed' | 'failed' | 'delayed' | 'wait' | 'active'
+  status?: 'completed' | 'failed' | 'delayed' | 'wait' | 'active' | 'paused'
 ): Promise<string[]>
 ```
 
