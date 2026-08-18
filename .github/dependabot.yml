@@ -72,9 +72,9 @@ updates:
       # while the same versions applied together pass. The pattern is unscoped by
       # `dependency-type` on purpose: `@nestjs/platform-fastify` is a production
       # dependency of the consumer app under `test/`, so the development-only
-      # catch-all below never covered it and it shipped in its own PR. Majors stay
-      # excluded here and remain governed by the `ignore` rules further down, which
-      # keep a peer-range widening a deliberate decision.
+      # catch-all below does not cover it. Majors stay excluded here and remain
+      # governed by the `ignore` rules further down, which keep a peer-range
+      # widening a deliberate decision.
       nestjs:
         patterns:
           - '@nestjs/*'
