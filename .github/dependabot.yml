@@ -58,6 +58,30 @@ updates:
           - minor
           - patch
 
+      # The NestJS runtime packages are one release train, not independent packages.
+      # `@nestjs/core` deep-imports internals of `@nestjs/common` while declaring a
+      # peer range of `^11.0.0` on it, so the range does not describe the real
+      # coupling and nothing rejects a mismatched pair at install time. Bumped one
+      # at a time, the lockfile resolves a tree where core is ahead of common and
+      # every suite that builds a Nest testing module dies at require time:
+      #
+      #   Cannot find module '@nestjs/common/decorators/http/sse-signal.decorator'
+      #   from '.../@nestjs+core@11.2.1_@nestjs+common@11.1.29_.../
+      #         node_modules/@nestjs/core/router/router-execution-context.js'
+      #
+      # while the same versions applied together pass. The pattern is unscoped by
+      # `dependency-type` on purpose: `@nestjs/platform-fastify` is a production
+      # dependency of the consumer app under `test/`, so the development-only
+      # catch-all below never covered it and it shipped in its own PR. Majors stay
+      # excluded here and remain governed by the `ignore` rules further down, which
+      # keep a peer-range widening a deliberate decision.
+      nestjs:
+        patterns:
+          - '@nestjs/*'
+        update-types:
+          - minor
+          - patch
+
       # Batch low-risk dev tooling bumps into a single PR to cut review noise.
       # Majors stay out: each one needs its own verification and its own revert.
       dev-dependencies:
