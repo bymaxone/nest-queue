@@ -1,0 +1,44 @@
+# Keeps the shared half of AGENTS.md in step with the canonical copy in
+# bymaxone/.github. The rules that must not vary between Bymax repositories are
+# edited there; everything this repository writes for itself lives outside the
+# markers and is never touched.
+#
+# Codex reads AGENTS.md from the file tree of the repository under review, so a
+# shared rule has to exist as a real file here rather than be referenced. That is
+# why this is a sync and not a plain `uses:` — the reusable CI elsewhere in this
+# directory propagates by reference, this one has to propagate by commit.
+name: agents-sync
+
+on:
+  schedule:
+    # Weekly, off the hour and on a day of its own: Monday already carries the
+    # mutation, CodeQL and peer-advisory runs, and the OSV scan takes Wednesday.
+    - cron: '23 7 * * 4'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    # Referenced by the moving alias rather than pinned, which is the convention
+    # for first-party reusables and the rule the shared block itself states.
+    uses: bymaxone/.github/.github/workflows/agents-sync.yml@v1
+    permissions:
+      contents: write
+      pull-requests: write
+    secrets:
+      # Named rather than `inherit`, so the called workflow receives this one
+      # secret and not every secret this repository holds.
+      #
+      # The mapping has to exist for the secret to have any effect at all: a
+      # reusable workflow receives no secret it is not passed, so without this
+      # line AGENTS_SYNC_TOKEN would be ignored however it is configured. An
+      # unset secret evaluates to the empty string, which the called workflow
+      # falls back from, so the mapping is safe to keep either way.
+      #
+      # Why it is worth setting: a pull request opened with the default
+      # GITHUB_TOKEN starts no workflow runs, and the `nest-queue-pr-and-ci-gates`
+      # ruleset requires ten status checks — so an unattended sync pull request
+      # cannot merge until somebody pushes to it.
+      sync-token: ${{ secrets.AGENTS_SYNC_TOKEN }}
