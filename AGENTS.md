@@ -236,7 +236,7 @@ code it misdescribes.
 
 ### Where this repository narrows a shared rule
 
-The block above holds across every Bymax repository. Three of its rules have a sharper form here,
+The block above holds across every Bymax repository. Four of its rules have a sharper form here,
 and this is that form — not a disagreement with the shared text.
 
 - **`docs/` is in English here, and it tracks phases on purpose.** This repository is a library
@@ -250,6 +250,15 @@ and this is that form — not a disagreement with the shared text.
   `scripts/check-published-surface.mjs`. Since nothing is inherited over the limit, the shared
   rule's allowance for pre-existing files has nothing to cover here: a file crossing 800 lines in a
   pull request is a genuine finding.
+- **An authorship finding must quote a SHA that `git cat-file -t` resolves.** Git's author and
+  committer fields are not text a change introduces, so they are out of scope for the attribution
+  rule to begin with — and the claim is the one the block singles out as expensive to act on,
+  because it asks for history to be rewritten. Measured on the pull request that added this file:
+  the same violation was reported twice, naming `c0e2317` and `6f06bf7`, and neither object exists
+  locally or on GitHub. Both commits actually under review carry the maintainer as author and
+  committer. A genuine violation is still a finding; the evidence has to be a SHA that resolves,
+  quoted from a command actually run against the tree under review.
+
 - **Suppressions have no exception in this repository.** `CLAUDE.md` states zero `any`, no
   `@ts-ignore` and no `eslint-disable`, and coverage is a hard 100% line/branch gate on every
   implemented file — so `istanbul ignore` is a way of getting a green coverage report for untested
