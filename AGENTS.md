@@ -1,62 +1,265 @@
-# AGENTS.md — @bymax-one/nest-queue
+# AGENTS.md
 
-Agent guidance for `@bymax-one/nest-queue`. This file mirrors `CLAUDE.md` and applies to all agent frameworks (Anthropic Claude, OpenAI Codex, GitHub Copilot Workspace, and similar tools).
+`@bymax-one/nest-queue` is a **published NestJS library** that wraps BullMQ behind a typed,
+opinionated surface. It ships as an esbuild bundle with `"dependencies": {}` — everything it needs
+comes from peer dependencies in the consumer's tree. Its public surface is frozen at what
+`src/server/index.ts` and `src/shared/index.ts` export, and its `README.md` and `CHANGELOG.md` are
+in `files`, so they are part of the artifact people install.
 
----
+Start with `CLAUDE.md`, which is the full contract for working in this repository: the BullMQ API
+rules, the TypeScript and testing bars, the quality gates and why each one exists, the release
+policy, and the commit conventions. This file does not restate it. What follows is the review layer.
 
-## Required reading
+## Code Review Rules
 
-Before making any change, read these sections (use partial-read tools where available — the files are large):
+<!-- shared:begin -->
+<!--
+  CANONICAL COPY: bymaxone/.github → agents/code-review-rules.md
+  Do not edit this block in a consuming repository. It is replaced wholesale by
+  the `agents-sync` reusable workflow, so a local edit is reverted on the next
+  run. Change it here, cut a release, and every repository is offered the update.
 
-| Document                            | When to read                                  |
-| ----------------------------------- | --------------------------------------------- |
-| `docs/technical_specification.md`   | Architecture, API contracts, design decisions |
-| `docs/development_plan.md` §1.2     | Guiding principles and coding standards       |
-| `docs/tasks/` (relevant phase file) | Per-task acceptance criteria                  |
+  Repository-specific rules go OUTSIDE this block, below the closing marker.
 
----
+  FOR WHOEVER EDITS THIS FILE, not for the reviewer who reads it:
 
-## Universal rules
+  Codex reads one AGENTS.md per directory, root to nested, within
+  project_doc_max_bytes (32 KiB default). Never name a template or fixture
+  AGENTS.md below the root: a change under it is read as the repo's guidance.
 
-- **TypeScript strict** — `strict: true`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`; zero `any`; no `@ts-ignore`, no `eslint-disable`.
-- **JSDoc on every export** — every `export` (class, function, interface, constant) carries JSDoc with `@example` where applicable.
-- **`@fileoverview` + `@layer` header** on every source file.
-- **English-only, timeless comments** — no language other than English; no roadmap/phase/task references in committed code or docs.
-- **Functions ≤ 50 lines, files ≤ 800 lines** — split by responsibility when over the limit.
-- **Conventional Commits** — `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `ci:`. No `Co-Authored-By` or attribution trailers.
-- **Zero runtime dependencies** — `package.json` ships `"dependencies": {}`.
-- **Official docs first** — verify the current API via authoritative sources before coding.
+  This block is charged against every consumer's budget. A rule added here must
+  be worth the bytes in the smallest-headroom repository, not only in this one;
+  agents-sync reports each consumer's headroom and fails when it is exceeded.
 
----
+  When you scope a rule, scope every rule in its paragraph or split the
+  paragraph -- an unscoped neighbour reads as deliberate.
+-->
 
-## BullMQ rules
+These rules hold in every Bymax repository. What is specific to this one is written after this
+block, and the two are read together.
 
-- Recurring jobs: `upsertJobScheduler`/`removeJobScheduler`/`getJobSchedulers` **only** — never `addRepeatable`/`removeRepeatable`.
-- `maxRetriesPerRequest: null` is applied **only** to worker/QueueEvents connections.
-- Cron patterns delegated to BullMQ's `cron-parser` — no hand-rolled regex.
-- Every BullMQ emitter the library constructs — `Queue`, `Worker`, `QueueEvents`, `FlowProducer` — gets a fallback `error` listener. These extend `EventEmitter`, where emitting `'error'` with no listener **throws**, so an emitter the consumer never asked for would crash their process on a transient Redis fault.
-- `QueueLifecycle` is the ONLY class exposing `onModuleDestroy`. NestJS binds lifecycle hooks by method name, not by `implements`, so a collaborator with one runs on Nest's schedule and races the bounded drain. Collaborators expose `closeAll` / `close` / `teardown` instead.
-- The configured `prefix` must reach **`Queue`, `Worker`, `QueueEvents` and `FlowProducer`**. BullMQ defaults an omitted prefix to `bull`, so a partial application puts producers and consumers on separate keyspaces — jobs are enqueued and never consumed, with nothing thrown.
-- Every injectable constructor parameter carries an explicit `@Inject(TOKEN)`. The package ships as an esbuild bundle, which does not emit `design:paramtypes`, so reflection-based resolution passes here and fails in a consumer's build.
+The pipeline already enforces formatting, linting, dependency policy, coverage and — where the
+repository has one — the mutation gate. Do not spend a review on a **violation** of one of those: it
+is a red check, not a comment. What follows is what CI cannot see.
 
----
+A violation of a rule in this block is reported at **P1** at minimum. Codex surfaces only P0 and P1
+on a pull request, so a rule whose violations land at P2 is a rule nobody sees.
 
-## Quality gates
+**When a rule moves from here into a check, it leaves here.** A red check is proportionate to a
+correctness failure that is invisible without it, and disproportionate to style enforced at an
+inconvenient moment. Never carry both: a rule stated here _and_ enforced by CI spends a reviewer's
+attention on what a gate already reports.
 
-```bash
-pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && \
-  pnpm build && pnpm size && pnpm check:exports && pnpm smoke
-```
+**A change to the enforcing configuration is the opposite case, and it is in scope.** Every gate runs
+the configuration from the branch under review — that branch's lint config, its coverage thresholds,
+its mutation thresholds. So a pull request that deletes a rule, lowers a threshold or widens an
+ignore glob turns the check **green**, because a gate reports on the rules it was handed. For those
+diffs the review is the only independent check there is, and a weakened gate needs the same
+justification a suppression does.
 
-100% line/branch coverage on every implemented file is a hard gate on every PR.
+### A finding names what it read
 
-`test:types` pins the published signatures; `check:exports` resolves every entrypoint
-through the packed tarball (it cannot live in `prepublishOnly` — attw packs the tarball
-itself); `smoke` is the only gate that exercises the **built** artifact, which is where DI
-and `exports` defects surface.
+Every factual claim in a review — about a library's API, about this repository's history, about what
+a file contains — has to come from something read in the tree under review, and the finding should
+say which. A claim assembled from recollection is likely to describe a previous version of whatever
+it is about.
 
----
+**Safe path**, by the kind of claim:
 
-## Public API surface
+| Claim about                         | Read this                                                                      |
+| ----------------------------------- | ------------------------------------------------------------------------------ |
+| A library's API **shape**           | `node_modules/<pkg>/dist/**/*.d.ts` in this tree                               |
+| A library's **runtime behaviour**   | that version's changelog entry, its documentation, or a test that exercises it |
+| Commit authorship, dates or history | `git log --format='%an <%ae> / %cn <%ce>' <sha>`                               |
+| What a file contains                | the file at the revision under review, not an earlier one                      |
 
-The public surface is frozen at `src/server/index.ts` and `src/shared/index.ts`. Do not add or remove exports without a deliberate versioned decision.
+The first two rows are separate on purpose, and the rule below says why: a field can stay optional
+in the published type while becoming mandatory in behaviour. A `.d.ts` settles what a signature
+accepts and nothing about what the implementation does with it, so a behavioural claim resting on
+one is unfounded.
+
+Weight the checking by what acting on the finding would cost. A comment that asks for a reworded
+sentence is cheap to be wrong about; one that asks for history to be rewritten, a merge reverted, or
+a release pulled is not — verify that class before raising it, and raise it at the severity the
+evidence supports rather than the severity the consequence would deserve if true.
+
+### A dependency upgrade migrates every call site, not only the ones that fail to compile
+
+When an upgrade tightens a contract, the compiler catches only the call sites whose **shape**
+changed. A field that stays optional in the published type while becoming mandatory in behaviour
+compiles, passes the unit suite, and fails in production.
+
+A `@bymax-one/*` version number carries **no compatibility information** while the libraries are
+pre-stable: breaking changes ship in minor and patch releases by explicit policy, so `^` and `~`
+protect against nothing. The migration note under **Apply to a derived backend** in the library's own
+changelog is the compatibility contract.
+
+**Safe path:** read **every** changelog entry from the version being replaced up to the proposed
+one, not only the proposed one's, and check every call site they name — not only the ones the
+compiler rejected. Upgrades routinely skip releases, and the entry that matters is often not the
+last one: adopting `@bymax-one/nest-cache` 1.1.0 → 1.2.1 skipped 1.2.0, where a namespace-validation
+security fix lives; 1.2.1's own entry is a field rename. Diff the `.d.ts` of the **previously adopted** version against
+the **proposed** one — `npm pack` both, and name the two versions. Reaching for "the installed
+declarations" is the trap: in a checkout of the branch under review the installed tree is already
+the new version, so that diff compares a release with itself and shows nothing.
+
+### Settled decisions are not review findings
+
+Both are settled deliberately, and reopening either costs a round trip and changes nothing:
+
+- **Do not propose a major version bump** for a breaking change in a `@bymax-one/*` library, and do
+  not assert that this ecosystem follows strict SemVer. Until an API is declared stable, breaking
+  changes ship in minor and patch releases; the migration note carries the compatibility information
+  the number does not. If a document claims strict SemVer, the finding is that the claim is wrong —
+  not that the version should be raised.
+- **Do not propose pinning `bymaxone/.github` reusable workflows to a commit SHA.** They are
+  referenced by the `@v1` alias on purpose: a fix has to land once and reach every repository, the
+  tag is immutable and the alias moves only on a release, and pinning was measured to cost ~58
+  dependency pull requests to propagate one change. Third-party actions are the opposite case and
+  **are** pinned by SHA.
+
+**Safe path:** if you believe a settled decision is now wrong, say so as a question in the pull
+request rather than as a finding.
+
+### Suppressions are refusals, not exceptions
+
+`@ts-ignore`, `@ts-expect-error`, `@ts-nocheck`, `eslint-disable` in any form,
+`as unknown as` laundering a real type error, `istanbul ignore`, and in Rust `#[allow(...)]` over a
+lint gate or `unsafe` without a `// SAFETY:` comment are blocking findings.
+
+Anything a configured gate already reports belongs to the gate, not to a review: where a repository
+lints `no-explicit-any` as an error — most do — an `as any` is a red check, and raising it here only
+duplicates it. Check the repository's lint configuration before reporting a suppression rather than
+assuming the list is exhaustive in either direction.
+
+A failing gate means the code is wrong, the type is wrong, or the rule is wrong. **Safe path:** fix
+whichever it is. Changing a rule's configuration with a stated reason is legitimate; scattering
+per-call-site silencers is not.
+
+### Comments state constraints, never history
+
+A comment must read as true for whoever opens the file next. Flag any comment that narrates what a
+previous version did, names a phase, task, ticket or review round, or explains a change rather than
+the code. **Safe path:** state the constraint that still holds, and let `git log` carry the history.
+
+### Size and layering
+
+Functions over **50 lines** and nesting deeper than four levels are findings **for what a change
+introduces** — a new function, or a change that pushes an existing one past the limit — in the
+repository's own source and test directories. A test-suite grouping construct (`describe`, `context`,
+`mod tests`, a table of cases) is not a function; the unit under the limit is the body of a single
+`it`/`test`/`#[test]`. On the same terms, every non-trivial source file a change introduces opens
+with a header stating its purpose and its layer, and every exported symbol a change introduces
+carries a doc comment.
+
+**The 800-line file limit applies to what a change introduces, not to what it inherits.** A
+repository that already carries a file past the line — a generator, a long end-to-end suite — would
+otherwise produce a finding on every pull request touching three lines of it, which the author
+cannot act on and did not cause. Raise it for a **new** file over the limit, or when a change pushes
+a file past it or materially grows one already over.
+
+Markdown, generated output and lockfiles are **out of scope**: a changelog is an append-only log that
+only grows, a lockfile is generated, and neither has layers. Reporting their length is a false
+positive on every dependency bump and every release note.
+
+**Safe path:** extract by responsibility rather than by line count — the limit is a symptom, and one
+file doing two jobs is the defect.
+
+### Language and attribution
+
+Everything published is English — source, comments, tests, commit messages, pull request titles and
+bodies, `README.md`, `CHANGELOG.md` and everything under `.github/`.
+
+Each repository states its language policy for `docs/` below this block. Report a language finding in
+`docs/` only against what the repository states; where it states nothing, `docs/` is English like
+everything else. A `docs/` language other than English is a repository-owner decision recorded in the
+narrowings, not a convention a contributor may introduce.
+
+No commit, pull request, comment or code may attribute authorship to an AI assistant or coding tool,
+in any form. **This governs text a change introduces** — a trailer, a "generated with" line, a
+signature in a comment or a description.
+
+Git's own author and committer fields are set by the contributor's git configuration rather than by
+anything in the diff. Before reporting one as a violation, read it:
+`git log -1 --format='%an <%ae> / %cn <%ce>' <sha>`. The claim is trivially checkable and expensive
+to act on — it asks for history to be rewritten.
+
+<!-- shared:end -->
+
+### `BymaxQueueModuleAsyncOptions.useFactory` uses method syntax deliberately
+
+`src/server/interfaces/queue-module-options.interface.ts` declares it as
+`useFactory?(...args: unknown[]): …` — a method, not a property holding an arrow type. Method syntax
+is bivariant in its parameters, which is what lets a consumer write
+`useFactory: (client: Redis) => ({ connection: { client } })` inline against `forRootAsync` and have
+it compile. NestJS resolves those arguments from `inject` at runtime, so **no** signature can make
+them statically safe.
+
+Do not propose widening the consumer's factory parameter to `unknown` to satisfy the type, and do
+not propose a property-syntax or `never[]`-rest declaration here: the first pushes a cast into every
+consumer, and the second breaks `options.useFactory(client)` at the call site inside the module. The
+trade is written out in the JSDoc on that member.
+
+### Invalid options throw at bootstrap and are never silently corrected
+
+`src/server/config/validate-options.ts` rejects a malformed configuration with a `QueueException`
+carrying `INVALID_OPTIONS`. That is the guarantee: a misconfigured queue fails at module
+construction, where the operator sees it, rather than at 3am under load.
+
+A finding that proposes a default, a clamp or any other fallback for a rejected option — a
+non-positive `shutdown.drainTimeoutMs`, a negative `metrics.cacheTtlMs`, `connection.client`
+coexisting with `connection.url` — is proposing to remove that guarantee. **Safe path:** if a value
+should be permitted, argue for widening the validation rule, not for recovering from it.
+
+### `'paused'` is not a job status
+
+`JobStatus` is exactly five members — `'waiting' | 'active' | 'completed' | 'failed' | 'delayed'`
+(`src/shared/types/job-status.types.ts`), and `QueueMetrics.counts` is keyed by it. Pausing is a
+**queue-level** operation: `QueueService.pauseQueue`/`resumeQueue` and the `'paused'`/`'resumed'` queue events
+in `src/server/decorators/on-queue-event.decorator.ts` are a different concept, and `'paused'` also
+appears as a BullMQ _clean_ target in `queue.service.ts`, which is again not a job status.
+
+Do not report `'paused'` as a missing case in a `JobStatus` switch, map or count. Adding it would
+change a published type and a documented metrics shape.
+
+### The README is not the contract — the source and `test/types/` are
+
+The published `README.md` contains at least one example that does not match the shipped API: the
+`MetricsService` section calls `getMetrics(name)` and `getAll([names])`, while the real service
+exposes `get(name)` and a no-argument `getAll()` (`src/server/services/metrics.service.ts`).
+
+So a finding must not cite the README as evidence of what the API is or should be. Read the source,
+`src/server/index.ts`, `src/shared/index.ts`, and `test/types/public-api.test-d.ts`, which pins the
+published signatures. A README snippet that contradicts them is a **defect in the README** — that
+is a legitimate finding, and a valuable one — but the correction goes to the README, never to the
+code it misdescribes.
+
+### Where this repository narrows a shared rule
+
+The block above holds across every Bymax repository. Four of its rules have a sharper form here,
+and this is that form — not a disagreement with the shared text.
+
+- **`docs/` is in English here, and it tracks phases on purpose.** This repository is a library
+  rather than a derived backend, so there is no Portuguese exemption to apply. The planning
+  documents under `docs/` — the specification, the development plan, the task files — reference
+  phases, task ids and roadmap state by design. **Comments state constraints, never history** applies
+  to runtime source, `README.md`, JSDoc and `.github/**`; a phase reference under `docs/` is not a
+  finding.
+- **Size and layering applies to `src/`, `test/` and `scripts/`, and no file is currently over 800
+  lines.** The largest are `src/server/services/worker-registry.service.spec.ts` and
+  `scripts/check-published-surface.mjs`. Since nothing is inherited over the limit, the shared
+  rule's allowance for pre-existing files has nothing to cover here: a file crossing 800 lines in a
+  pull request is a genuine finding.
+- **An authorship finding must quote a SHA that `git cat-file -t` resolves.** Git's author and
+  committer fields are not text a change introduces, so they are out of scope for the attribution
+  rule to begin with — and the claim is the one the block singles out as expensive to act on,
+  because it asks for history to be rewritten. Measured on the pull request that added this file:
+  the same violation was reported twice, naming `c0e2317` and `6f06bf7`, and neither object exists
+  locally or on GitHub. Both commits actually under review carry the maintainer as author and
+  committer. A genuine violation is still a finding; the evidence has to be a SHA that resolves,
+  quoted from a command actually run against the tree under review.
+
+- **Suppressions have no exception in this repository.** `CLAUDE.md` states zero `any`, no
+  `@ts-ignore` and no `eslint-disable`, and coverage is a hard 100% line/branch gate on every
+  implemented file — so `istanbul ignore` is a way of getting a green coverage report for untested
+  code rather than a formatting nicety.
