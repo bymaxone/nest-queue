@@ -7,6 +7,22 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.1] — 2026-08-30
+
+Documentation only. `dist/` is byte-identical to `1.2.0`; the published tarball was unpacked and
+diffed against a fresh build to confirm it rather than assert it. The release exists because
+`README.md` ships inside the package, so a fix that stays on `main` leaves the npm page — where
+the example is actually read — still wrong.
+
+### Fixed
+
+- **The `MetricsService` example in `README.md` called two methods that do not exist.** It showed
+  `getMetrics(name)` and `getAll([names])`; the service exposes `get(name)` and a no-argument
+  `getAll()` returning `readonly QueueMetrics[]` for every queue currently cached by
+  `QueueService`. Code copied from that example failed to compile, and the wrong `getAll` signature
+  also implied a per-call queue filter the API does not offer. Every other call in the README was
+  checked against the source in the same pass and is correct.
+
 ## [1.2.0] — 2026-08-10
 
 **Breaking, shipped as a minor by choice.** The peer ranges move to the next major of each
@@ -487,6 +503,7 @@ v6 peer range.
 
 ---
 
+[1.2.1]: https://github.com/bymaxone/nest-queue/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/bymaxone/nest-queue/compare/v1.0.11...v1.2.0
 [1.0.11]: https://github.com/bymaxone/nest-queue/compare/v1.0.10...v1.0.11
 [1.0.10]: https://github.com/bymaxone/nest-queue/compare/v1.0.9...v1.0.10
