@@ -400,8 +400,8 @@ BymaxQueueModule.forRoot({
 import { MetricsService } from '@bymax-one/nest-queue'
 import type { QueueMetrics } from '@bymax-one/nest-queue'
 
-const metrics: QueueMetrics = await this.metricsService.getMetrics('email')
-const all = await this.metricsService.getAll(['email', 'notifications'])
+const metrics: QueueMetrics = await this.metricsService.get('email')
+const all: readonly QueueMetrics[] = await this.metricsService.getAll()
 ```
 
 ---
