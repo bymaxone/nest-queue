@@ -498,6 +498,155 @@ function scaffoldConsumer() {
 // 3. The README's own snippets compile against the built package.
 // ---------------------------------------------------------------------------
 
+/**
+ * Exported classes of the built package's root entry, by name.
+ *
+ * Only the root entry: `writeReceiverDeclarations` imports these from the root
+ * specifier, and a subpath like `./shared` is not re-exported there, so
+ * harvesting from it would emit an import of a member the root does not export.
+ *
+ * Only classes: a class name is usable directly as its instance type, so nothing
+ * has to infer a value from a type-only export. The trailing `export { ... }`
+ * list is the authority on what ships; `declare class` alone can name an
+ * internal the bundler kept.
+ *
+ * @returns The class names a receiver may be bound to.
+ */
+function exportedClasses() {
+  const dts = join(ROOT, 'dist', 'server', 'index.d.ts')
+  if (!existsSync(dts)) return new Set()
+  const src = readFileSync(dts, 'utf8')
+  const declared = new Set([...src.matchAll(/^declare class ([A-Za-z0-9_]+)/gm)].map((m) => m[1]))
+  const names = new Set()
+  for (const list of src.matchAll(/^export \{([^}]*)\};?$/gm)) {
+    for (const raw of list[1].split(',')) {
+      const name = raw.trim()
+      if (name && !name.startsWith('type ') && declared.has(name)) names.add(name)
+    }
+  }
+  return names
+}
+
+/**
+ * True when this pass must leave `this.<name>` alone.
+ *
+ * Two reasons, both meaning a rewrite would make the check worse rather than
+ * better: the snippet already gives the receiver a type, in which case
+ * TypeScript checks it natively and a binding would silently substitute a
+ * different one; or the snippet assigns to it, which a `const` cannot accept.
+ *
+ * Field forms are matched with modifiers optional and `!`/`?` allowed, both
+ * annotated and initialised, since `private readonly queue = inject(QueueService)`
+ * carries its type in the initialiser. An annotation must begin with an
+ * identifier character, which is what keeps an options-object key out: in
+ * `flows: { enabled: true }` the colon is followed by `{`.
+ *
+ * @param code - The snippet source.
+ * @param name - The receiver property name.
+ * @returns Whether the receiver must be left untouched.
+ */
+function isOffLimits(code, name) {
+  const ctorParam = new RegExp(`constructor\\s*\\([^)]*\\b${name}\\s*[!?]?\\s*:`, 's')
+  const classField = new RegExp(
+    `^\\s*(?:(?:private|public|protected|readonly|static|declare)\\s+)*${name}\\s*[!?]?\\s*:\\s*[A-Za-z_$]`,
+    'm',
+  )
+  // An initialised field carries its type in the initialiser rather than an
+  // annotation — `private readonly queue = inject(QueueService)` — so the
+  // annotated form above never sees it.
+  const initialised = new RegExp(
+    `^\\s*(?:(?:private|public|protected|readonly|static|declare)\\s+)*${name}\\s*[!?]?\\s*=`,
+    'm',
+  )
+  const assigned = new RegExp(`\\bthis\\.${name}\\s*=[^=]`)
+  return (
+    ctorParam.test(code) || classField.test(code) || initialised.test(code) || assigned.test(code)
+  )
+}
+
+/**
+ * Rewrite `this.<name>` receivers a snippet never declares into declared
+ * constants, and return the bindings that type them.
+ *
+ * Binding is name-based and nothing else: a receiver binds only where its
+ * PascalCased name **is** an exported class, as `this.metricsService` is
+ * `MetricsService`. Inferring the class from anywhere else — a snippet's sole
+ * import, say — cannot separate `this.mailer` in a snippet importing
+ * `QueueService` from the receiver such a rule is meant to catch, and binding a
+ * local helper to a package class fails a correct README. A gate that can
+ * redden correct documentation is worse than one that misses a receiver, so the
+ * inference stops at the name.
+ *
+ * That is what keeps the pass upgrade-only: a receiver that does not resolve is
+ * left exactly as it was, in the ignored bucket it was already in, so nothing
+ * that compiled before can start failing. The cost is a receiver whose property
+ * name is not its class name, `this.flows` against `FlowService`, which stays
+ * unchecked.
+ *
+ * @param code - The snippet source.
+ * @param classes - Exported class names of the built package.
+ * @param slot - The snippet's index, which scopes the generated names.
+ * @returns The rewritten source and the receiver bindings it needs.
+ */
+function bindReceivers(code, classes, slot) {
+  const bound = new Map()
+  const names = new Set([...code.matchAll(/\bthis\.([a-z][A-Za-z0-9_]*)\b/g)].map((m) => m[1]))
+  let rewritten = code
+  for (const name of names) {
+    const cls = name[0].toUpperCase() + name.slice(1)
+    if (!classes.has(cls) || isOffLimits(code, name)) continue
+    bound.set(name, cls)
+    rewritten = rewritten.replace(new RegExp(`\\bthis\\.${name}\\b`, 'g'), `__ctx_${slot}_${name}`)
+  }
+  return { rewritten, bound }
+}
+
+/**
+ * Write each snippet into the gate directory with its receivers bound, and emit
+ * the ambient declarations that type them.
+ *
+ * @param subjects - README blocks that import the package.
+ * @returns file name → the source written, so a diagnostic traces back to it.
+ */
+function writeSnippetFiles(subjects) {
+  const classes = exportedClasses()
+  const sources = new Map()
+  /** `<slot>_<prop>` → the exported class that types it. */
+  const bindings = new Map()
+  subjects.forEach(({ ext, code }, i) => {
+    const name = `snippet-${String(i + 1).padStart(2, '0')}.${ext}`
+    const { rewritten, bound } = bindReceivers(code, classes, i)
+    for (const [prop, cls] of bound) bindings.set(`${i}_${prop}`, cls)
+    sources.set(name, rewritten)
+    writeFileSync(join(GATE_DIR, name), rewritten)
+  })
+  if (bindings.size > 0) writeReceiverDeclarations(bindings)
+  return sources
+}
+
+/**
+ * Emit the bound receivers as ambient globals, in a file of their own so every
+ * snippet keeps its original line numbers — a diagnostic then points at the line
+ * the reader sees in the README rather than at one this gate shifted.
+ *
+ * Names are scoped per snippet rather than merged by property name: two snippets
+ * may each write `this.service` for a different class, and one shared
+ * declaration would compile one of them against the other's API.
+ *
+ * @param bindings - `<slot>_<prop>` → the exported class that types it.
+ */
+function writeReceiverDeclarations(bindings) {
+  const imports = [...new Set(bindings.values())].sort().join(', ')
+  const consts = [...bindings]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, cls]) => `  const __ctx_${key}: ${cls}`)
+    .join('\n')
+  writeFileSync(
+    join(GATE_DIR, 'receivers.d.ts'),
+    `import type { ${imports} } from '${PKG.name}'\n\ndeclare global {\n${consts}\n}\n`,
+  )
+}
+
 function checkSnippets() {
   // `tsx` too, and the fence language is kept: a React example has to be written
   // to a .tsx file or it does not parse, and a package with a React subpath
@@ -515,13 +664,7 @@ function checkSnippets() {
   }
 
   scaffoldConsumer()
-  /** file name → its source, so a diagnostic can be traced back to the snippet. */
-  const sources = new Map()
-  subjects.forEach(({ ext, code }, i) => {
-    const name = `snippet-${String(i + 1).padStart(2, '0')}.${ext}`
-    sources.set(name, code)
-    writeFileSync(join(GATE_DIR, name), code)
-  })
+  const sources = writeSnippetFiles(subjects)
 
   // A README snippet is written for a reader, not for a compiler: it may use a
   // variable introduced by the paragraph above it. Those diagnostics say nothing
