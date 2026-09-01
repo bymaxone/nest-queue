@@ -546,11 +546,10 @@ function exportedClasses() {
  * @returns Whether the receiver must be left untouched.
  */
 function isOffLimits(code, name) {
-  // Scanned lazily rather than with `[^)]*`, which stops at the first `)` and so
-  // misses a parameter property sitting after a function type:
-  // `constructor(cb: () => void, private queue: QueueService)`.
-  const ctorParam = new RegExp(`constructor\\s*\\([\\s\\S]{0,400}?\\b${name}\\s*[!?]?\\s*:`, 's')
-  // A parameter property anywhere in a parameter list, for the same reason.
+  // Only a parameter PROPERTY creates `this.<name>`; a plain `constructor(x: T)`
+  // parameter does not, so it must not suppress binding. Matched wherever it
+  // appears in the list rather than by scanning from `constructor(`, which a
+  // function type in an earlier parameter would truncate.
   const paramProperty = new RegExp(
     `[(,]\\s*(?:(?:private|public|protected|readonly)\\s+)+${name}\\s*[!?]?\\s*:`,
   )
@@ -567,7 +566,6 @@ function isOffLimits(code, name) {
   )
   const assigned = new RegExp(`\\bthis\\.${name}\\s*=[^=]`)
   return (
-    ctorParam.test(code) ||
     paramProperty.test(code) ||
     classField.test(code) ||
     initialised.test(code) ||
