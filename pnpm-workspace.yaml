@@ -13,6 +13,16 @@ allowBuilds:
   cpu-features: false
   protobufjs: false
   ssh2: false
+  # Native filesystem watcher, a direct dependency of jest-haste-map from 30.5.0
+  # (it is not one in 30.4.1, which is why it appears with a jest bump rather
+  # than on its own). Denying the build script does not remove the package: the
+  # script only compiles the addon from source, and the package also ships
+  # prebuilt binaries as per-platform optional packages, which is what actually
+  # gets loaded. Verified against the tree that introduces it — the module
+  # resolves and loads from jest-haste-map with this entry in place, and the
+  # full suite passes. Compiling from source would only matter on a platform
+  # with no prebuild, which no environment here is.
+  '@parcel/watcher': false
 
 # Forced versions, for two distinct reasons. These live here and NOT in
 # package.json: pnpm 11 no longer reads the `pnpm` field of package.json, so an
