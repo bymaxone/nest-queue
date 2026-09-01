@@ -37,7 +37,7 @@ allowBuilds:
 #    rather than left to each manifest's range.
 # 2. Everything below is a vulnerable transitive dev dependency.
 overrides:
-  'bullmq': '6.0.10'
+  'bullmq': '6.3.4'
   'bullmq-otel': '2.0.0'
   'ioredis': '6.0.0'
   # Scoped per major, like the js-yaml and undici pairs: unscoped, a 1.x or 2.x
@@ -63,4 +63,4 @@ overrides:
   'undici@8': '^8.9.0'
 
 minimumReleaseAgeExclude:
-  - bullmq@6.0.10
+  - bullmq@6.3.4
