@@ -546,7 +546,14 @@ function exportedClasses() {
  * @returns Whether the receiver must be left untouched.
  */
 function isOffLimits(code, name) {
-  const ctorParam = new RegExp(`constructor\\s*\\([^)]*\\b${name}\\s*[!?]?\\s*:`, 's')
+  // Scanned lazily rather than with `[^)]*`, which stops at the first `)` and so
+  // misses a parameter property sitting after a function type:
+  // `constructor(cb: () => void, private queue: QueueService)`.
+  const ctorParam = new RegExp(`constructor\\s*\\([\\s\\S]{0,400}?\\b${name}\\s*[!?]?\\s*:`, 's')
+  // A parameter property anywhere in a parameter list, for the same reason.
+  const paramProperty = new RegExp(
+    `[(,]\\s*(?:(?:private|public|protected|readonly)\\s+)+${name}\\s*[!?]?\\s*:`,
+  )
   const classField = new RegExp(
     `^\\s*(?:(?:private|public|protected|readonly|static|declare)\\s+)*${name}\\s*[!?]?\\s*:\\s*[A-Za-z_$]`,
     'm',
@@ -560,7 +567,11 @@ function isOffLimits(code, name) {
   )
   const assigned = new RegExp(`\\bthis\\.${name}\\s*=[^=]`)
   return (
-    ctorParam.test(code) || classField.test(code) || initialised.test(code) || assigned.test(code)
+    ctorParam.test(code) ||
+    paramProperty.test(code) ||
+    classField.test(code) ||
+    initialised.test(code) ||
+    assigned.test(code)
   )
 }
 
@@ -577,11 +588,10 @@ function isOffLimits(code, name) {
  * redden correct documentation is worse than one that misses a receiver, so the
  * inference stops at the name.
  *
- * That is what keeps the pass upgrade-only: a receiver that does not resolve is
- * left exactly as it was, in the ignored bucket it was already in, so nothing
- * that compiled before can start failing. The cost is a receiver whose property
- * name is not its class name, `this.flows` against `FlowService`, which stays
- * unchecked.
+ * An unresolved receiver is therefore never rewritten, so this pass can only add
+ * checks and never introduces a diagnostic about anything but the documented
+ * package API. The cost is that a receiver whose property name is not its class
+ * name — `this.flows` against `FlowService` — is not checked.
  *
  * @param code - The snippet source.
  * @param classes - Exported class names of the built package.
