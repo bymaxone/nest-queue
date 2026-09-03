@@ -54,6 +54,12 @@ overrides:
   # 3.1.6. An override floor constrains what may be chosen next, not what is
   # already chosen; raising it is what forces the re-resolve.
   'fast-uri': '^3.1.6'
+  # Floor at the fix for GHSA-3m5p-2c4r-xxw2 (X-Forwarded-* spoofing under a
+  # trustProxy hop count, CVSS 6.1, `>= 5.8.3 < 5.12.1`) and GHSA-w2qp-rph6-63g4
+  # (schema validation bypass via root primitive coercion mismatch, CVSS 5.4,
+  # `< 5.12.1`). Reaches the tree through the consumer app's
+  # `@nestjs/platform-fastify`, which does not ship.
+  'fastify': '^5.12.1'
   'find-my-way': '^9.6.1'
   # Floors raised to the fix for GHSA-5p4m-2wfm-xmqj (CVSS 7.5); the previous floors
   # admitted 3.15.0 and 4.3.0, which the advisory covers.
