@@ -7,6 +7,31 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.2] — 2026-09-04
+
+**1.2.1 was tagged but never published**, so this release carries its documentation fix as well
+as the one below. `dist/` changes here for the first time since 1.2.0 — JSDoc reaches the emitted
+`.d.ts`, so a doc-block correction is a change to the published types.
+
+### Fixed
+
+- **The `enqueue` deduplication example asserted a safety property it did not provide.** It showed
+  `` `${tenantId}:reindex:${term}` `` and stated that "one tenant's term cannot suppress another's".
+  Two variable fields joined by a delimiter either may contain do not produce a unique key: with
+  `` `${tenantId}:${term}` ``, the pairs `('a', 'b:c')` and `('a:b', 'c')` both yield `a:b:c`. The
+  guidance now percent-encodes every variable field, and the claim states what the construction
+  delivers. This is documentation a consumer copies into their own key-building code, which is why
+  the shape mattered more than whether `:reindex:` in particular was reachable.
+- Carried from 1.2.1: **the `MetricsService` example in `README.md` called two methods that do not
+  exist**, `getMetrics(name)` and `getAll([names])`, where the service exposes `get(name)` and a
+  no-argument `getAll()`.
+
+### Internal
+
+Not shipped, listed because the tag covers them: bullmq raised from 6.0.10 to 6.3.4 in the
+workspace override; `fast-uri`, `qs` and `fastify` floors raised past published advisories; the
+README-snippet gate now type-checks through receivers; `AGENTS.md` and its sync workflow added.
+
 ## [1.2.1] — 2026-08-30
 
 Documentation only. `dist/` is byte-identical to `1.2.0`; the published tarball was unpacked and
@@ -503,6 +528,7 @@ v6 peer range.
 
 ---
 
+[1.2.2]: https://github.com/bymaxone/nest-queue/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/bymaxone/nest-queue/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/bymaxone/nest-queue/compare/v1.0.11...v1.2.0
 [1.0.11]: https://github.com/bymaxone/nest-queue/compare/v1.0.10...v1.0.11

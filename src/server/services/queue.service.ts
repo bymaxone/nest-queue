@@ -114,7 +114,13 @@ export class QueueService {
    * The deduplication `id` is a shared key across the queue, so a multi-tenant
    * producer MUST scope it by tenant: keyed on the value alone
    * (`` `reindex:${term}` ``), tenant A enqueuing a term suppresses tenant B's job
-   * for the same term. Include the tenant (`` `${tenantId}:reindex:${term}` ``).
+   * for the same term.
+   *
+   * Scoping alone is not enough. Two variable fields joined by a delimiter that
+   * either may contain do not produce a unique key: with `` `${tenantId}:${term}` ``,
+   * the pairs `('a', 'b:c')` and `('a:b', 'c')` both yield `a:b:c`. Percent-encode
+   * every variable field so the delimiter cannot appear inside one:
+   * `` `${encodeURIComponent(tenantId)}:${encodeURIComponent(term)}` ``.
    *
    * Deduplication modes (`deduplication: { id, ttl?, extend?, replace?, keepLastIfActive? }`):
    *  - Simple `{ id }` — collapse duplicates until the in-flight job completes or fails.
@@ -129,10 +135,11 @@ export class QueueService {
    * @param data - Typed job payload.
    * @param options - Per-job BullMQ options (priority, delay, `jobId`, `deduplication`, ...).
    * @returns The created job.
-   * @example Throttle: at most one reindex per term every 5 seconds. The dedup key
-   *   carries the tenant so one tenant's term cannot suppress another's.
+   * @example Throttle: at most one reindex per term every 5 seconds. Both variable
+   *   fields are percent-encoded, so no other tenant/term pair can build this key.
+   *   const dedupId = `${encodeURIComponent(tenantId)}:reindex:${encodeURIComponent(term)}`
    *   await queueService.enqueue('search', 'reindex', { term }, {
-   *     deduplication: { id: `${tenantId}:reindex:${term}`, ttl: 5_000 },
+   *     deduplication: { id: dedupId, ttl: 5_000 },
    *   })
    */
   async enqueue<TData = unknown, TResult = unknown>(

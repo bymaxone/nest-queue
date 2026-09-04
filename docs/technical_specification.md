@@ -865,19 +865,20 @@ Two distinct, complementary mechanisms — both native to BullMQ and surfaced th
   | Keep-last-if-active | `{ id, keepLastIfActive: true }`           | While a job is processing, store the latest data and auto-create one follow-up job when it finishes. |
 
   ```typescript
-  // Throttle: at most one index-rebuild per search term every 5s. The dedup id
-  // carries the tenant so one tenant's term cannot suppress another's.
+  // Throttle: at most one index-rebuild per search term every 5s. Both variable
+  // fields are percent-encoded, so no other tenant/term pair can build this key.
+  const dedupId = `${encodeURIComponent(tenantId)}:reindex:${encodeURIComponent(term)}`
   await queue.enqueue(
     'search',
     'reindex',
     { term },
     {
-      deduplication: { id: `${tenantId}:reindex:${term}`, ttl: 5_000 },
+      deduplication: { id: dedupId, ttl: 5_000 },
     },
   )
   ```
 
-  This replaces the previous draft's "global deduplication is the consumer's job" stance — it is now a first-class, documented feature. The deduplication key is independent of `jobId`; inspect/clear it with the native `getDeduplicationJobId` / `removeDeduplicationKey`. The `id` is a shared key across the queue, so a multi-tenant producer MUST scope it by tenant (`` `${tenantId}:reindex:${term}` ``); keyed on the value alone, one tenant enqueuing a term suppresses another tenant's job for the same term.
+  This replaces the previous draft's "global deduplication is the consumer's job" stance — it is now a first-class, documented feature. The deduplication key is independent of `jobId`; inspect/clear it with the native `getDeduplicationJobId` / `removeDeduplicationKey`. The `id` is a shared key across the queue, so a multi-tenant producer MUST scope it by tenant; keyed on the value alone, one tenant enqueuing a term suppresses another tenant's job for the same term. Scoping alone is not sufficient: two variable fields joined by a delimiter either may contain do not produce a unique key — `('a', 'b:c')` and `('a:b', 'c')` both yield `a:b:c` — so every variable field is percent-encoded (`` `${encodeURIComponent(tenantId)}:reindex:${encodeURIComponent(term)}` ``).
 
 ### 5.5 `enqueueBulk<TData, TResult>()` method
 
