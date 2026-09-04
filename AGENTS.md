@@ -247,15 +247,19 @@ change a published type and a documented metrics shape.
 
 ### The README is not the contract — the source and `test/types/` are
 
-The published `README.md` contains at least one example that does not match the shipped API: the
-`MetricsService` section calls `getMetrics(name)` and `getAll([names])`, while the real service
-exposes `get(name)` and a no-argument `getAll()` (`src/server/services/metrics.service.ts`).
+A finding must not cite the README as evidence of what the API is or should be. The authority is
+the source, `src/server/index.ts`, `src/shared/index.ts`, and `test/types/public-api.test-d.ts`,
+which pins the published signatures.
 
-So a finding must not cite the README as evidence of what the API is or should be. Read the source,
-`src/server/index.ts`, `src/shared/index.ts`, and `test/types/public-api.test-d.ts`, which pins the
-published signatures. A README snippet that contradicts them is a **defect in the README** — that
-is a legitimate finding, and a valuable one — but the correction goes to the README, never to the
-code it misdescribes.
+This is not hypothetical: a `MetricsService` example calling `getMetrics(name)` and
+`getAll([names])` against a service exposing `get(name)` and a no-argument `getAll()` shipped to
+npm in 1.0.11 and 1.2.0, and was corrected in 1.2.2. `check:published` compiles README snippets, but only what it
+can type — a receiver the snippet never declares is bound only where its name matches an exported
+class, so an example reaching the API through anything else is prose to the gate.
+
+A README snippet contradicting the source is therefore a **defect in the README** — a legitimate
+finding, and a valuable one — but the correction goes to the README, never to the code it
+misdescribes.
 
 ### Where this repository narrows a shared rule
 
