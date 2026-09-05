@@ -7,6 +7,30 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.3] — 2026-09-05
+
+**Nothing that runs in this package changed.** A fresh build of the release commit was packed and
+compared against the published 1.2.2 tarball: `dist/` is identical file for file, and `package.json`
+differs only in the version string. The remaining difference is this CHANGELOG entry, which ships
+because `CHANGELOG.md` does.
+
+It exists because the estate releases on a cadence, so a library whose artifact is unchanged
+publishes anyway and says so rather than implying a benefit it does not deliver. **There is no
+reason to upgrade from 1.2.2**, and a consumer on `^1.2.0` gains nothing by resolving to it.
+
+### Internal
+
+Not shipped — `files` is `dist`, `LICENSE`, `README.md`, `CHANGELOG.md`, and the only file touched
+since 1.2.2 is `AGENTS.md`:
+
+- The shared review-rules block was synchronised with its canonical copy, bringing in an invariant
+  for keys built from more than one field — the generalised form of the deduplication defect this
+  package corrected in 1.2.2.
+- Two repository-specific review rules were corrected: one rested its case on a defect that had
+  since been fixed, so the claim had become false; the other required an authorship finding to
+  quote a resolvable commit id, a criterion the shared block superseded by placing author and
+  committer identity out of scope entirely.
+
 ## [1.2.2] — 2026-09-04
 
 **1.2.1 was tagged but never published**, so this release carries its documentation fix as well
@@ -528,6 +552,7 @@ v6 peer range.
 
 ---
 
+[1.2.3]: https://github.com/bymaxone/nest-queue/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/bymaxone/nest-queue/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/bymaxone/nest-queue/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/bymaxone/nest-queue/compare/v1.0.11...v1.2.0
