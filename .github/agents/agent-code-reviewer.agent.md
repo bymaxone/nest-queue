@@ -1,7 +1,6 @@
 ---
 name: Code Reviewer
 description: Reviews pull requests for @bymax-one/nest-queue, enforcing TypeScript strict rules, BullMQ API correctness, supply-chain security, and test coverage requirements.
-model: claude-sonnet-4-5
 tools:
   - type: function
     function:
