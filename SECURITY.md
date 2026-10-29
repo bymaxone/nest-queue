@@ -26,10 +26,11 @@ by email.
 
 ## Supported Versions
 
-| Version   | Support                         |
-| --------- | ------------------------------- |
-| `1.0.x`   | Active — security fixes applied |
-| `< 1.0.0` | Pre-release — no support        |
+| Version       | Support                                            |
+| ------------- | -------------------------------------------------- |
+| Latest `1.x`  | Active — security fixes applied                    |
+| Earlier `1.x` | Upgrade to the latest `1.x`; fixes land there only |
+| `< 1.0.0`     | Pre-release — no support                           |
 
 ---
 
@@ -72,10 +73,14 @@ npm audit signatures @bymax-one/nest-queue
 
 The release pipeline enforces:
 
-- SHA-pinned GitHub Actions (Pinned-Dependencies Scorecard check)
+- Third-party GitHub Actions pinned to a commit SHA; the organisation's own reusable workflows
+  (`bymaxone/.github`) are referenced by their moving `v1` tag so a fix to a shared workflow reaches
+  every repository
 - Least-privilege workflow permissions
 - TruffleHog OSS secret scanning on every push
-- OSV-Scanner dependency advisory scanning
+- OSV-Scanner dependency advisory scanning of the full lockfile on every push, pull request and
+  weekly; an advisory with no patched release is ignored only in `osv-scanner.toml`, with a reason
+  and an expiry date
 - OpenSSF Scorecard transparency (target ≥ 7.0)
 
 See the [OpenSSF Scorecard report](https://securityscorecards.dev/viewer/?uri=github.com/bymaxone/nest-queue)

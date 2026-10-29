@@ -771,7 +771,7 @@ key will do it twice at some point.
 | Namespacing       | `prefix` applied uniformly to `Queue`, `Worker`, `QueueEvents` and `FlowProducer`                                                                                                           |
 | Connection policy | `maxRetriesPerRequest: null` confined to duplicated consumer connections; producers keep fail-fast retries                                                                                  |
 | Delivery          | At-least-once with a bounded drain; unacknowledged work is re-queued by BullMQ's stalled check                                                                                              |
-| Supply chain      | `dependencies: {}`; SHA-pinned Actions, OSV-Scanner, TruffleHog, OpenSSF Scorecard; npm publish over OIDC                                                                                   |
+| Supply chain      | `dependencies: {}`; SHA-pinned third-party Actions, OSV-Scanner, TruffleHog, OpenSSF Scorecard; npm publish over OIDC                                                                       |
 | Input validation  | Options validated at bootstrap; cron patterns validated by BullMQ's own parser, never a hand-rolled regex                                                                                   |
 
 > [!IMPORTANT]
@@ -805,7 +805,7 @@ key will do it twice at some point.
   module-resolution mode would (all four `attw` quadrants green, `node10` included), and
   `pnpm smoke` resolves the packed tarball from a real consumer in ESM _and_ CommonJS.
 - **Bundle budgets** enforced (`pnpm size`): server ≤ 18 KiB brotli, shared ≤ 2.5 KiB.
-- **Supply chain:** SHA-pinned GitHub Actions, OSV-Scanner, TruffleHog, OpenSSF Scorecard,
+- **Supply chain:** SHA-pinned third-party GitHub Actions, OSV-Scanner, TruffleHog, OpenSSF Scorecard,
   npm publish with provenance (OIDC).
 
 ```bash

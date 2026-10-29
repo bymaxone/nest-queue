@@ -7,6 +7,49 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+Behaviour is unchanged: the status codes a `QueueException` carries, the public API and the types
+are the same as in 1.2.3. The bundle under `dist/` is not byte-identical, though, and the
+differences are listed below so a reader does not have to take "no change" on trust.
+
+### Changed
+
+- `QueueException` is now thrown with the named `HttpStatus` members (`BAD_REQUEST`,
+  `INTERNAL_SERVER_ERROR`, `SERVICE_UNAVAILABLE`) instead of the numbers 400, 500 and 503, at every
+  call site. The values are the same; the change satisfies `no-unsafe-enum-assignment` in
+  typescript-eslint 8.71. Against a fresh build of 1.2.3, the CommonJS bundle is
+  identical once those members are replaced by their numeric values, the ES module bundle differs
+  only in the order of its `@nestjs/common` imports and in line wrapping, and the type declarations
+  differ in one JSDoc line (`FlowService`, which now names `HttpStatus.SERVICE_UNAVAILABLE`).
+
+### Security
+
+- Dependency resolution of the tooling the repository builds and tests with was raised to patched
+  versions: `fastify`, `undici`, `fast-uri`, `js-yaml`, `brace-expansion`, `qs`, `zod`,
+  `handlebars`, `@grpc/grpc-js` and `@nestjs/platform-fastify`. None of these ships in the package,
+  which still declares `"dependencies": {}`; they reach it only through development and example-app
+  tooling.
+- `osv-scanner.toml` ignores `GHSA-gcqx-w48m-w2h4` (`deepmerge` 4.3.1, no patched release) until
+  2027-01-27. The package is reached only through `jest-config`, a development dependency.
+
+### Internal
+
+Not shipped:
+
+- Tests kill the four mutants that survived the full mutation run, and the one equivalent mutant is
+  disabled in place with the reason beside it. The mutation score is 100%.
+- The README snippet check (`scripts/check-published-surface.mjs`) decides whether a snippet
+  declares a receiver from the parsed snippet rather than from its text, so decorated constructor
+  parameters, object-literal keys and JSX are classified correctly.
+- Development and GitHub Actions dependencies were updated (Stryker, Jest, ts-jest, Prettier,
+  typescript-eslint, testcontainers, NestJS 11.2.x, and the CodeQL, pnpm, harden-runner, TruffleHog
+  and setup-node actions).
+- `SECURITY.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `AGENTS.md`, the README supply-chain wording and the
+  mutation-testing documents were brought in line with the current configuration.
+
+---
+
 ## [1.2.3] — 2026-09-05
 
 **Nothing that runs in this package changed.** A fresh build of the release commit was packed and
@@ -552,6 +595,7 @@ v6 peer range.
 
 ---
 
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.3...HEAD
 [1.2.3]: https://github.com/bymaxone/nest-queue/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/bymaxone/nest-queue/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/bymaxone/nest-queue/compare/v1.2.0...v1.2.1
