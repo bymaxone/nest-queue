@@ -2512,13 +2512,16 @@ Enqueue + process + typed result; bounded graceful shutdown (finish in-flight, f
 
 ### 19.1 Workflows (`.github/workflows/`)
 
-| Workflow          | Trigger               | Responsibility                                                                                                       |
-| ----------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `ci.yml`          | PR + push             | Install (frozen lockfile) → typecheck → lint → unit (100% coverage) → e2e (Testcontainers) → `check-size.mjs` budget |
-| `codeql.yml`      | push to main + weekly | Static analysis (TS/JS)                                                                                              |
-| `scorecard.yml`   | push to main + weekly | OpenSSF Scorecard (target ≥ 7.0)                                                                                     |
-| `osv-scanner.yml` | PR + weekly           | Dependency vulnerability scan (OSV)                                                                                  |
-| `release.yml`     | tag `v*`              | typecheck → lint → coverage → mutation gate → build → `pnpm publish --provenance` (OIDC trusted publishing)          |
+| Workflow                  | Trigger                             | Responsibility                                                                                                                                                                                                                                                              |
+| ------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci.yml`                  | PR + push to main + manual          | Install (frozen lockfile) → typecheck → lint → unit (100% coverage) → e2e (Testcontainers) → build and `check-size.mjs` budget → consumer-app typecheck; incremental mutation testing on push to main                                                                       |
+| `mutation-full.yml`       | weekly + manual                     | Cold full Stryker run (every mutant re-tested from scratch)                                                                                                                                                                                                                 |
+| `codeql.yml`              | PR + push to main + weekly + manual | Static analysis (TS/JS)                                                                                                                                                                                                                                                     |
+| `scorecard.yml`           | push to main + weekly               | OpenSSF Scorecard (target ≥ 7.0)                                                                                                                                                                                                                                            |
+| `osv-scanner.yml`         | PR + push to main + weekly          | Dependency vulnerability scan (OSV) of the full lockfile                                                                                                                                                                                                                    |
+| `peer-advisory-drift.yml` | weekly + manual                     | Advisories against the declared peer ranges                                                                                                                                                                                                                                 |
+| `agents-sync.yml`         | weekly + manual                     | Keeps the shared review-rules block of `AGENTS.md` in sync with its canonical copy                                                                                                                                                                                          |
+| `release.yml`             | tag `v*.*.*` + manual               | Tag-matches-version check → `pnpm prepublishOnly` (clean, typecheck, type tests, lint, mutation-directive check, coverage, build, published-surface check) → size, type-resolution and smoke gates → `pnpm publish --provenance` (OIDC trusted publishing) → GitHub Release |
 
 ### 19.2 Hardening
 
