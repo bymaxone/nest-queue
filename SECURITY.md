@@ -26,11 +26,10 @@ by email.
 
 ## Supported Versions
 
-| Version       | Support                                            |
-| ------------- | -------------------------------------------------- |
-| Latest `1.x`  | Active — security fixes applied                    |
-| Earlier `1.x` | Upgrade to the latest `1.x`; fixes land there only |
-| `< 1.0.0`     | Pre-release — no support                           |
+| Version   | Support                                       |
+| --------- | --------------------------------------------- |
+| `1.2.x`   | Active — security fixes applied               |
+| `< 1.2.0` | Not supported — upgrade to the latest `1.2.x` |
 
 ---
 
