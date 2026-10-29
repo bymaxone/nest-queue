@@ -303,6 +303,19 @@ describe('BymaxQueueModule.forRootAsync', () => {
     expect(resolved.prefix).toBe('bull')
   })
 
+  it('rejects invalid factory options instead of resolving them', () => {
+    // The async path must fail fast like forRoot: options a factory returns reach the
+    // resolved-options provider unvalidated, so it is the only place a bad value is caught.
+    const dynamic = BymaxQueueModule.forRootAsync({ useFactory: () => baseOptionsClientMode() })
+    const provider = findProvider(
+      dynamic.providers ?? [],
+      BYMAX_QUEUE_RESOLVED_OPTIONS,
+    ) as FactoryProvider
+    expect(() => {
+      provider.useFactory({})
+    }).toThrow(QueueException)
+  })
+
   it('registers FlowService and MetricsService as resolved-aware factories', () => {
     // The async path injects the resolved options into the conditional providers.
     const dynamic = BymaxQueueModule.forRootAsync({ useFactory: () => baseOptionsClientMode() })

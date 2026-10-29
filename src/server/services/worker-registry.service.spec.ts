@@ -409,6 +409,24 @@ describe('WorkerRegistry.registerSandboxed', () => {
       }),
     ).toThrow(QueueException)
   })
+
+  it('rejects invalid worker options before opening a connection or a worker', () => {
+    // A sandboxed worker takes the same option bounds as an in-process one; an out-of-range
+    // concurrency must fail registration, not reach the BullMQ Worker constructor.
+    const { Worker: MockWorker } = jest.requireMock<{ Worker: jest.Mock }>('bullmq')
+    MockWorker.mockClear()
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
+    const details = detailsOf(() =>
+      registry.registerSandboxed({
+        queueName: 'sb-bad-options',
+        processorFile: '/tmp/p.js',
+        options: { concurrency: 0 },
+      }),
+    )
+    expect(details.reason).toBe('concurrency must be >= 1')
+    expect(MockWorker).not.toHaveBeenCalled()
+    expect(registry.getConnections().has('sb-bad-options')).toBe(false)
+  })
 })
 
 describe('WorkerRegistry.unregister', () => {
