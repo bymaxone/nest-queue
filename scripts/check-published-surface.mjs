@@ -550,11 +550,19 @@ function isOffLimits(code, name) {
   // parameter does not, so it must not suppress binding. Matched wherever it
   // appears in the list rather than by scanning from `constructor(`, which a
   // function type in an earlier parameter would truncate.
+  // A parameter may carry decorators before its modifiers —
+  // `constructor(@Inject(TOKEN) private readonly queue: QueueService)` — so the
+  // modifiers are not necessarily adjacent to the `(` or `,` that opens the parameter.
+  // Call arguments are matched three levels deep, which covers `@Inject(forwardRef(() => T))`.
+  const decorators = String.raw`(?:@[\w$.]+(?:\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))?\s*)*`
   const paramProperty = new RegExp(
-    `[(,]\\s*(?:(?:private|public|protected|readonly)\\s+)+${name}\\s*[!?]?\\s*:`,
+    `[(,]\\s*${decorators}(?:(?:private|public|protected|readonly)\\s+)+${name}\\s*[!?]?\\s*:`,
   )
+  // An annotated field is told apart from an object-literal key (`queue: mockQueue,`),
+  // which has the same `name: Identifier` shape, by what a key cannot have: a
+  // modifier, a `!`/`?` marker, or a terminating `;`.
   const classField = new RegExp(
-    `^\\s*(?:(?:private|public|protected|readonly|static|declare)\\s+)*${name}\\s*[!?]?\\s*:\\s*[A-Za-z_$]`,
+    `^\\s*(?:(?:(?:private|public|protected|readonly|static|declare)\\s+)+${name}\\s*[!?]?|${name}\\s*[!?])\\s*:\\s*[A-Za-z_$]|^\\s*${name}\\s*:\\s*[A-Za-z_$][\\w$.<>,|&\\[\\] ]*;\\s*$`,
     'm',
   )
   // An initialised field carries its type in the initialiser rather than an
