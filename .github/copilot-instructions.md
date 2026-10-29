@@ -42,8 +42,8 @@ rules live alongside this file:
 ## Repository context
 
 A public NestJS dynamic module wrapping BullMQ. Peer deps: `@nestjs/common ^11.0.16`,
-`@nestjs/core ^11.1.18`, `bullmq ^5.16`, `ioredis ^5`, `reflect-metadata ^0.2`; optional
-`bullmq-otel ^1`. Zero runtime dependencies (`dependencies: {}`). Node >= 24, pnpm 11.
+`@nestjs/core ^11.1.18`, `bullmq ^6.0.0`, `ioredis ^6.0.0`, `reflect-metadata ^0.2`; optional
+`bullmq-otel ^2.0.0`. Zero runtime dependencies (`dependencies: {}`). Node >= 24, pnpm 11.
 Two subpaths: `.` (server) and `./shared` (dependency-free types and constants).
 
 ## Domain rules — queueing correctness
@@ -84,5 +84,5 @@ throws, and the symptom appears far from the cause.
 
 ```
 pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && \
-  pnpm build && pnpm size && pnpm check:exports && pnpm smoke
+  pnpm build && pnpm size && pnpm check:exports && pnpm check:published && pnpm smoke
 ```
