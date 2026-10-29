@@ -37,7 +37,6 @@ differences are listed below so a reader does not have to take "no change" on tr
 
 - The README supply-chain wording now says that third-party GitHub Actions are pinned to a commit SHA,
   which is what the workflows do; the organisation's own reusable workflows follow a version tag.
-- The changelog lists every change on `main` since 1.2.3.
 
 ### Internal
 
