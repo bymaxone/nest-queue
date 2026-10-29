@@ -85,8 +85,10 @@ All of the following must pass:
 The E2E suite (`pnpm test:e2e`) needs Docker and runs against a real Redis; CI
 runs it on every PR.
 
-Mutation testing (`pnpm mutation`) is a **release gate**, run on a push to `main`
-and manually before tagging a version — never on every PR.
+Mutation testing is held at a 100% score and is **not** run on every PR. It runs
+incrementally on a push to `main`, cold every week (`Mutation (full)`), and locally with
+`pnpm mutation` (incremental) or `pnpm mutation:full` (cold). A surviving mutant is fixed with a
+test; only a mutant no test can observe is disabled in place, with the reason written beside it.
 
 ## Commits — Conventional Commits
 

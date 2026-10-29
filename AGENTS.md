@@ -274,3 +274,7 @@ and this is that form — not a disagreement with the shared text.
   `@ts-ignore` and no `eslint-disable`, and coverage is a hard 100% line/branch gate on every
   implemented file — so `istanbul ignore` is a way of getting a green coverage report for untested
   code rather than a formatting nicety.
+
+## Session memory (Obsidian vault)
+
+Lessons from earlier sessions live outside the repository, in the owner's Obsidian vault at `~/Documents/MyApps/obsidian/Brain/`, when it is present on this machine. Before a task, find this repository's hub under `02 - Areas/`: the table in `02 - Areas/Bymax/Bymax.md` maps each Bymax repository to its folder; for any other repository, search `02 - Areas/` for the repository name. Read the hub with its `Learnings.md` and `Decisions.md`, and the relevant stack notes under `03 - Resources/`. When the vault and the code disagree, the code wins. Record each non-obvious gotcha, root cause or decision in the hub as the vault's `_meta/conventions.md` describes; a repository without a hub gets one from `_meta/templates/project-hub.md`.

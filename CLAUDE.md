@@ -48,7 +48,7 @@ pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && \
   pnpm build && pnpm size && pnpm check:exports && pnpm check:published && pnpm smoke
 ```
 
-100% line/branch coverage on every implemented file is a hard gate. Mutation testing runs automatically post-merge on `main` via the shared reusable (`bymaxone/.github` → node-lib-ci) plus an optional manual `pnpm mutation`.
+100% line/branch coverage on every implemented file is a hard gate. Mutation testing is held at a 100% score (`stryker.config.json`). It runs incrementally on every push to `main` through the shared reusable (`bymaxone/.github` → node-lib-ci), cold once a week and on demand as `Mutation (full)`, and locally as `pnpm mutation` (incremental) or `pnpm mutation:full` (cold).
 
 - **`test:types`** compiles `test/types/public-api.test-d.ts`, which pins the published signatures. A new export, a new generic parameter, or a new union member belongs there.
 - **`check:exports`** runs `attw` against the packed tarball. It must **not** be added to `prepublishOnly`: attw packs the tarball itself, and the nested pack inside `pnpm publish` fails with `ENOENT`.

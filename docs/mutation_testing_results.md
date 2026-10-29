@@ -6,6 +6,25 @@ Mutation run for `@bymax-one/nest-queue`, captured against the full
 release, after the prefix-propagation and explicit-`@Inject` fixes and the removal
 of the unused `config/default-options` re-export alias.
 
+## Current state
+
+The suite is held at a **100.00%** mutation score, the `break` threshold in
+`stryker.config.json` (`high`, `low` and `break` are all 100).
+
+| Field            | Value                                                                |
+| ---------------- | -------------------------------------------------------------------- |
+| Date             | 2026-10-29                                                           |
+| Runner           | Stryker 10 with `@stryker-mutator/jest-runner`, `pnpm mutation:full` |
+| Result           | **PASS** — exit 0                                                    |
+| Killed / timeout | 666 / 5 (671 detected)                                               |
+| Survived         | 0                                                                    |
+| No coverage      | 0                                                                    |
+
+Mutants that no test can observe are disabled in place with a `Stryker disable` directive
+that states why they are equivalent, rather than counted as survivors. The sections below are
+the `1.0.0` baseline, kept for the per-file reasoning, and describe a lower threshold and
+survivors that have since been resolved or disabled in place.
+
 ## Run metadata
 
 | Field             | Value                                                              |
@@ -87,9 +106,10 @@ behavior for any reachable input. No threshold was lowered to accommodate them.
 ## Reproduce
 
 ```bash
+# incremental (default): re-test only what changed since the stored report:
 NODE_OPTIONS=--max-old-space-size=4096 pnpm mutation
-# re-test only the mutants that are not yet killed:
-NODE_OPTIONS=--max-old-space-size=4096 pnpm mutation:incremental
+# re-test every mutant from scratch, ignoring stored verdicts:
+NODE_OPTIONS=--max-old-space-size=4096 pnpm mutation:full
 # scope to a single file while iterating:
 NODE_OPTIONS=--max-old-space-size=4096 pnpm exec stryker run --mutate "src/server/services/worker-registry.service.ts"
 ```

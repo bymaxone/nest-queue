@@ -19,18 +19,26 @@ high mutation score on its critical logic.
 
 | Level   | Value | Meaning                                                |
 | ------- | ----- | ------------------------------------------------------ |
-| `high`  | 99    | Score at or above this is reported as healthy (green). |
-| `low`   | 95    | Below this is reported as a warning (yellow).          |
-| `break` | 95    | The run **fails** below this score.                    |
+| `high`  | 100   | Score at or above this is reported as healthy (green). |
+| `low`   | 100   | Below this is reported as a warning (yellow).          |
+| `break` | 100   | The run **fails** below this score.                    |
 
-The target is **100%** on the critical paths; `break: 95` is the hard floor.
+The score must be **100%**: `stryker.config.json` sets all three levels to 100. A mutant no
+test can observe is disabled in place with a `Stryker disable` directive that states why it is
+equivalent; a mutant a test could kill is never disabled.
 
 ## Cadence
 
-Mutation testing is a **pre-release gate**, not a per-commit check — a full run
-takes several minutes. It is run before cutting a release and whenever the
-critical logic changes materially. Day-to-day quality is guarded by 100%
-line/branch coverage on every implemented file.
+Mutation testing is not a per-pull-request check. It runs in three places:
+
+- **On every push to `main`**, incrementally: only the mutants affected by the change are
+  re-tested, which takes minutes.
+- **Weekly and on demand, cold** (`Mutation (full)`, also `workflow_dispatch`): every mutant is
+  re-tested from scratch, because an incremental run reuses stored verdicts that can be stale.
+- **Locally**, with `pnpm mutation` (incremental) or `pnpm mutation:full` (cold), before a change
+  that touches critical logic.
+
+Day-to-day quality is also guarded by 100% line/branch coverage on every implemented file.
 
 ## Targets (surviving mutants here are unacceptable)
 
