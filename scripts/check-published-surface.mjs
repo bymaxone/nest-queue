@@ -528,6 +528,65 @@ function exportedClasses() {
 }
 
 /**
+ * Replace every decorator expression in a snippet with a space, so
+ * `constructor(@Inject(forwardRef(() => T)) private readonly queue: Q)` reads as
+ * `constructor( private readonly queue: Q)`. The call arguments are skipped by
+ * counting parentheses, which no regular expression can do to arbitrary depth.
+ *
+ * @param code - The snippet source.
+ * @returns The source with decorators removed.
+ */
+function stripDecorators(code) {
+  let out = ''
+  let i = 0
+  while (i < code.length) {
+    if (code[i] !== '@') {
+      out += code[i++]
+      continue
+    }
+    i++
+    while (i < code.length && /[\w$.]/.test(code[i])) i++
+    if (code[i] === '(') {
+      let depth = 0
+      do {
+        if (code[i] === '(') depth++
+        else if (code[i] === ')') depth--
+        i++
+      } while (i < code.length && depth > 0)
+    }
+    out += ' '
+  }
+  return out
+}
+
+/**
+ * True when the position sits directly in a class body, not in an object
+ * literal or a function body nested inside one. A line shaped `name: Type`
+ * with no modifier is a field there and an object key anywhere else, and the
+ * text of the line alone cannot say which.
+ *
+ * @param code - The snippet source.
+ * @param at - The character offset to classify.
+ * @returns Whether the innermost enclosing block is a class body.
+ */
+function insideClassBody(code, at) {
+  const stack = []
+  let start = 0
+  for (let i = 0; i < at; i++) {
+    if (code[i] === '{') {
+      stack.push(/\bclass\b[^{};]*$/.test(code.slice(start, i)))
+      start = i + 1
+    } else if (code[i] === '}') {
+      stack.pop()
+      start = i + 1
+    } else if (code[i] === ';') {
+      start = i + 1
+    }
+  }
+  return stack.at(-1) === true
+}
+
+/**
  * True when this pass must leave `this.<name>` alone.
  *
  * Two reasons, both meaning a rewrite would make the check worse rather than
@@ -539,45 +598,42 @@ function exportedClasses() {
  * annotated and initialised, since `private readonly queue = inject(QueueService)`
  * carries its type in the initialiser. An annotation must begin with an
  * identifier character, which is what keeps an options-object key out: in
- * `flows: { enabled: true }` the colon is followed by `{`.
+ * `flows: { enabled: true }` the colon is followed by `{`. A bare
+ * `name: Identifier` line has the shape of both a field and an object key, so it
+ * counts only inside a class body.
  *
  * @param code - The snippet source.
  * @param name - The receiver property name.
  * @returns Whether the receiver must be left untouched.
  */
 function isOffLimits(code, name) {
+  const src = stripDecorators(code)
+  const mods = '(?:(?:private|public|protected|readonly|static|declare)\\s+)'
   // Only a parameter PROPERTY creates `this.<name>`; a plain `constructor(x: T)`
   // parameter does not, so it must not suppress binding. Matched wherever it
   // appears in the list rather than by scanning from `constructor(`, which a
   // function type in an earlier parameter would truncate.
-  // A parameter may carry decorators before its modifiers —
-  // `constructor(@Inject(TOKEN) private readonly queue: QueueService)` — so the
-  // modifiers are not necessarily adjacent to the `(` or `,` that opens the parameter.
-  // Call arguments are matched three levels deep, which covers `@Inject(forwardRef(() => T))`.
-  const decorators = String.raw`(?:@[\w$.]+(?:\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))?\s*)*`
   const paramProperty = new RegExp(
-    `[(,]\\s*${decorators}(?:(?:private|public|protected|readonly)\\s+)+${name}\\s*[!?]?\\s*:`,
+    `[(,]\\s*(?:(?:private|public|protected|readonly)\\s+)+${name}\\s*[!?]?\\s*:`,
   )
-  // An annotated field is told apart from an object-literal key (`queue: mockQueue,`),
-  // which has the same `name: Identifier` shape, by what a key cannot have: a
-  // modifier, a `!`/`?` marker, or a terminating `;`.
-  const classField = new RegExp(
-    `^\\s*(?:(?:(?:private|public|protected|readonly|static|declare)\\s+)+${name}\\s*[!?]?|${name}\\s*[!?])\\s*:\\s*[A-Za-z_$]|^\\s*${name}\\s*:\\s*[A-Za-z_$][\\w$.<>,|&\\[\\] ]*;\\s*$`,
+  // Markers an object-literal key cannot carry: a modifier or a `!`/`?`.
+  const markedField = new RegExp(
+    `^\\s*(?:${mods}+${name}\\s*[!?]?|${name}\\s*[!?])\\s*:\\s*[A-Za-z_$]`,
     'm',
   )
+  const bareField = new RegExp(`^\\s*${name}\\s*:\\s*[A-Za-z_$]`, 'gm')
+  const unmarkedField = [...src.matchAll(bareField)].some((m) => insideClassBody(src, m.index))
   // An initialised field carries its type in the initialiser rather than an
   // annotation — `private readonly queue = inject(QueueService)` — so the
-  // annotated form above never sees it.
-  const initialised = new RegExp(
-    `^\\s*(?:(?:private|public|protected|readonly|static|declare)\\s+)*${name}\\s*[!?]?\\s*=`,
-    'm',
-  )
+  // annotated forms above never see it.
+  const initialised = new RegExp(`^\\s*${mods}*${name}\\s*[!?]?\\s*=`, 'm')
   const assigned = new RegExp(`\\bthis\\.${name}\\s*=[^=]`)
   return (
-    paramProperty.test(code) ||
-    classField.test(code) ||
-    initialised.test(code) ||
-    assigned.test(code)
+    paramProperty.test(src) ||
+    markedField.test(src) ||
+    unmarkedField ||
+    initialised.test(src) ||
+    assigned.test(src)
   )
 }
 
