@@ -17,8 +17,8 @@ differences are listed below so a reader does not have to take "no change" on tr
 
 - `QueueException` is now thrown with the named `HttpStatus` members (`BAD_REQUEST`,
   `INTERNAL_SERVER_ERROR`, `SERVICE_UNAVAILABLE`) instead of the numbers 400, 500 and 503, at every
-  call site. The values are the same; the change satisfies `no-unsafe-enum-assignment` in
-  typescript-eslint 8.71. Against a fresh build of 1.2.3, the CommonJS bundle is
+  call site. The values are the same; the change satisfies `no-unsafe-enum-assignment`.
+  Against a fresh build of 1.2.3, the CommonJS bundle is
   identical once those members are replaced by their numeric values, the ES module bundle differs
   only in the order of its `@nestjs/common` imports and in line wrapping, and the type declarations
   differ in one JSDoc line (`FlowService`, which now names `HttpStatus.SERVICE_UNAVAILABLE`).
