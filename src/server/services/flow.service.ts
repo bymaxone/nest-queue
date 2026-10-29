@@ -6,7 +6,7 @@
  * @layer server/services
  */
 
-import { Injectable, Logger } from '@nestjs/common'
+import { HttpStatus, Injectable, Logger } from '@nestjs/common'
 import { FlowProducer, type FlowJob, type JobNode, type Telemetry } from 'bullmq'
 import type { ConnectionResolver } from './connection-resolver.service'
 import { QueueException } from '../errors/queue-exception'
@@ -20,7 +20,7 @@ import { attachDefaultErrorListener } from '../utils/attach-error-listener'
  *
  * Opt-in: this provider is registered unconditionally so that injecting it never
  * raises `UnknownDependenciesException`; instead, every operation throws
- * `QueueException(FLOW_DISABLED, 503)` when `flows.enabled !== true`.
+ * `QueueException(FLOW_DISABLED, HttpStatus.SERVICE_UNAVAILABLE)` when `flows.enabled !== true`.
  *
  * @example
  * await flowService.add({
@@ -118,7 +118,7 @@ export class FlowService {
    */
   private requireProducer(): FlowProducer {
     if (!this.producer) {
-      throw new QueueException(QUEUE_ERROR_CODES.FLOW_DISABLED, 503)
+      throw new QueueException(QUEUE_ERROR_CODES.FLOW_DISABLED, HttpStatus.SERVICE_UNAVAILABLE)
     }
     return this.producer
   }

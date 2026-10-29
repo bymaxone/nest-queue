@@ -4,7 +4,7 @@
  * @layer server/services
  */
 
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common'
 import { type Job, type JobsOptions, Queue, type QueueOptions } from 'bullmq'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
@@ -166,11 +166,15 @@ export class QueueService {
     jobs: readonly BulkJob<TData>[],
   ): Promise<TypedJob<TData, TResult>[]> {
     if (jobs.length > MAX_BULK_SIZE) {
-      throw new QueueException(QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED, 500, {
-        reason: 'batch size exceeds limit',
-        limit: MAX_BULK_SIZE,
-        received: jobs.length,
-      })
+      throw new QueueException(
+        QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        {
+          reason: 'batch size exceeds limit',
+          limit: MAX_BULK_SIZE,
+          received: jobs.length,
+        },
+      )
     }
     try {
       const created = await this.queueFor(queueName).addBulk(
@@ -182,9 +186,13 @@ export class QueueService {
       )
       return created
     } catch (err) {
-      throw new QueueException(QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED, 500, {
-        cause: (err as Error).message,
-      })
+      throw new QueueException(
+        QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        {
+          cause: (err as Error).message,
+        },
+      )
     }
   }
 
@@ -289,7 +297,7 @@ export class QueueService {
         // NR_CLOSED, ...); a cron parse error is a bare Error and carries none.
         // Anything with a code propagates untouched, status and message intact.
         if (isOperationalError(err)) throw err
-        throw new QueueException(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS, 400, {
+        throw new QueueException(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS, HttpStatus.BAD_REQUEST, {
           reason: 'pattern must be a valid cron expression (5- or 6-field)',
         })
       }

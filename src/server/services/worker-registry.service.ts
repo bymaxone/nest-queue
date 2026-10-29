@@ -10,7 +10,7 @@
  */
 
 import { isAbsolute, extname } from 'node:path'
-import { Inject, Injectable, Logger } from '@nestjs/common'
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common'
 import { Worker } from 'bullmq'
 import type { Job, WorkerOptions as BullWorkerOptions } from 'bullmq'
 import type { Redis } from 'ioredis'
@@ -134,10 +134,14 @@ export class WorkerRegistry {
     } catch (cause) {
       // Disconnect the duplicated connection to prevent a Redis resource leak.
       conn.disconnect()
-      throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, {
-        queueName,
-        cause: cause instanceof Error ? cause.message : String(cause),
-      })
+      throw new QueueException(
+        QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        {
+          queueName,
+          cause: cause instanceof Error ? cause.message : String(cause),
+        },
+      )
     }
 
     attachDefaultErrorListener(worker, this.logger, 'Worker', queueName)
@@ -178,10 +182,14 @@ export class WorkerRegistry {
     } catch (cause) {
       // Disconnect the duplicated connection to prevent a Redis resource leak.
       conn.disconnect()
-      throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, {
-        queueName,
-        cause: cause instanceof Error ? cause.message : String(cause),
-      })
+      throw new QueueException(
+        QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        {
+          queueName,
+          cause: cause instanceof Error ? cause.message : String(cause),
+        },
+      )
     }
 
     attachDefaultErrorListener(worker, this.logger, 'Worker', queueName)
@@ -261,7 +269,11 @@ export class WorkerRegistry {
    */
   private guardDuplicate(queueName: string): void {
     if (this.#entries.has(queueName)) {
-      throw new QueueException(QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR, 500, { queueName })
+      throw new QueueException(
+        QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        { queueName },
+      )
     }
   }
 
@@ -276,30 +288,46 @@ export class WorkerRegistry {
   private validateOptions(opts?: WorkerOptions): void {
     if (opts?.concurrency !== undefined) {
       if (opts.concurrency < 1) {
-        throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, {
-          reason: 'concurrency must be >= 1',
-          actual: opts.concurrency,
-        })
+        throw new QueueException(
+          QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
+          HttpStatus.INTERNAL_SERVER_ERROR,
+          {
+            reason: 'concurrency must be >= 1',
+            actual: opts.concurrency,
+          },
+        )
       }
       if (opts.concurrency > MAX_WORKER_CONCURRENCY) {
-        throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, {
-          reason: `concurrency must be <= ${MAX_WORKER_CONCURRENCY.toString()}`,
-          actual: opts.concurrency,
-        })
+        throw new QueueException(
+          QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
+          HttpStatus.INTERNAL_SERVER_ERROR,
+          {
+            reason: `concurrency must be <= ${MAX_WORKER_CONCURRENCY.toString()}`,
+            actual: opts.concurrency,
+          },
+        )
       }
     }
     if (opts?.limiter !== undefined) {
       if (opts.limiter.max < 1) {
-        throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, {
-          reason: 'limiter.max must be >= 1',
-          actual: opts.limiter.max,
-        })
+        throw new QueueException(
+          QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
+          HttpStatus.INTERNAL_SERVER_ERROR,
+          {
+            reason: 'limiter.max must be >= 1',
+            actual: opts.limiter.max,
+          },
+        )
       }
       if (opts.limiter.duration < 1) {
-        throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, {
-          reason: 'limiter.duration must be >= 1',
-          actual: opts.limiter.duration,
-        })
+        throw new QueueException(
+          QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
+          HttpStatus.INTERNAL_SERVER_ERROR,
+          {
+            reason: 'limiter.duration must be >= 1',
+            actual: opts.limiter.duration,
+          },
+        )
       }
     }
   }
@@ -316,9 +344,13 @@ export class WorkerRegistry {
   private validateProcessorFile(processorFile: string | URL): void {
     if (processorFile instanceof URL) {
       if (processorFile.protocol !== 'file:') {
-        throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, {
-          reason: 'processorFile URL must use the file: protocol',
-        })
+        throw new QueueException(
+          QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
+          HttpStatus.INTERNAL_SERVER_ERROR,
+          {
+            reason: 'processorFile URL must use the file: protocol',
+          },
+        )
       }
       // A file: URL pathname is always absolute; still enforce the extension allowlist
       // so a file: URL cannot bypass the arbitrary-file-execution guard string paths get.
@@ -326,9 +358,13 @@ export class WorkerRegistry {
       return
     }
     if (!isAbsolute(processorFile)) {
-      throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, {
-        reason: 'processorFile must be an absolute path',
-      })
+      throw new QueueException(
+        QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        {
+          reason: 'processorFile must be an absolute path',
+        },
+      )
     }
     this.assertProcessorExtension(processorFile)
   }
@@ -343,9 +379,13 @@ export class WorkerRegistry {
   private assertProcessorExtension(filePath: string): void {
     const allowedExtensions = new Set<string>(['.js', '.cjs', '.mjs'])
     if (!allowedExtensions.has(extname(filePath))) {
-      throw new QueueException(QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED, 500, {
-        reason: 'processorFile must have a .js, .cjs, or .mjs extension',
-      })
+      throw new QueueException(
+        QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        {
+          reason: 'processorFile must have a .js, .cjs, or .mjs extension',
+        },
+      )
     }
   }
 

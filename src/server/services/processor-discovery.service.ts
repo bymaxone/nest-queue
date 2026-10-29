@@ -8,7 +8,7 @@
  * @layer server/services
  */
 
-import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common'
+import { HttpStatus, Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common'
 import { DiscoveryService } from '@nestjs/core'
 import type { Job } from 'bullmq'
 import { WorkerRegistry } from './worker-registry.service'
@@ -143,7 +143,11 @@ export class ProcessorDiscoveryService implements OnModuleInit {
     const ctor = (instance as WithConstructor).constructor
 
     if (this.registeredQueues.has(queueName)) {
-      throw new QueueException(QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR, 500, { queueName })
+      throw new QueueException(
+        QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        { queueName },
+      )
     }
     this.registeredQueues.add(queueName)
 

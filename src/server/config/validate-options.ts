@@ -3,13 +3,16 @@
  * @layer server/config
  */
 
+import { HttpStatus } from '@nestjs/common'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 
 /** Throw a well-formed INVALID_OPTIONS exception carrying the failing reason. */
 function invalid(reason: string): never {
-  throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, 500, { reason })
+  throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, HttpStatus.INTERNAL_SERVER_ERROR, {
+    reason,
+  })
 }
 
 /**

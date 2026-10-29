@@ -7,6 +7,7 @@
  * @layer server/utils
  */
 
+import { HttpStatus } from '@nestjs/common'
 import type { JobSchedulerRepeatOptions } from '../../shared/types/job-scheduler-options.types'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
@@ -17,7 +18,9 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
  * @param reason - Human-readable, secret-free explanation of the failure.
  */
 function invalid(reason: string): never {
-  throw new QueueException(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS, 400, { reason })
+  throw new QueueException(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS, HttpStatus.BAD_REQUEST, {
+    reason,
+  })
 }
 
 /**
