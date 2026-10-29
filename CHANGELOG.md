@@ -45,6 +45,7 @@ Not shipped:
 - Development and GitHub Actions dependencies were updated (Stryker, Jest, ts-jest, Prettier,
   typescript-eslint, testcontainers, NestJS 11.2.x, and the CodeQL, pnpm, harden-runner, TruffleHog
   and setup-node actions).
+- The shared review-rules block in `AGENTS.md` was synchronised with its canonical copy.
 - `SECURITY.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `AGENTS.md`, the README supply-chain wording and the
   mutation-testing documents were brought in line with the current configuration.
 

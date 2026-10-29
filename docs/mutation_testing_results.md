@@ -106,7 +106,6 @@ behavior for any reachable input. No threshold was lowered to accommodate them.
 ## Reproduce
 
 ```bash
-NODE_OPTIONS=--max-old-space-size=4096 pnpm mutation
 # incremental (default): re-test only what changed since the stored report:
 NODE_OPTIONS=--max-old-space-size=4096 pnpm mutation
 # re-test every mutant from scratch, ignoring stored verdicts:
