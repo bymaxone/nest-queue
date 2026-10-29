@@ -11,8 +11,8 @@ identity.
 
 We adopt the **[Contributor Covenant](https://www.contributor-covenant.org/version/2/1/code_of_conduct/),
 version 2.1** as the code of conduct for this project. All participants are
-expected to uphold it in every project space (issues, pull requests,
-discussions) and whenever representing the project in public.
+expected to uphold it in every project space (issues and pull requests)
+and whenever representing the project in public.
 
 In short: be respectful and constructive, assume good faith, and help keep this
 a professional and inclusive community.
