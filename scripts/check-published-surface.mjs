@@ -543,11 +543,12 @@ function exportedClasses() {
  * holding a parenthesis cannot be mistaken for any of them.
  *
  * @param code - The snippet source.
+ * @param ext - The snippet's file extension, `ts` or `tsx`, which decides how JSX is read.
  * @returns The receiver names the snippet declares or assigns.
  */
-function declaredReceivers(code) {
+function declaredReceivers(code, ext) {
   const declared = new Set()
-  const sourceFile = ts.createSourceFile('snippet.ts', code, ts.ScriptTarget.Latest, true)
+  const sourceFile = ts.createSourceFile(`snippet.${ext}`, code, ts.ScriptTarget.Latest, true)
   const parameterProperty =
     ts.ModifierFlags.Public |
     ts.ModifierFlags.Private |
@@ -598,12 +599,13 @@ function declaredReceivers(code) {
  * @param code - The snippet source.
  * @param classes - Exported class names of the built package.
  * @param slot - The snippet's index, which scopes the generated names.
+ * @param ext - The snippet's file extension, `ts` or `tsx`.
  * @returns The rewritten source and the receiver bindings it needs.
  */
-function bindReceivers(code, classes, slot) {
+function bindReceivers(code, classes, slot, ext) {
   const bound = new Map()
   const names = new Set([...code.matchAll(/\bthis\.([a-z][A-Za-z0-9_]*)\b/g)].map((m) => m[1]))
-  const declared = declaredReceivers(code)
+  const declared = declaredReceivers(code, ext)
   let rewritten = code
   for (const name of names) {
     const cls = name[0].toUpperCase() + name.slice(1)
@@ -628,7 +630,7 @@ function writeSnippetFiles(subjects) {
   const bindings = new Map()
   subjects.forEach(({ ext, code }, i) => {
     const name = `snippet-${String(i + 1).padStart(2, '0')}.${ext}`
-    const { rewritten, bound } = bindReceivers(code, classes, i)
+    const { rewritten, bound } = bindReceivers(code, classes, i, ext)
     for (const [prop, cls] of bound) bindings.set(`${i}_${prop}`, cls)
     sources.set(name, rewritten)
     writeFileSync(join(GATE_DIR, name), rewritten)
