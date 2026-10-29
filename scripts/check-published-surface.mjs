@@ -22,6 +22,7 @@ import { lookup } from 'node:dns/promises'
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import ts from 'typescript'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const PKG = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
@@ -528,49 +529,53 @@ function exportedClasses() {
 }
 
 /**
- * True when this pass must leave `this.<name>` alone.
+ * Collect the `this.<name>` receivers a snippet itself declares or assigns, by
+ * parsing it rather than matching its text.
  *
- * Two reasons, both meaning a rewrite would make the check worse rather than
- * better: the snippet already gives the receiver a type, in which case
- * TypeScript checks it natively and a binding would silently substitute a
- * different one; or the snippet assigns to it, which a `const` cannot accept.
- *
- * Field forms are matched with modifiers optional and `!`/`?` allowed, both
- * annotated and initialised, since `private readonly queue = inject(QueueService)`
- * carries its type in the initialiser. An annotation must begin with an
- * identifier character, which is what keeps an options-object key out: in
- * `flows: { enabled: true }` the colon is followed by `{`.
+ * A rewrite must leave such a receiver alone for two reasons, both meaning it
+ * would make the check worse rather than better: the snippet already gives the
+ * receiver a type, in which case TypeScript checks it natively and a binding
+ * would silently substitute a different one; or the snippet assigns to it, which
+ * a `const` cannot accept. The declaring forms are class properties, annotated or
+ * initialised, with or without modifiers, and constructor parameter properties,
+ * with or without decorators. Reading syntax nodes means an options-object key, a
+ * plain constructor parameter, a string holding a brace or a decorator argument
+ * holding a parenthesis cannot be mistaken for any of them.
  *
  * @param code - The snippet source.
- * @param name - The receiver property name.
- * @returns Whether the receiver must be left untouched.
+ * @param ext - The snippet's file extension, `ts` or `tsx`, which decides how JSX is read.
+ * @returns The receiver names the snippet declares or assigns.
  */
-function isOffLimits(code, name) {
-  // Only a parameter PROPERTY creates `this.<name>`; a plain `constructor(x: T)`
-  // parameter does not, so it must not suppress binding. Matched wherever it
-  // appears in the list rather than by scanning from `constructor(`, which a
-  // function type in an earlier parameter would truncate.
-  const paramProperty = new RegExp(
-    `[(,]\\s*(?:(?:private|public|protected|readonly)\\s+)+${name}\\s*[!?]?\\s*:`,
-  )
-  const classField = new RegExp(
-    `^\\s*(?:(?:private|public|protected|readonly|static|declare)\\s+)*${name}\\s*[!?]?\\s*:\\s*[A-Za-z_$]`,
-    'm',
-  )
-  // An initialised field carries its type in the initialiser rather than an
-  // annotation — `private readonly queue = inject(QueueService)` — so the
-  // annotated form above never sees it.
-  const initialised = new RegExp(
-    `^\\s*(?:(?:private|public|protected|readonly|static|declare)\\s+)*${name}\\s*[!?]?\\s*=`,
-    'm',
-  )
-  const assigned = new RegExp(`\\bthis\\.${name}\\s*=[^=]`)
-  return (
-    paramProperty.test(code) ||
-    classField.test(code) ||
-    initialised.test(code) ||
-    assigned.test(code)
-  )
+function declaredReceivers(code, ext) {
+  const declared = new Set()
+  const sourceFile = ts.createSourceFile(`snippet.${ext}`, code, ts.ScriptTarget.Latest, true)
+  const parameterProperty =
+    ts.ModifierFlags.Public |
+    ts.ModifierFlags.Private |
+    ts.ModifierFlags.Protected |
+    ts.ModifierFlags.Readonly
+  const visit = (node) => {
+    if (ts.isPropertyDeclaration(node) && ts.isIdentifier(node.name)) {
+      declared.add(node.name.text)
+    } else if (
+      ts.isParameter(node) &&
+      ts.isConstructorDeclaration(node.parent) &&
+      ts.isIdentifier(node.name) &&
+      (ts.getCombinedModifierFlags(node) & parameterProperty) !== 0
+    ) {
+      declared.add(node.name.text)
+    } else if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isPropertyAccessExpression(node.left) &&
+      node.left.expression.kind === ts.SyntaxKind.ThisKeyword
+    ) {
+      declared.add(node.left.name.text)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return declared
 }
 
 /**
@@ -594,15 +599,17 @@ function isOffLimits(code, name) {
  * @param code - The snippet source.
  * @param classes - Exported class names of the built package.
  * @param slot - The snippet's index, which scopes the generated names.
+ * @param ext - The snippet's file extension, `ts` or `tsx`.
  * @returns The rewritten source and the receiver bindings it needs.
  */
-function bindReceivers(code, classes, slot) {
+function bindReceivers(code, classes, slot, ext) {
   const bound = new Map()
   const names = new Set([...code.matchAll(/\bthis\.([a-z][A-Za-z0-9_]*)\b/g)].map((m) => m[1]))
+  const declared = declaredReceivers(code, ext)
   let rewritten = code
   for (const name of names) {
     const cls = name[0].toUpperCase() + name.slice(1)
-    if (!classes.has(cls) || isOffLimits(code, name)) continue
+    if (!classes.has(cls) || declared.has(name)) continue
     bound.set(name, cls)
     rewritten = rewritten.replace(new RegExp(`\\bthis\\.${name}\\b`, 'g'), `__ctx_${slot}_${name}`)
   }
@@ -623,7 +630,7 @@ function writeSnippetFiles(subjects) {
   const bindings = new Map()
   subjects.forEach(({ ext, code }, i) => {
     const name = `snippet-${String(i + 1).padStart(2, '0')}.${ext}`
-    const { rewritten, bound } = bindReceivers(code, classes, i)
+    const { rewritten, bound } = bindReceivers(code, classes, i, ext)
     for (const [prop, cls] of bound) bindings.set(`${i}_${prop}`, cls)
     sources.set(name, rewritten)
     writeFileSync(join(GATE_DIR, name), rewritten)
