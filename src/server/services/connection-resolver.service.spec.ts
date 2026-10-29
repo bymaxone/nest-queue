@@ -167,6 +167,47 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     jest.useRealTimers()
   })
 
+  it('detaches both listeners once the ready timeout fires', async () => {
+    // A timed-out startup must not leave 'ready'/'error' subscriptions on a client the
+    // caller may still hold, or a late event would run handlers for a settled attempt.
+    jest.useFakeTimers()
+    const client = new FakeRedis('connecting', null)
+    redisConstructor.mockReturnValue(asRedis(client))
+
+    const resolver = new ConnectionResolver({
+      connection: { url: 'redis://localhost:6379', options: {} },
+      connectionReadyTimeoutMs: 1000,
+    })
+    const init = resolver.init()
+    const assertion = expect(init).rejects.toBeInstanceOf(QueueException)
+    jest.advanceTimersByTime(1000)
+    await assertion
+
+    expect(client.listenerCount('ready')).toBe(0)
+    expect(client.listenerCount('error')).toBe(0)
+    jest.useRealTimers()
+  })
+
+  it('cancels the ready timeout once the client becomes ready', async () => {
+    // The timeout timer is armed before the event race; a client that wins the race must
+    // disarm it so no pending timer keeps the process alive for the rest of the budget.
+    jest.useFakeTimers()
+    const client = new FakeRedis('connecting', null)
+    redisConstructor.mockReturnValue(asRedis(client))
+
+    const resolver = new ConnectionResolver({
+      connection: { url: 'redis://localhost:6379', options: {} },
+      connectionReadyTimeoutMs: 1000,
+    })
+    const init = resolver.init()
+    expect(jest.getTimerCount()).toBe(1)
+    client.emit('ready')
+    await init
+
+    expect(jest.getTimerCount()).toBe(0)
+    jest.useRealTimers()
+  })
+
   it('rejects when the client emits an error before ready', async () => {
     // A connection error during startup propagates to the caller.
     const client = new FakeRedis('connecting', null)

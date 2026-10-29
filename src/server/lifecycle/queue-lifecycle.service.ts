@@ -106,6 +106,7 @@ export class QueueLifecycle implements OnModuleDestroy {
     let timer: ReturnType<typeof setTimeout> | undefined
     const closed = worker.close()
     // Keep the abandoned graceful close from surfacing as an unhandled rejection.
+    // Stryker disable next-line CallExpression: equivalent — `Promise.race` below subscribes to `closed` itself, which already marks a late rejection as handled; verified in Node that a close rejecting after the timer wins raises no `unhandledRejection` with this line removed, so no test can observe the difference
     closed.catch(() => undefined)
     try {
       await Promise.race([

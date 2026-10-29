@@ -6,7 +6,7 @@
  * @layer server/services
  */
 
-import { Injectable } from '@nestjs/common'
+import { HttpStatus, Injectable } from '@nestjs/common'
 import type { QueueMetrics } from '../../shared/types/queue-metrics.types'
 import type { QueueService } from './queue.service'
 import { QueueException } from '../errors/queue-exception'
@@ -101,7 +101,7 @@ export class MetricsService {
    */
   private ensureEnabled(): void {
     if (!this.enabled) {
-      throw new QueueException(QUEUE_ERROR_CODES.METRICS_DISABLED, 503)
+      throw new QueueException(QUEUE_ERROR_CODES.METRICS_DISABLED, HttpStatus.SERVICE_UNAVAILABLE)
     }
   }
 }

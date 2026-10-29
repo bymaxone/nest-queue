@@ -3,6 +3,7 @@
  * @layer server/utils
  */
 
+import { HttpStatus } from '@nestjs/common'
 import type { Redis } from 'ioredis'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
@@ -23,10 +24,14 @@ export function assertBlockingConnection(client: Redis): void {
   const actualValue = (client.options as { maxRetriesPerRequest?: number | null } | undefined)
     ?.maxRetriesPerRequest
   if (actualValue !== null) {
-    throw new QueueException(QUEUE_ERROR_CODES.CONNECTION_REQUIRES_NULL_RETRIES, 500, {
-      actualValue: actualValue ?? null,
-      expectedValue: null,
-    })
+    throw new QueueException(
+      QUEUE_ERROR_CODES.CONNECTION_REQUIRES_NULL_RETRIES,
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      {
+        actualValue: actualValue ?? null,
+        expectedValue: null,
+      },
+    )
   }
 }
 

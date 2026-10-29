@@ -5,7 +5,7 @@
  * @layer server/services
  */
 
-import { Inject, Injectable } from '@nestjs/common'
+import { HttpStatus, Inject, Injectable } from '@nestjs/common'
 import { Redis, type RedisOptions } from 'ioredis'
 import { BYMAX_QUEUE_OPTIONS } from '../bymax-queue.constants'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
@@ -95,9 +95,13 @@ export class ConnectionResolver {
   /** The resolved Queue-role client. */
   getClient(): Redis {
     if (!this.#client) {
-      throw new QueueException(QUEUE_ERROR_CODES.CONNECTION_INVALID, 500, {
-        reason: 'not initialized',
-      })
+      throw new QueueException(
+        QUEUE_ERROR_CODES.CONNECTION_INVALID,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        {
+          reason: 'not initialized',
+        },
+      )
     }
     return this.#client
   }
@@ -105,9 +109,13 @@ export class ConnectionResolver {
   /** The resolved connection mode. */
   getMode(): QueueConnectionMode {
     if (!this.mode) {
-      throw new QueueException(QUEUE_ERROR_CODES.CONNECTION_INVALID, 500, {
-        reason: 'not initialized',
-      })
+      throw new QueueException(
+        QUEUE_ERROR_CODES.CONNECTION_INVALID,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        {
+          reason: 'not initialized',
+        },
+      )
     }
     return this.mode
   }
@@ -132,7 +140,11 @@ export class ConnectionResolver {
     this.mode = 'mode-a-byo'
     this.#client = client
     if (!isClientUsable(client)) {
-      throw new QueueException(QUEUE_ERROR_CODES.CONNECTION_INVALID, 500, { status: client.status })
+      throw new QueueException(
+        QUEUE_ERROR_CODES.CONNECTION_INVALID,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        { status: client.status },
+      )
     }
     const probe = duplicateConnection(client)
     try {
@@ -162,7 +174,13 @@ export class ConnectionResolver {
       }
       const timer = setTimeout(() => {
         cleanup()
-        reject(new QueueException(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT, 500, { timeoutMs }))
+        reject(
+          new QueueException(
+            QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            { timeoutMs },
+          ),
+        )
       }, timeoutMs)
       client.once('ready', onReady)
       client.once('error', onError)
