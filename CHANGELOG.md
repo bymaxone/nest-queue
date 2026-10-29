@@ -7,7 +7,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [1.2.4] — 2026-10-29
 
 Behaviour is unchanged: the status codes a `QueueException` carries, the public API and the types
 are the same as in 1.2.3. The bundle under `dist/` is not byte-identical, though, and the
@@ -33,6 +33,12 @@ differences are listed below so a reader does not have to take "no change" on tr
 - `osv-scanner.toml` ignores `GHSA-gcqx-w48m-w2h4` (`deepmerge` 4.3.1, no patched release) until
   2027-01-27. The package is reached only through `jest-config`, a development dependency.
 
+### Documentation
+
+- The README supply-chain wording now says that third-party GitHub Actions are pinned to a commit SHA,
+  which is what the workflows do; the organisation's own reusable workflows follow a version tag.
+- The changelog lists every change on `main` since 1.2.3.
+
 ### Internal
 
 Not shipped:
@@ -46,8 +52,8 @@ Not shipped:
   typescript-eslint, testcontainers, NestJS 11.2.x, and the CodeQL, pnpm, harden-runner, TruffleHog
   and setup-node actions).
 - The shared review-rules block in `AGENTS.md` was synchronised with its canonical copy.
-- `SECURITY.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `AGENTS.md`, the README supply-chain wording and the
-  mutation-testing documents were brought in line with the current configuration.
+- `SECURITY.md`, `CONTRIBUTING.md`, `CLAUDE.md`, `AGENTS.md` and the mutation-testing documents were
+  brought in line with the current configuration.
 
 ---
 
@@ -596,7 +602,7 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.3...HEAD
+[1.2.4]: https://github.com/bymaxone/nest-queue/compare/v1.2.3...v1.2.4
 [1.2.3]: https://github.com/bymaxone/nest-queue/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/bymaxone/nest-queue/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/bymaxone/nest-queue/compare/v1.2.0...v1.2.1
