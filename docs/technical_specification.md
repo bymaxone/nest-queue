@@ -398,7 +398,7 @@ The package is organized in 2 subpaths with distinct responsibilities:
 ├── scripts/
 │   └── check-size.mjs                        # bundle budget gate (KiB brotli)
 ├── .github/
-│   ├── workflows/                            # ci.yml, codeql.yml, release.yml, scorecard.yml, osv-scanner.yml
+│   ├── workflows/                            # the workflows listed in §19.1
 │   ├── copilot-instructions.md               # repo-wide Copilot review config
 │   ├── instructions/
 │   │   ├── code.instructions.md
