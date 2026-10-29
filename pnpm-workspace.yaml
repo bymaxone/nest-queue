@@ -43,8 +43,11 @@ overrides:
   # Scoped per major, like the js-yaml and undici pairs: unscoped, a 1.x or 2.x
   # transitive would be forced onto 5.x, whose API minimatch cannot use. Each
   # line carries its own fix for the DoS that bypasses the earlier mitigation.
-  'brace-expansion@1': '^1.1.18'
-  'brace-expansion@2': '^2.1.4'
+  # Floors at GHSA-q2hr-2g5m-vwhr (CVSS 5.3, quadratic-time `{a},b}` rewrite):
+  # fixed in 1.1.21 and 2.1.7, the latest of the three advisories on each line.
+  # Reaches the tree through minimatch under the jest and eslint toolchains.
+  'brace-expansion@1': '^1.1.21'
+  'brace-expansion@2': '^2.1.7'
   'brace-expansion@5': '^5.0.9'
   'esbuild': '^0.28.1'
   # Floor at the fix for GHSA-5jgf-p345-68v8 (CVSS 7.5), host confusion via
@@ -53,18 +56,32 @@ overrides:
   # resolution the lockfile already holds, so 3.1.5 stayed installed alongside
   # 3.1.6. An override floor constrains what may be chosen next, not what is
   # already chosen; raising it is what forces the re-resolve.
-  'fast-uri': '^3.1.6'
+  #
+  # Raised again to 3.1.7 for GHSA-58mr-gqgx-xq4g (CVSS 7.5), host confusion via
+  # an unclosed bracket in the URI authority, which covers 3.1.6.
+  'fast-uri': '^3.1.7'
   # Floor at the fix for GHSA-3m5p-2c4r-xxw2 (X-Forwarded-* spoofing under a
   # trustProxy hop count, CVSS 6.1, `>= 5.8.3 < 5.12.1`) and GHSA-w2qp-rph6-63g4
   # (schema validation bypass via root primitive coercion mismatch, CVSS 5.4,
   # `< 5.12.1`). Reaches the tree through the consumer app's
   # `@nestjs/platform-fastify`, which does not ship.
-  'fastify': '^5.12.1'
+  #
+  # Raised to 5.12.5, the fix for GHSA-4mh8-r7rc-xpvc (CVSS 5.9, HTTP/2 trailer
+  # DoS) and, from 5.12.2, GHSA-667r-xxjv-c9mm (CVSS 8.1), GHSA-9q9j-q6p8-xq58,
+  # GHSA-hwr6-493r-vm6h and GHSA-p68q-wchp-6fh7 (CVSS 7.5 each, validation and
+  # URL-handling bypasses).
+  'fastify': '^5.12.5'
+  # Same consumer-app path as fastify: floor at the fix for GHSA-9c5c-9qcx-q35q
+  # (CVSS 7.4, path-scoped middleware bypass via absolute-form request targets).
+  # The consumer manifest asks for ^11.0.0, which admits 11.2.3.
+  '@nestjs/platform-fastify': '^11.2.4'
   'find-my-way': '^9.6.1'
   # Floors raised to the fix for GHSA-5p4m-2wfm-xmqj (CVSS 7.5); the previous floors
   # admitted 3.15.0 and 4.3.0, which the advisory covers.
-  'js-yaml@3': '^3.15.1'
-  'js-yaml@4': '^4.3.1'
+  # Raised again for GHSA-2883-xcg3-v3hh (CVSS 7.5, `maxTotalMergeKeys` does not
+  # bound CPU for empty merge sources): fixed in 3.15.2 and 4.3.2.
+  'js-yaml@3': '^3.15.2'
+  'js-yaml@4': '^4.3.2'
   'protobufjs': '^7.6.5'
   # Floor at the fix for GHSA-4mjr-xmp4-gh2g (DoS via attacker-controlled
   # isBuffer, `>= 2.2.5 < 6.16.0`) and GHSA-x5fp-wj9c-mxmx (array-limit bypass,
@@ -76,7 +93,20 @@ overrides:
   # `>=7.0.0 <7.29.0` and `>=8.0.0 <8.9.0` — so each is pinned to its own fix, and
   # a 7.x arriving later lands above the floor rather than below it.
   'undici@7': '^7.29.0'
-  'undici@8': '^8.9.0'
+  #
+  # The `8` floor is raised to 8.12.2 for GHSA-xjj6-f33q-929c (CVSS 7.5, DoS via an
+  # unhandled error on excessive content-length), which also covers the 8.10.2
+  # cluster (GHSA-vp8m-p9jh-q5pm and GHSA-w293-vg96-wgc3, CVSS 7.4 each).
+  'undici@8': '^8.12.2'
+  # Floor at the fix for GHSA-8r5x-fm3f-whwj (CVSS 9.8, JavaScript injection via AST
+  # type confusion in `compile`) and its two siblings. Reaches the tree through
+  # ts-jest, a dev dependency; remove once ts-jest ships a handlebars range
+  # above 4.7.10.
+  'handlebars': '^4.7.10'
+  # Floor at the fix for GHSA-m9gg-hp2v-232j (CVSS 7.4, `getAuthContext` can return
+  # an unauthorised context) and GHSA-f596-whhp-79r4. Reaches the tree through
+  # testcontainers -> dockerode; remove once testcontainers' range clears 1.14.5.
+  '@grpc/grpc-js': '^1.14.5'
 
 minimumReleaseAgeExclude:
   - bullmq@6.3.4
