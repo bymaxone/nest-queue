@@ -44,7 +44,7 @@
 This spec follows the cross-portfolio Bymax public-library standard (the same one applied to `@bymax-one/nest-logger`, `@bymax-one/nest-cache`, and `@bymax-one/nest-notification`). The following are **normative invariants** for this package; where the body of the document and these invariants ever disagree, these win.
 
 1. **Dynamic module via `ConfigurableModuleBuilder`.** The module is built on `@nestjs/common`'s `ConfigurableModuleBuilder`, exposing `forRoot()` / `forRootAsync()`. Global scope is opted-in through `isGlobal` mapped to `DynamicModule.global` via `setExtras` — **not** a hand-written `@Global()` decorator.
-2. **Quality floor.** 100% line/branch coverage on every implemented file (enforced by `jest.coverage.config.ts` thresholds set to `100/100/100/100`); Stryker mutation testing with `{ high: 99, low: 95, break: 95 }`, targeting 100%, run as a **pre-release gate** (not on every commit).
+2. **Quality floor.** 100% line/branch coverage on every implemented file (enforced by `jest.coverage.config.ts` thresholds set to `100/100/100/100`); Stryker mutation testing with `{ high: 100, low: 100, break: 100 }`, run incrementally on every push to `main` and cold every week, not on pull requests.
 3. **Bundle budget** measured in **KiB brotli** by `scripts/check-size.mjs` (not "KB gzipped").
 4. **Recurring jobs use the current BullMQ Job Schedulers API** (`upsertJobScheduler` / `removeJobScheduler` / `getJobSchedulers`). The legacy "repeatable jobs" API (`addRepeatable` / `removeRepeatable` / `getRepeatableJobs`) is **deprecated and removed in BullMQ v6** and must not appear in the public surface.
 5. **Observability and deduplication are first-class**, not consumer responsibilities: the module accepts a BullMQ `telemetry` instance (OpenTelemetry via `bullmq-otel`) and exposes BullMQ native `deduplication` options through `enqueue`.
@@ -421,7 +421,7 @@ The package is organized in 2 subpaths with distinct responsibilities:
 ├── jest.coverage.config.ts                   # thresholds 100/100/100/100
 ├── jest.e2e.config.ts
 ├── jest.stryker.config.ts
-├── stryker.config.json                       # break 95, high 99, low 95
+├── stryker.config.json                       # high 100, low 100, break 100
 ├── commitlint.config.cjs                     # Conventional Commits
 ├── SECURITY.md
 ├── CLAUDE.md
@@ -1955,7 +1955,7 @@ This decision is reviewed in every minor release of the lib.
 
 ## 15. Implementation Phases
 
-> **Testing strategy:** unit tests are written **alongside each phase** (TDD), not accumulated in Phase 4. Each phase must reach **100% line/branch coverage on the files it implements** (enforced by `jest.coverage.config.ts` thresholds `100/100/100/100`). Stryker mutation testing (`break 95`, target 100%) runs as a pre-release gate, not per commit. See §18.
+> **Testing strategy:** unit tests are written **alongside each phase** (TDD), not accumulated in Phase 4. Each phase must reach **100% line/branch coverage on the files it implements** (enforced by `jest.coverage.config.ts` thresholds `100/100/100/100`). Stryker mutation testing (`break 100`) runs incrementally on every push to `main` and cold every week, not on pull requests. See §18.
 
 ### 15.1 Phase overview
 
@@ -2490,16 +2490,16 @@ export class DynamicWorkersBootstrap implements OnModuleInit {
 
 ### 18.1 Test layers
 
-| Layer    | Tooling                            | Scope                                                                                                           | Gate                                                                                                                    |
-| -------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Unit     | Jest + ts-jest                     | Every service, resolver, decorator, validator with mocked BullMQ/Redis                                          | 100% line/branch on implemented files (`jest.coverage.config.ts` → `100/100/100/100`)                                   |
-| E2E      | Jest + `@testcontainers/redis`     | Real Redis: enqueue→process, schedulers, flows, deduplication, retry, graceful shutdown, connection-role policy | Must pass in CI; run on a dedicated config (`jest.e2e.config.ts`)                                                       |
-| Mutation | Stryker (`jest.stryker.config.ts`) | Kills surviving mutants in core logic                                                                           | `stryker.config.json` thresholds `{ high: 99, low: 95, break: 95 }`, target 100% — **pre-release gate**, not per-commit |
+| Layer    | Tooling                            | Scope                                                                                                           | Gate                                                                                                                        |
+| -------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Unit     | Jest + ts-jest                     | Every service, resolver, decorator, validator with mocked BullMQ/Redis                                          | 100% line/branch on implemented files (`jest.coverage.config.ts` → `100/100/100/100`)                                       |
+| E2E      | Jest + `@testcontainers/redis`     | Real Redis: enqueue→process, schedulers, flows, deduplication, retry, graceful shutdown, connection-role policy | Must pass in CI; run on a dedicated config (`jest.e2e.config.ts`)                                                           |
+| Mutation | Stryker (`jest.stryker.config.ts`) | Kills surviving mutants in core logic                                                                           | `stryker.config.json` thresholds `{ high: 100, low: 100, break: 100 }` — on push to `main` and weekly, not per pull request |
 
 ### 18.2 Coverage and mutation policy
 
 - Coverage thresholds are configured to **fail the build** below 100% on implemented files; new code ships with its tests in the same phase (TDD).
-- Mutation testing is expensive, so it runs in the release pipeline (and on demand), gating publication on `break 95`.
+- Mutation testing is expensive, so it is not run on pull requests. It runs incrementally on every push to `main`, cold every week (`Mutation (full)`) and on demand, and a score below `break 100` fails the run.
 - Memory safety: Jest is capped (`maxWorkers: '50%'`) and recursive workspace scripts are serialized, so a local library dependency is not duplicated across many workers.
 
 ### 18.3 What the e2e suite must prove
@@ -2616,7 +2616,7 @@ The module is global by default (`isGlobal: true`, mapped via `ConfigurableModul
 **Process / release (supply chain)**
 
 - [ ] Graceful shutdown tested in e2e with a real `SIGTERM` (drain + force-close path)
-- [ ] Mutation score: Stryker `break 95` (high 99, low 95), targeting 100%, as a pre-release gate
+- [ ] Mutation score: Stryker `break 100` (high 100, low 100)
 - [ ] 100% line/branch coverage on implemented files
 - [ ] OSV-Scanner clean; `pnpm audit` clean on recommended peer deps
 - [ ] TruffleHog OSS secret scan clean
