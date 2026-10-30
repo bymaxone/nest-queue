@@ -9,21 +9,25 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.2.4] — 2026-10-29
 
-Behaviour is unchanged: the status codes a `QueueException` carries, the public API and the types
-are the same as in 1.2.3. The bundle under `dist/` is not byte-identical, though, and the
-differences are listed below so a reader does not have to take "no change" on trust.
+No action required: behaviour, the public API, the types and the peer ranges are unchanged.
+
+The status codes a `QueueException` carries are the same as in 1.2.3, but the bundle under `dist/`
+is not byte-identical, and the differences are listed below so a reader does not have to take
+"no change" on trust.
 
 ### Changed
 
 - `QueueException` is now thrown with the named `HttpStatus` members (`BAD_REQUEST`,
   `INTERNAL_SERVER_ERROR`, `SERVICE_UNAVAILABLE`) instead of the numbers 400, 500 and 503, at every
-  call site. The values are the same; the change satisfies `no-unsafe-enum-assignment`.
-  Against a fresh build of 1.2.3, the CommonJS bundle is
-  identical once those members are replaced by their numeric values, the ES module bundle differs
-  only in the order of its `@nestjs/common` imports and in line wrapping, and the type declarations
-  differ in one JSDoc line (`FlowService`, which now names `HttpStatus.SERVICE_UNAVAILABLE`).
+  call site. The values are the same; the change satisfies `no-unsafe-enum-assignment`. Against a
+  fresh build of 1.2.3, the CommonJS bundle is identical once those members are replaced by their
+  numeric values, the ES module bundle differs only in the order of its `@nestjs/common` imports and
+  in line wrapping, and the type declarations differ in one JSDoc line (`FlowService`, which now
+  names `HttpStatus.SERVICE_UNAVAILABLE`).
 
 ### Security
+
+Not shipped:
 
 - Dependency resolution of the tooling the repository builds and tests with was raised to patched
   versions: `fastify`, `undici`, `fast-uri`, `js-yaml`, `brace-expansion`, `qs`, `zod`,
