@@ -3,6 +3,7 @@
  * published package. `readme-snippets.mjs` copies this file into the throwaway consumer it
  * compiles the snippets in, so a call made through one of these names is checked against the
  * real types instead of resolving to `any`.
+ * @layer scripts
  *
  * Only names the surrounding prose introduces belong here. A wrong option, method or field
  * on a package type is a real error and must stay one.
