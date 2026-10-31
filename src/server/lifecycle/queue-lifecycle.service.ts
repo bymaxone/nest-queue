@@ -152,7 +152,7 @@ export class QueueLifecycle implements OnModuleDestroy {
 
   /**
    * Drain every cached queue when `drainOnShutdown` is enabled (dev/test only).
-   * Removes waiting and delayed jobs; off by default to stay production-safe.
+   * Removes waiting jobs and leaves delayed and active ones; off by default to stay production-safe.
    */
   private async drainQueuesIfRequested(): Promise<void> {
     if (!this.resolved.shutdown.drainOnShutdown) return
