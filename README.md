@@ -14,7 +14,7 @@
   <a href="https://www.npmjs.com/package/@bymax-one/nest-queue"><img src="https://img.shields.io/npm/dm/@bymax-one/nest-queue?style=flat-square&colorA=000000&colorB=000000" alt="npm downloads" /></a>
   <a href="https://github.com/bymaxone/nest-queue/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/bymaxone/nest-queue/ci.yml?branch=main&style=flat-square&colorA=000000&label=CI" alt="CI status" /></a>
   <a href="https://github.com/bymaxone/nest-queue/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen?style=flat-square&colorA=000000" alt="coverage" /></a>
-  <a href="https://github.com/bymaxone/nest-queue/blob/main/docs/mutation_testing_results.md"><img src="https://img.shields.io/badge/mutation-99.68%25-brightgreen?style=flat-square&colorA=000000" alt="mutation score" /></a>
+  <a href="https://github.com/bymaxone/nest-queue/blob/main/docs/mutation_testing_results.md"><img src="https://img.shields.io/badge/mutation-100%25-brightgreen?style=flat-square&colorA=000000" alt="mutation score" /></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/bymaxone/nest-queue"><img src="https://api.scorecard.dev/projects/github.com/bymaxone/nest-queue/badge?style=flat-square" alt="OpenSSF Scorecard" /></a>
   <a href="https://github.com/bymaxone/nest-queue/blob/main/LICENSE"><img src="https://img.shields.io/github/license/bymaxone/nest-queue?style=flat-square&colorA=000000&colorB=000000" alt="license" /></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" /></a>
@@ -239,7 +239,7 @@ Every option passed to `forRoot` / `forRootAsync`. Only `connection` is required
 | `metrics.cacheTtlMs`       | `number`                                         | `5_000`                                                                                                                                    | TTL of the metrics snapshot cache. `0` disables caching. Must be `>= 0`.                                                                                                    |
 | `telemetry`                | `Telemetry`                                      | —                                                                                                                                          | A BullMQ `Telemetry` instance (typically `new BullMQOtel(...)` from the optional `bullmq-otel` peer), attached to every `Queue` and `Worker`.                               |
 | `shutdown.drainTimeoutMs`  | `number`                                         | `30_000`                                                                                                                                   | Upper bound on the graceful drain before workers are force-closed. Must be `> 0`.                                                                                           |
-| `shutdown.drainOnShutdown` | `boolean`                                        | `false`                                                                                                                                    | Wait for the queue to drain, not just for in-flight jobs to finish.                                                                                                         |
+| `shutdown.drainOnShutdown` | `boolean`                                        | `false`                                                                                                                                    | Development and test only: after the workers close, call `drain()` on every cached queue, which **removes** its waiting and delayed jobs. Leave it `false` in production.   |
 | `connectionReadyTimeoutMs` | `number`                                         | `10_000`                                                                                                                                   | Mode B only: how long to wait for Redis `ready` before failing with `CONNECTION_TIMEOUT`.                                                                                   |
 | `isGlobal`                 | `boolean`                                        | `true`                                                                                                                                     | Register the module globally, so `QueueService` is injectable without re-importing.                                                                                         |
 
@@ -300,8 +300,8 @@ BymaxQueueModule.forRoot({
 })
 ```
 
-The library opens one connection for queues and one per worker/QueueEvents listener, each
-with `maxRetriesPerRequest: null` where BullMQ requires it.
+The library opens one connection for queues, one per worker and one per queue that has an
+`@OnQueueEvent` listener. The worker and `QueueEvents` connections carry `maxRetriesPerRequest: null`.
 
 ---
 
@@ -321,21 +321,21 @@ import type {
 } from '@bymax-one/nest-queue'
 ```
 
-| Method               | Signature                                                                                    | Description                                                                          |
-| -------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `enqueue`            | `<TData, TResult>(queue, name, data, opts?) → Promise<Job<TData, TResult>>`                  | Add a single job                                                                     |
-| `enqueueBulk`        | `<TData, TResult>(queue, jobs) → Promise<Job<TData, TResult>[]>`                             | Add up to 1 000 jobs in one Redis roundtrip                                          |
-| `getJob`             | `<TData, TResult>(queue, jobId) → Promise<Job<TData, TResult> \| null>`                      | Get job by ID; `null` when it does not exist                                         |
-| `getJobs`            | `<TData, TResult>(queue, status, start?, end?) → Promise<Job<TData, TResult>[]>`             | Page jobs in one status (default `0`–`50`)                                           |
-| `getMetrics`         | `(queue) → Promise<QueueMetrics>`                                                            | Uncached snapshot of job counts per status, with a collection timestamp              |
-| `pauseQueue`         | `(queue) → Promise<void>`                                                                    | Pause a queue                                                                        |
-| `resumeQueue`        | `(queue) → Promise<void>`                                                                    | Resume a paused queue                                                                |
-| `cleanQueue`         | `(queue, graceMs, limit, status?) → Promise<string[]>`                                       | Remove up to `limit` jobs older than `graceMs` (`0` = no limit); returns removed ids |
-| `upsertJobScheduler` | `<TData, TResult>(queue, id, repeat, template?) → Promise<Job<TData, TResult> \| undefined>` | Create or update a recurring Job Scheduler; returns the first scheduled job          |
-| `removeJobScheduler` | `(queue, id) → Promise<boolean>`                                                             | Remove a Job Scheduler by ID                                                         |
-| `getJobSchedulers`   | `(queue, start?, end?, asc?) → Promise<JobSchedulerJson[]>`                                  | Page the schedulers registered on a queue                                            |
-| `getOrCreateQueue`   | `<TData, TResult>(queue, overrides?) → Queue<TData, TResult>`                                | Return the cached raw `Queue` instance                                               |
-| `getCachedQueues`    | `() → ReadonlyMap<string, Queue>`                                                            | Read-only view of every queue created so far                                         |
+| Method               | Signature                                                                                    | Description                                                                                |
+| -------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `enqueue`            | `<TData, TResult>(queue, name, data, opts?) → Promise<Job<TData, TResult>>`                  | Add a single job                                                                           |
+| `enqueueBulk`        | `<TData, TResult>(queue, jobs) → Promise<Job<TData, TResult>[]>`                             | Add up to 1 000 jobs in one Redis roundtrip                                                |
+| `getJob`             | `<TData, TResult>(queue, jobId) → Promise<Job<TData, TResult> \| null>`                      | Get job by ID; `null` when it does not exist                                               |
+| `getJobs`            | `<TData, TResult>(queue, status, start?, end?) → Promise<Job<TData, TResult>[]>`             | Page jobs in one status (default `0`–`50`)                                                 |
+| `getMetrics`         | `(queue) → Promise<QueueMetrics>`                                                            | Uncached snapshot of job counts per status, with a collection timestamp                    |
+| `pauseQueue`         | `(queue) → Promise<void>`                                                                    | Pause a queue                                                                              |
+| `resumeQueue`        | `(queue) → Promise<void>`                                                                    | Resume a paused queue                                                                      |
+| `cleanQueue`         | `(queue, gracePeriodMs, limit, status?) → Promise<string[]>`                                 | Remove up to `limit` jobs older than `gracePeriodMs` (`0` = no limit); returns removed ids |
+| `upsertJobScheduler` | `<TData, TResult>(queue, id, repeat, template?) → Promise<Job<TData, TResult> \| undefined>` | Create or update a recurring Job Scheduler; returns the first scheduled job                |
+| `removeJobScheduler` | `(queue, id) → Promise<boolean>`                                                             | Remove a Job Scheduler by ID                                                               |
+| `getJobSchedulers`   | `(queue, start?, end?, asc?) → Promise<JobSchedulerJson[]>`                                  | Page the schedulers registered on a queue                                                  |
+| `getOrCreateQueue`   | `<TData, TResult>(queue, overrides?) → Queue<TData, TResult>`                                | Return the cached raw `Queue` instance                                                     |
+| `getCachedQueues`    | `() → ReadonlyMap<string, Queue>`                                                            | Read-only view of every queue created so far                                               |
 
 ### `WorkerRegistry`
 
@@ -495,7 +495,7 @@ onFailed(job: Job | undefined, err: Error): void {
 
 ### `@OnQueueEvent(eventName)`
 
-Listens to BullMQ `QueueEvents` (global, cross-process events). Requires `queueEvents: { enabled: true }` in module options.
+Listens to BullMQ `QueueEvents` (global, cross-process events). The library opens one shared `QueueEvents` connection per queue when it discovers the first listener for it; there is no option to enable.
 
 ```typescript
 @OnQueueEvent('completed')
@@ -594,7 +594,7 @@ BymaxQueueModule.forRoot({
 
 ## 🛑 Graceful Shutdown
 
-`QueueLifecycle` is registered and invoked automatically via NestJS `onApplicationShutdown`.
+`QueueLifecycle` runs automatically when NestJS closes the application context, through its `onModuleDestroy` hook (call `app.enableShutdownHooks()` so that a termination signal closes the context).
 It implements a **bounded drain protocol** with at-least-once semantics:
 
 1. All workers are closed with a grace period (`drainTimeoutMs`, default 30 s).
@@ -708,7 +708,7 @@ Connection details arrive through injected options — the library never reads
 `process.env` itself, so credentials live wherever your configuration layer keeps them.
 No connection string, password, or TLS material is written to a log line, an exception
 message, or an exception payload. `QueueException.details` carries only scalar
-configuration values (`{ actualValue, expectedValue, limit, received }`), never a
+values — a reason, a limit, a queue or scheduler name, a status — never a
 connection object and never `job.data`.
 
 They are also not reachable by serializing the objects that hold them. The connection is
@@ -766,7 +766,7 @@ key will do it twice at some point.
 | Layer             | Implementation                                                                                                                                                                              |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Credentials       | Injected options only; never read from `process.env`, never logged, never placed in an exception; held in a non-enumerable accessor and private fields, so serializing a service omits them |
-| Error payloads    | `QueueException.details` restricted to scalar configuration values — no `job.data`, no connection object                                                                                    |
+| Error payloads    | `QueueException.details` restricted to scalar values — no `job.data`, no connection object                                                                                                  |
 | Job payloads      | Treated as opaque; never deep-merged (prototype-pollution guard), never logged                                                                                                              |
 | Namespacing       | `prefix` applied uniformly to `Queue`, `Worker`, `QueueEvents` and `FlowProducer`                                                                                                           |
 | Connection policy | `maxRetriesPerRequest: null` confined to duplicated consumer connections; producers keep fail-fast retries                                                                                  |
@@ -796,7 +796,7 @@ key will do it twice at some point.
 ## 🧪 Testing & Quality
 
 - **100% line/branch coverage** on every implemented file (hard CI gate).
-- **Mutation score 99.68%** (Stryker `break 95`) — see [`docs/mutation_testing_results.md`](docs/mutation_testing_results.md).
+- **Mutation score 100.00%** (Stryker `break 100`) — see [`docs/mutation_testing_results.md`](docs/mutation_testing_results.md).
 - **Real-Redis E2E** via Testcontainers (workers, flows, schedulers, deduplication, retries,
   DLQ, graceful shutdown).
 - **Type-level API tests** (`pnpm test:types`) pin the published signatures, so a refactor
@@ -804,13 +804,13 @@ key will do it twice at some point.
 - **Published-shape gates**: `pnpm check:exports` resolves every entrypoint the way each
   module-resolution mode would (all four `attw` quadrants green, `node10` included), and
   `pnpm smoke` resolves the packed tarball from a real consumer in ESM _and_ CommonJS.
-- **Bundle budgets** enforced (`pnpm size`): server ≤ 18 KiB brotli, shared ≤ 2.5 KiB.
+- **Bundle budgets** enforced (`pnpm size`): server ≤ 18 KiB brotli, shared ≤ 2 500 B.
 - **Supply chain:** SHA-pinned third-party GitHub Actions, OSV-Scanner, TruffleHog, OpenSSF Scorecard,
   npm publish with provenance (OIDC).
 
 ```bash
 pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && \
-  pnpm build && pnpm size && pnpm check:exports && pnpm smoke
+  pnpm build && pnpm size && pnpm check:exports && pnpm check:published && pnpm smoke
 ```
 
 ---
@@ -852,20 +852,17 @@ implementation, so BullMQ still works, just without the native accelerator.
 
 ### `CONNECTION_REQUIRES_NULL_RETRIES`
 
-This error fires in Mode A when the injected client was not configured with
-`maxRetriesPerRequest: null`. BullMQ workers require this setting to block on
-Redis operations rather than giving up after a few retries.
+BullMQ workers need `maxRetriesPerRequest: null` to block on Redis operations rather
+than giving up after a few retries. The library does not ask you to configure it: every
+Worker and `QueueEvents` connection is a `duplicate()` of the client you pass, made with
+`maxRetriesPerRequest: null`, and in Mode A it checks that a duplicate really comes back
+that way. This error means one did not — measured with ioredis, a client created with
+`maxRetriesPerRequest: 3` duplicates to `null`, so a stock client never triggers it.
 
-If you use `@bymax-one/nest-cache`, pass a queue-dedicated client with `maxRetriesPerRequest: null`:
-
-```typescript
-// In your cache module, create a second ioredis client for the queue
-const queueRedis = new Redis({ ..., maxRetriesPerRequest: null })
-```
-
-The library duplicates the client you pass and applies the correct setting; ensure
-the **original** client passed to Mode A is usable as a duplication source (ioredis
-allows duplicate on any state).
+If you see it, the client you passed is not a plain ioredis client (a wrapper or a test
+double whose `duplicate()` ignores its options). Pass the ioredis client itself, or let the
+library open its own connection with Mode B. The producer keeps the client's own retry
+policy, which is what lets it fail fast during an outage.
 
 ### Jobs get stuck (not processed after restart)
 
@@ -873,10 +870,11 @@ Stalled jobs are re-queued automatically by BullMQ's stalled-job check. If worke
 do not pick them up:
 
 1. Verify `drainTimeoutMs` is larger than the worst-case job runtime.
-2. Verify `lockDuration` (in `workerOptions`) covers the handler execution time —
-   a worker that runs longer than `lockDuration` will have its lock stolen, marking
-   the job as stalled.
-3. Check `worker.maxStalledCount` is `> 0` (default `1`) so stalled jobs re-queue.
+2. Verify `lockDuration` (in the `options` you pass to `@Processor` or `register`) covers
+   the handler execution time — a worker that runs longer than `lockDuration` will have its
+   lock stolen, marking the job as stalled.
+3. BullMQ re-queues a stalled job up to its `maxStalledCount` times (default `1`) and then
+   fails it; this library does not expose that setting.
 
 ---
 

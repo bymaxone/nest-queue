@@ -9,6 +9,34 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Documentation
+
+- **Several statements in `README.md` described behaviour the code does not have.** The prose and the
+  tables were checked against the source, which the snippet gate does not do:
+  - `shutdown.drainOnShutdown` was described as waiting for the queue to drain. It calls `drain()`
+    on every cached queue after the workers close, which removes the waiting and delayed jobs, so
+    it is for development and tests only.
+  - `@OnQueueEvent` was said to need `queueEvents: { enabled: true }`. No such option exists; the
+    library opens the `QueueEvents` connection when it discovers the first listener.
+  - Graceful Shutdown named `onApplicationShutdown`; `QueueLifecycle` runs from `onModuleDestroy`.
+  - The Troubleshooting entry for `CONNECTION_REQUIRES_NULL_RETRIES` told Mode A users to pass a
+    client built with `maxRetriesPerRequest: null`. Worker connections are `duplicate()` calls that
+    force it, so a stock ioredis client never triggers the error; the entry now says so.
+  - The stuck-jobs entry pointed `lockDuration` at `workerOptions` (the `options` of `@Processor`
+    and `register` are what a consumer sets) and at a `maxStalledCount` setting the library does not
+    expose.
+  - The Testing section and the badge quoted a mutation score of 99.68% against `break 95`; the
+    suite is held at 100.00% against `break 100`. The shared bundle budget is 2 500 B, not 2.5 KiB, and the gate
+    chain now includes `pnpm check:published`.
+  - `QueueException.details` was described by four keys; it carries more, always scalar. The
+    `cleanQueue` row named its second parameter `graceMs`, which is `gracePeriodMs`.
+
+### Tests
+
+- The README's option-defaults table and error-code catalog are now parsed and compared with
+  `applyDefaults`, `DEFAULT_JOB_OPTIONS` and `QUEUE_ERROR_CODES`, so a default or a code that drifts
+  fails the suite instead of reaching the npm page.
+
 ---
 
 ## [1.2.4] — 2026-10-30
