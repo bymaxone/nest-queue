@@ -216,6 +216,9 @@ export class EmailProcessor {
 Register the processor in your module alongside `BymaxQueueModule`:
 
 ```typescript
+import { Module } from '@nestjs/common'
+import { EmailProcessor } from './email.processor'
+
 @Module({
   providers: [EmailProcessor],
 })
@@ -348,13 +351,14 @@ import type {
 Programmatic API to create and manage BullMQ workers at runtime.
 
 ```typescript
+import path from 'node:path'
 import { WorkerRegistry } from '@bymax-one/nest-queue'
 import type { ProgrammaticWorkerConfig, SandboxedWorkerConfig } from '@bymax-one/nest-queue'
 
 // Register an in-process worker
 registry.register({
   queueName: 'email',
-  processor: async (job) => {
+  handler: async (job) => {
     /* … */
   },
   options: { concurrency: 4 },
@@ -592,7 +596,7 @@ import { BullMQOtel } from 'bullmq-otel'
 
 BymaxQueueModule.forRoot({
   connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
-  telemetry: new BullMQOtel('my-service', tracer),
+  telemetry: new BullMQOtel({ tracerName: 'my-service' }),
 })
 ```
 

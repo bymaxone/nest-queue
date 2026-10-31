@@ -249,9 +249,10 @@ which pins the published signatures.
 
 This is not hypothetical: a `MetricsService` example calling `getMetrics(name)` and
 `getAll([names])` against a service exposing `get(name)` and a no-argument `getAll()` shipped to
-npm and stayed there until a later release corrected it. `check:published` compiles README snippets, but only what it
-can type — a receiver the snippet never declares is bound only where its name matches an exported
-class, so an example reaching the API through anything else is prose to the gate.
+npm and stayed there until a later release corrected it. `check:published` compiles every README snippet, so a wrong
+method, option or field fails it; a name the prose introduces is typed in
+`scripts/readme-prelude.d.ts`, and what a snippet merely states in words, such as a default in a
+comment, is prose to the gate.
 
 A README snippet contradicting the source is therefore a **defect in the README** — a legitimate
 finding, and a valuable one — but the correction goes to the README, never to the code it
@@ -268,9 +269,8 @@ and this is that form — not a disagreement with the shared text.
   phases, task ids and roadmap state by design. **Comments state constraints, never history** applies
   to runtime source, `README.md`, JSDoc and `.github/**`; a phase reference under `docs/` is not a
   finding.
-- **Size and layering applies to `src/`, `test/` and `scripts/`, and no file is currently over 800
-  lines.** The largest are `src/server/services/worker-registry.service.spec.ts` and
-  `scripts/check-published-surface.mjs`. Since nothing is inherited over the limit, the shared
+- **Size and layering applies to `src/`, `test/` and `scripts/`, and no file is inherited over
+  the limit.** The shared
   rule's allowance for pre-existing files has nothing to cover here: a file crossing 800 lines in a
   pull request is a genuine finding.
 - **Suppressions have no exception in this repository.** `CLAUDE.md` states zero `any`, no

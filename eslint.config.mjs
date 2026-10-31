@@ -18,6 +18,8 @@ export default tseslint.config(
       'test/consumer-app/**',
       '*.config.ts',
       'jest.*.config.ts',
+      // Compiled by the README snippet gate against `dist/` in its own throwaway project.
+      'scripts/readme-prelude.d.ts',
     ],
   },
   eslint.configs.recommended,

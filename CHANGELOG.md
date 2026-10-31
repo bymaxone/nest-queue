@@ -43,8 +43,19 @@ No action required: behaviour, the public API, the types and the peer ranges are
   deletes the waiting jobs of every queue the process created and must not be enabled
   in production; the table cell alone was easy to miss.
 
+- **Two README examples did not compile against the published types.** The OpenTelemetry example
+  built `new BullMQOtel('my-service', tracer)`, the `bullmq-otel` 1.x signature; the `^2` peer takes
+  an options object, so it is now `new BullMQOtel({ tracerName: 'my-service' })`. The
+  `WorkerRegistry.register` example passed `processor:`; the property is `handler`. Two fragments
+  also used `path` and `Module` without importing them.
+
 ### Tests
 
+- `pnpm check:published` now fails on a wrong method, option or field anywhere in the README.
+  It reads syntactic and semantic diagnostics together, compiles every snippet, not only those
+  that import the package, types the names the prose introduces in
+  `scripts/readme-prelude.d.ts`, resolves a relative import to the snippet that exports it and
+  fails one that no snippet satisfies.
 - The Mode A null-retries probe is exercised with real ioredis clients: a stock client with finite
   retries is accepted, a client whose `duplicate()` ignores the override is refused with
   `CONNECTION_REQUIRES_NULL_RETRIES`, the probe is closed in both cases, and BullMQ itself refuses
