@@ -215,8 +215,9 @@ them statically safe.
 
 Do not propose widening the consumer's factory parameter to `unknown` to satisfy the type, and do
 not propose a property-syntax or `never[]`-rest declaration here: the first pushes a cast into every
-consumer, and the second breaks `options.useFactory(client)` at the call site inside the module. The
-trade is written out in the JSDoc on that member.
+consumer, and the second makes the factory uncallable with an argument, which
+`_AsyncFactoryAcceptsAnArgumentWhenCalled` in `test/types/public-api.test-d.ts` pins. The trade is
+written out in the JSDoc on that member.
 
 ### Invalid options throw at bootstrap and are never silently corrected
 
@@ -248,7 +249,7 @@ which pins the published signatures.
 
 This is not hypothetical: a `MetricsService` example calling `getMetrics(name)` and
 `getAll([names])` against a service exposing `get(name)` and a no-argument `getAll()` shipped to
-npm in 1.0.11 and 1.2.0, and was corrected in 1.2.2. `check:published` compiles README snippets, but only what it
+npm and stayed there until a later release corrected it. `check:published` compiles README snippets, but only what it
 can type — a receiver the snippet never declares is bound only where its name matches an exported
 class, so an example reaching the API through anything else is prose to the gate.
 
