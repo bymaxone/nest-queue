@@ -141,3 +141,24 @@ describe('README error-code catalog', () => {
     expect(listed.sort()).toEqual(Object.values(QUEUE_ERROR_CODES).sort())
   })
 })
+
+describe('README export coverage', () => {
+  /** The names an entry file exports, from its `export { ... }` and `export type { ... }` lists. */
+  function exportedNames(entry: string): string[] {
+    const source = readFileSync(resolve(__dirname, entry), 'utf8')
+    return [...source.matchAll(/^export (?:type )?\{([^}]*)\}/gm)].flatMap(([, list = '']) =>
+      list
+        .split(',')
+        .map((name) => name.trim())
+        .filter((name) => name !== ''),
+    )
+  }
+
+  // The README is the only place a consumer learns what the package exports, and a public name it
+  // never mentions is one nobody can find. Naming it anywhere counts, so the check stays cheap.
+  it.each(['../index.ts', '../../shared/index.ts'])('names every export of %s', (entry) => {
+    const missing = exportedNames(entry).filter((name) => !new RegExp(`\\b${name}\\b`).test(readme))
+
+    expect(missing).toEqual([])
+  })
+})

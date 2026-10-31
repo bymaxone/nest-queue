@@ -237,8 +237,8 @@ Every option passed to `forRoot` / `forRootAsync`. Only `connection` is required
 | `prefix`                   | `string`                                         | `'bull'`                                                                                                                                   | Redis key namespace. Applied to the `Queue`, `Worker`, `QueueEvents` **and** `FlowProducer` — see [Architecture](#-architecture).                                                                      |
 | `defaultJobOptions`        | `JobsOptions`                                    | `attempts: 3` · exponential backoff `2000` ms · `removeOnComplete: { age: 24 h, count: 1000 }` · `removeOnFail: { age: 7 d, count: 5000 }` | Merged into every job enqueued through the service; per-job options win. The bounded `removeOn*` caps are what keep Redis from growing without limit under a failure storm.                            |
 | `queueOptions`             | `Partial<QueueOptions>`                          | `{}`                                                                                                                                       | Extra BullMQ `Queue` options. `connection`, `defaultJobOptions` and `prefix` are owned by the library and cannot be set here.                                                                          |
-| `flows.enabled`            | `boolean`                                        | `false`                                                                                                                                    | Registers `FlowService`. Injecting it while disabled throws `FLOW_DISABLED`.                                                                                                                           |
-| `metrics.enabled`          | `boolean`                                        | `false`                                                                                                                                    | Registers `MetricsService`. Injecting it while disabled throws `METRICS_DISABLED`.                                                                                                                     |
+| `flows.enabled`            | `boolean`                                        | `false`                                                                                                                                    | `FlowService` is always provided; while disabled, every method except `close()` throws `FLOW_DISABLED`.                                                                                                |
+| `metrics.enabled`          | `boolean`                                        | `false`                                                                                                                                    | `MetricsService` is always provided; while disabled, every method throws `METRICS_DISABLED`.                                                                                                           |
 | `metrics.cacheTtlMs`       | `number`                                         | `5_000`                                                                                                                                    | TTL of the metrics snapshot cache. `0` disables caching. Must be `>= 0`.                                                                                                                               |
 | `telemetry`                | `Telemetry`                                      | —                                                                                                                                          | A BullMQ `Telemetry` instance (typically `new BullMQOtel(...)` from the optional `bullmq-otel` peer), attached to every `Queue` and `Worker`.                                                          |
 | `shutdown.drainTimeoutMs`  | `number`                                         | `30_000`                                                                                                                                   | Upper bound on the graceful drain before workers are force-closed. Must be `> 0`.                                                                                                                      |
@@ -414,6 +414,23 @@ const metrics: QueueMetrics = await this.metricsService.get('email')
 const all: readonly QueueMetrics[] = await this.metricsService.getAll()
 ```
 
+### Other exports
+
+| Export                                                                                                                                | What it is                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `WorkerRegistry.unregister(queue)`, `list()`                                                                                          | Stop and remove a worker and its connection; list the queue names that have a worker                         |
+| `FlowService.addBulk(flows)`, `getProducer()`, `close()`                                                                              | Add several flows at once; the underlying BullMQ `FlowProducer`; close it (a no-op while flows are disabled) |
+| `MetricsService.invalidate(queue?)`                                                                                                   | Drop the cached snapshot of one queue, or of all of them                                                     |
+| `QueueEventsRegistry`                                                                                                                 | The shared `QueueEvents` per queue (`getOrCreate`, `list`), used by `@OnQueueEvent`                          |
+| `BYMAX_QUEUE_OPTIONS`, `BYMAX_QUEUE_RESOLVED_OPTIONS`                                                                                 | Injection tokens for the options as given and with the defaults applied                                      |
+| `BYMAX_QUEUE_REDIS_CLIENT`, `BYMAX_QUEUE_CONNECTION_MODE`                                                                             | Injection tokens for the Queue-role ioredis client and for `'mode-a-byo'` or `'mode-b-owned'`                |
+| `DEFAULT_WORKER_CONCURRENCY`, `MAX_WORKER_CONCURRENCY`                                                                                | The worker concurrency used when none is given, and its ceiling                                              |
+| `DEFAULT_JOB_OPTIONS`, `DEFAULT_METRICS_CACHE_TTL_MS`, `DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS`                                            | The defaults of the Configuration table                                                                      |
+| `QUEUE_ERROR_MESSAGES`                                                                                                                | The default message of each error code                                                                       |
+| `BymaxQueueModuleOptions`, `BymaxQueueModuleAsyncOptions`, `BymaxQueueOptionsFactory`, `QueueConnectionConfig`, `QueueConnectionMode` | The option and connection types behind `forRoot` and `forRootAsync`                                          |
+| `ProcessorMetadata`, `ProcessHandlerMetadata`, `QueueEventListenerMetadata`                                                           | The reflection metadata the decorators write                                                                 |
+| `JobStatus`, `JOB_STATUS`, `BulkJob`, `SandboxedJob`, `WorkerEventName`, `QueueEventName`, `WorkerOptions`                            | Constants and types for the APIs above                                                                       |
+
 ---
 
 ## 🚨 Error Code Catalog
@@ -507,10 +524,12 @@ onFailed(job: Job | undefined, err: Error): void {
 
 Listens to BullMQ `QueueEvents` (global, cross-process events). The library opens one shared `QueueEvents` connection per queue when it discovers the first listener for it; there is no option to enable.
 
+The handler receives one serialized payload object, not a `Job`: `completed` carries `{ jobId, returnvalue, prev? }`, `failed` carries `{ jobId, failedReason, prev? }`, and `error` carries a real `Error`. Fetch the job with `QueueService.getJob` when you need it.
+
 ```typescript
 @OnQueueEvent('completed')
-onCompleted(jobId: string, returnValue: string): void {
-  console.log(`Job ${jobId} completed`)
+onCompleted({ jobId, returnvalue }: { jobId: string; returnvalue: string }): void {
+  console.log(`Job ${jobId} completed with ${returnvalue}`)
 }
 ```
 

@@ -14,8 +14,10 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [1.2.5] — 2026-10-31
 
 No action required: behaviour, the public API, the types and the peer ranges are unchanged.
-`dist/` is byte-identical to the published 1.2.4 (`diff -r` of a fresh build against the unpacked
-1.2.4 tarball prints nothing); only `README.md`, this file and the version in `package.json` change in the package.
+Measured with `diff -r` of a fresh build against the unpacked 1.2.4 tarball, `dist/` differs in
+one comment line only, the description of the `drainOnShutdown` step, which sits in the bundles
+(`index.mjs`, `index.cjs`) and in the declarations (`index.d.ts`, `index.d.cts`); the package
+otherwise changes in `README.md`, this file and the version in `package.json`.
 
 ### Documentation
 
@@ -49,6 +51,14 @@ No action required: behaviour, the public API, the types and the peer ranges are
   `WorkerRegistry.register` example passed `processor:`; the property is `handler`. Two fragments
   also used `path` and `Module` without importing them.
 
+- **Further README statements were wrong, and the exports nothing described are now listed.** The
+  Configuration table said that injecting `FlowService` or `MetricsService` while disabled throws;
+  both are always provided and every method throws `FLOW_DISABLED` or `METRICS_DISABLED`, except
+  `FlowService.close()`, which is a no-op while flows are disabled. The
+  `@OnQueueEvent` example declared `(jobId, returnValue)`, but the handler receives one serialized
+  payload object (`completed` carries `{ jobId, returnvalue, prev? }`), so the example and the prose
+  above it now say so. An "Other exports" table now covers the exports the README never named.
+
 ### Tests
 
 - `pnpm check:published` now fails on a wrong method, option or field anywhere in the README.
@@ -62,6 +72,8 @@ No action required: behaviour, the public API, the types and the peer ranges are
   retries is accepted, a client whose `duplicate()` ignores the override is refused with
   `CONNECTION_REQUIRES_NULL_RETRIES`, the probe is closed in both cases, and BullMQ itself refuses
   a Worker on the connection the probe rejected.
+- A spec fails when a name exported from `src/server/index.ts` or `src/shared/index.ts` is not
+  named in the README, so an export nobody documented cannot ship unnoticed again.
 - The README's option-defaults table and error-code catalog are now parsed and compared with
   `applyDefaults`, `DEFAULT_JOB_OPTIONS` and `QUEUE_ERROR_CODES`, so a default or a code that drifts
   fails the suite instead of reaching the npm page.
