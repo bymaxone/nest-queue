@@ -424,11 +424,14 @@ function isAbbreviatedLocalType(line, sources) {
 
 /** An import of some OTHER package the fixture does not install — a documented optional
  * integration. Reported as uncovered, not as a failure. A relative specifier is never foreign:
- * it must resolve to a README snippet that exports what it imports. */
+ * it must resolve to a README snippet that exports what it imports. Neither is the package
+ * itself or any subpath of it: those resolve through `exports`, so one that does not is a
+ * wrong import. */
 function isForeignModule(line) {
   if (!/error TS2307/.test(line)) return false
   const specifier = /Cannot find module '([^']+)'/.exec(line)?.[1] ?? ''
-  return !specifier.startsWith('.') && specifier !== PKG.name
+  const ownPackage = specifier === PKG.name || specifier.startsWith(`${PKG.name}/`)
+  return !specifier.startsWith('.') && !ownPackage
 }
 
 /**
