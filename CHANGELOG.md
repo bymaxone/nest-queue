@@ -57,7 +57,8 @@ No action required: behaviour, the public API, the types and the peer ranges are
   `scripts/readme-prelude.d.ts`, resolves a relative import to the snippet that exports it and
   fails one that no snippet satisfies. The prelude is compiled as a `.ts` file, so a type in it that
   stops resolving is an error instead of `any`, and a syntax error is tolerated only where the parse
-  tree shows a bare `...` standing for omitted arguments, elements or properties.
+  tree shows a bare `...` standing for the other elements of an array or the other properties of an
+  object literal.
 - The Mode A null-retries probe is exercised with real ioredis clients: a stock client with finite
   retries is accepted, a client whose `duplicate()` ignores the override is refused with
   `CONNECTION_REQUIRES_NULL_RETRIES`, the probe is closed in both cases, and BullMQ itself refuses

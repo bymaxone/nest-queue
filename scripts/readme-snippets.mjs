@@ -16,9 +16,9 @@
  *   declaration file is never diagnosed under `skipLibCheck`, and a prelude type that stopped
  *   resolving would become `any` unnoticed.
  *
- * A bare `...` that stands for "the usual arguments", "the other elements" or "the other
- * properties" is filled in from the parse tree. Any other syntax error is reported, however many
- * ellipses sit elsewhere in the snippet.
+ * A bare `...` that stands for "the other elements" of an array or "the other properties" of an
+ * object literal is filled in from the parse tree. Any other syntax error is reported, a bare
+ * `...` as a call argument included, however many ellipses sit elsewhere in the snippet.
  *
  * Run after `pnpm build`: the snippets compile against `dist/`.
  */
@@ -94,7 +94,6 @@ function scaffoldConsumer() {
   // extension: the repository tsconfig sets `skipLibCheck`, a declaration file is never
   // diagnosed, and a prelude type that stopped resolving would turn into `any` unnoticed.
   copyFileSync(join(ROOT, 'scripts', 'readme-prelude.d.ts'), join(GATE_DIR, 'prelude.ts'))
-  writeFileSync(join(GATE_DIR, 'elision.ts'), ELISION_TYPES)
 }
 
 // ---------------------------------------------------------------------------
@@ -354,137 +353,39 @@ function prepareSnippet(code, exporters, ext) {
   return { text: `${prefix}${body}${suffix}`, offset: prefix.split('\n').length - 1 }
 }
 
-/** Declarations behind a call whose trailing arguments are elided: the explicit arguments are
- * checked against the leading parameters of the real signature. */
-const ELISION_TYPES = `export {}
-declare global {
-  type __Prefix<T extends readonly unknown[]> = Required<T> extends readonly [infer H, ...infer R]
-    ? [] | [H, ...__Prefix<R>]
-    : T
-  function __prefix<F extends (...args: never[]) => unknown>(
-    callee: F,
-    args: __Prefix<Parameters<F>>,
-  ): void
-  function __prefixNew<C extends abstract new (...args: never[]) => unknown>(
-    ctor: C,
-    args: __Prefix<ConstructorParameters<C>>,
-  ): void
-}
-`
-
-/**
- * The first elision to fix in a snippet, innermost first: a spread whose expression is missing,
- * with the call it ends when it is the last argument of a call or `new`. The parse tree decides:
- * regular expressions, template literals, JSX text, comments and strings are already resolved
- * there, so none of them can pass for an elision.
- *
- * @param file - The parsed snippet.
- * @returns The spread node, or undefined when the snippet has no elision left.
- */
-function nextElision(file) {
-  let found
-  const visit = (node) => {
-    ts.forEachChild(node, visit)
-    const spread = node.kind === ts.SyntaxKind.SpreadElement || ts.isSpreadAssignment(node)
-    if (found === undefined && spread && node.expression.pos === node.expression.end) found = node
-  }
-  visit(file)
-  return found
-}
-
-/**
- * Fill each bare `...` a snippet uses to say "the usual arguments", "the other elements" or "the
- * other properties", so that it parses and the rest of the snippet is still checked.
- *
- * - A trailing call or `new` argument turns the call into a pair, `(__prefix(callee, [explicit
- *   args]), callee(explicit args, ...any))`: the first checks the explicit arguments against the
- *   leading parameters of the real signature, the second keeps the call's own type, type
- *   arguments and inference included.
- * - Any other elision becomes a spread of `any`, accepted in an array, an object literal and a
- *   call; a fixed-arity callee still reports `TS2556` for it, which `isArgumentElision` tolerates
- *   at that exact position only.
- *
- * A bare `...` anywhere else stays the syntax error it is. Line numbers are unchanged.
- *
- * @param code - The snippet source.
- * @param ext - The snippet's file extension, `ts` or `tsx`.
- * @returns The source with every elision filled.
- */
-function fillElisions(code, ext) {
-  const kind = ext === 'tsx' ? ts.ScriptKind.TSX : ts.ScriptKind.TS
-  let text = code
-  // Each pass fixes one elision and parses again, so a nested one is seen after the one inside it.
-  for (let pass = 0; pass < 200; pass += 1) {
-    const file = ts.createSourceFile('snippet', text, ts.ScriptTarget.Latest, true, kind)
-    const spread = nextElision(file)
-    if (spread === undefined) return text
-    const call = spread.parent
-    const trailing =
-      (ts.isCallExpression(call) || ts.isNewExpression(call)) &&
-      call.arguments?.at(-1) === spread &&
-      !ts.isOptionalChain(call)
-    if (!trailing) {
-      const at = spread.expression.pos
-      text = `${text.slice(0, at)}${ELISION}${text.slice(at)}`
-      continue
-    }
-    const callee = text.slice(call.expression.getStart(file), call.expression.end)
-    const open = text.indexOf('(', call.typeArguments?.end ?? call.expression.end)
-    const typeArguments = text.slice(call.expression.end, open).trim()
-    // Everything between the parentheses is kept up to the elision, so each explicit argument
-    // stays on its README line; the elision and what follows it keep only their line breaks.
-    const explicit = text.slice(open + 1, spread.getStart(file))
-    const tail = text.slice(spread.end, call.end - 1).replace(/[^\n]/g, '')
-    const check = ts.isNewExpression(call) ? '__prefixNew' : '__prefix'
-    const typed = `${ts.isNewExpression(call) ? 'new ' : ''}${callee}${typeArguments}`
-    const flat = explicit.replace(/\s*\n\s*/g, ' ')
-    const rebuilt = `(${check}(${callee}${typeArguments}, [${explicit}${tail}]), ${typed}(${flat}...${ELISION}))`
-    const replaced = text.slice(call.getStart(file), call.end)
-    const lost = replaced.split('\n').length - rebuilt.split('\n').length
-    text = `${text.slice(0, call.getStart(file))}${rebuilt}${'\n'.repeat(lost)}${text.slice(call.end)}`
-  }
-  return text
-}
-
-/** The text that stands in for a missing spread expression, and that identifies it later. */
+/** The text that stands in for a missing spread expression. */
 const ELISION = '({} as any)'
 
 /**
- * Where a filled elision sits as a call or `new` argument, as `line:column` keys in README
- * numbering. A fixed-arity callee reports `TS2556` at such a spread, because the arguments the
- * snippet leaves out cannot be counted; that one diagnostic, at exactly that position, says
- * nothing about the API, while every other diagnostic on the line still counts.
+ * Fill each bare `...` a snippet uses to say "the other elements" or "the other properties" of an
+ * array or object literal, so that it parses and the rest of the snippet is still checked. A
+ * spread of `any` is accepted in both and hides nothing: every explicit element is checked.
  *
- * @param text - The text that is compiled.
+ * The parse tree decides what is an elision: a spread whose expression is missing and whose
+ * parent is an array or object literal. Regular expressions, template literals, JSX text,
+ * comments and strings are already resolved there, so none of them can pass for one. A bare
+ * `...` anywhere else, a call argument included, stays the syntax error it is: filling it would
+ * leave the call's explicit arguments unchecked or its result mistyped, and a README example
+ * can write the arguments out.
+ *
+ * @param code - The snippet source.
  * @param ext - The snippet's file extension, `ts` or `tsx`.
- * @param offset - Header lines before the snippet body.
- * @returns The keys of the filled call-argument spreads.
+ * @returns The source with every array and object elision filled; line numbers are unchanged.
  */
-function argumentElisions(text, ext, offset) {
+function fillElisions(code, ext) {
   const kind = ext === 'tsx' ? ts.ScriptKind.TSX : ts.ScriptKind.TS
-  const file = ts.createSourceFile('snippet', text, ts.ScriptTarget.Latest, true, kind)
-  const keys = new Set()
+  const file = ts.createSourceFile('snippet', code, ts.ScriptTarget.Latest, true, kind)
+  const at = []
   const visit = (node) => {
-    if (
-      ts.isSpreadElement(node) &&
-      node.expression.getText(file) === ELISION &&
-      (ts.isCallExpression(node.parent) || ts.isNewExpression(node.parent))
-    ) {
-      const { line, character } = file.getLineAndCharacterOfPosition(node.getStart(file))
-      keys.add(`${String(line + 1 - offset)}:${String(character + 1)}`)
-    }
+    const spread = ts.isSpreadElement(node) || ts.isSpreadAssignment(node)
+    const literal =
+      spread &&
+      (ts.isArrayLiteralExpression(node.parent) || ts.isObjectLiteralExpression(node.parent))
+    if (literal && node.expression.pos === node.expression.end) at.push(node.expression.pos)
     ts.forEachChild(node, visit)
   }
   visit(file)
-  return keys
-}
-
-/** Whether a diagnostic is the arity error a filled call-argument elision leaves behind. */
-function isArgumentElision(line, elisions) {
-  if (!/error TS2556/.test(line)) return false
-  const at = /\((\d+),(\d+)\)/.exec(line)
-  const file = (/^([^(]+)\(/.exec(line)?.[1] ?? '').split(/[\\/]/).pop() ?? ''
-  return at !== null && (elisions.get(file)?.has(`${at[1]}:${at[2]}`) ?? false)
+  return at.reduceRight((text, pos) => `${text.slice(0, pos)}${ELISION}${text.slice(pos)}`, code)
 }
 
 /**
@@ -492,16 +393,13 @@ function isArgumentElision(line, elisions) {
  * added, and emit the ambient declarations that type the bound receivers.
  *
  * @param blocks - Every TypeScript block of the README.
- * @returns What the author wrote per file, the header lines each file carries, and where each
- * file elides call arguments.
+ * @returns What the author wrote per file, and the header lines each file carries.
  */
 function writeSnippetFiles(blocks) {
   const classes = exportedClasses()
   const exporters = snippetExports(blocks)
   const sources = new Map()
   const offsets = new Map()
-  /** file name → the positions of its call-argument elisions. */
-  const elisions = new Map()
   /** `<slot>_<prop>` → the exported class that types it. */
   const bindings = new Map()
   blocks.forEach(({ ext, code }, i) => {
@@ -512,11 +410,10 @@ function writeSnippetFiles(blocks) {
     // The abbreviated-type check reads what the author wrote, not the header added here.
     sources.set(name, code)
     offsets.set(name, offset)
-    elisions.set(name, argumentElisions(text, ext, offset))
     writeFileSync(join(GATE_DIR, name), text)
   })
   if (bindings.size > 0) writeReceiverDeclarations(bindings)
-  return { sources, offsets, elisions }
+  return { sources, offsets }
 }
 
 /** Whether a snippet imports the package itself. */
@@ -594,16 +491,11 @@ export function checkSnippets(fail) {
     return
   }
   scaffoldConsumer()
-  const { sources, offsets, elisions } = writeSnippetFiles(blocks)
+  const { sources, offsets } = writeSnippetFiles(blocks)
   try {
     const lines = compileGate(offsets)
     if (process.env.GATE_DEBUG) console.log(lines.join('\n'))
-    const real = lines.filter(
-      (l) =>
-        !isArgumentElision(l, elisions) &&
-        !isForeignModule(l) &&
-        !isAbbreviatedLocalType(l, sources),
-    )
+    const real = lines.filter((l) => !isForeignModule(l) && !isAbbreviatedLocalType(l, sources))
     if (real.length > 0) {
       fail(
         'snippets',
