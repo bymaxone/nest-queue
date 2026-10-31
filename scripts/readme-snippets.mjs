@@ -94,6 +94,7 @@ function scaffoldConsumer() {
   // extension: the repository tsconfig sets `skipLibCheck`, a declaration file is never
   // diagnosed, and a prelude type that stopped resolving would turn into `any` unnoticed.
   copyFileSync(join(ROOT, 'scripts', 'readme-prelude.d.ts'), join(GATE_DIR, 'prelude.ts'))
+  writeFileSync(join(GATE_DIR, 'elision.ts'), ELISION_TYPES)
 }
 
 // ---------------------------------------------------------------------------
@@ -353,29 +354,92 @@ function prepareSnippet(code, exporters, ext) {
   return { text: `${prefix}${body}${suffix}`, offset: prefix.split('\n').length - 1 }
 }
 
+/** Declarations behind a call whose trailing arguments are elided: the explicit arguments are
+ * checked against the leading parameters of the real signature, and the call keeps its type. */
+const ELISION_TYPES = `export {}
+declare global {
+  type __Prefix<T extends readonly unknown[]> = number extends T['length']
+    ? T
+    : T extends readonly [infer H, ...infer R]
+      ? [] | [H, ...__Prefix<R>]
+      : []
+  function __prefix<F extends (...args: never[]) => unknown>(
+    callee: F,
+    args: __Prefix<Parameters<F>>,
+  ): ReturnType<F>
+  function __prefixNew<C extends abstract new (...args: never[]) => unknown>(
+    ctor: C,
+    args: __Prefix<ConstructorParameters<C>>,
+  ): InstanceType<C>
+}
+`
+
+/**
+ * The first elision to fix in a snippet, innermost first: a spread whose expression is missing,
+ * with the call it ends when it is the last argument of a call or `new`. The parse tree decides:
+ * regular expressions, template literals, JSX text, comments and strings are already resolved
+ * there, so none of them can pass for an elision.
+ *
+ * @param file - The parsed snippet.
+ * @returns The spread node, or undefined when the snippet has no elision left.
+ */
+function nextElision(file) {
+  let found
+  const visit = (node) => {
+    ts.forEachChild(node, visit)
+    const spread = node.kind === ts.SyntaxKind.SpreadElement || ts.isSpreadAssignment(node)
+    if (found === undefined && spread && node.expression.pos === node.expression.end) found = node
+  }
+  visit(file)
+  return found
+}
+
 /**
  * Fill each bare `...` a snippet uses to say "the usual arguments", "the other elements" or "the
- * other properties" with a spread of `any`, which a call, an array and an object literal all
- * accept whatever the callee declares.
- * The parse tree decides what is an elision: a spread whose expression is missing. Regular
- * expressions, template literals, JSX text, comments and strings are already resolved there, so
- * none of them can pass for one, and a bare `...` anywhere else stays the syntax error it is.
+ * other properties", so that it parses and the rest of the snippet is still checked.
+ *
+ * - A trailing call or `new` argument turns the call into `__prefix(callee, [explicit args])`,
+ *   which checks the explicit arguments against the leading parameters of the real signature and
+ *   keeps the call's type.
+ * - Any other elision becomes a spread of `any`, accepted in an array, an object literal and a
+ *   call; a fixed-arity callee still reports `TS2556` for it, which `isArgumentElision` tolerates
+ *   at that exact position only.
+ *
+ * A bare `...` anywhere else stays the syntax error it is. Line numbers are unchanged.
  *
  * @param code - The snippet source.
  * @param ext - The snippet's file extension, `ts` or `tsx`.
- * @returns The source with every elision filled; line numbers are unchanged.
+ * @returns The source with every elision filled.
  */
 function fillElisions(code, ext) {
   const kind = ext === 'tsx' ? ts.ScriptKind.TSX : ts.ScriptKind.TS
-  const file = ts.createSourceFile('snippet', code, ts.ScriptTarget.Latest, true, kind)
-  const at = []
-  const visit = (node) => {
-    const spread = node.kind === ts.SyntaxKind.SpreadElement || ts.isSpreadAssignment(node)
-    if (spread && node.expression.pos === node.expression.end) at.push(node.expression.pos)
-    ts.forEachChild(node, visit)
+  let text = code
+  // Each pass fixes one elision and parses again, so a nested one is seen after the one inside it.
+  for (let pass = 0; pass < 200; pass += 1) {
+    const file = ts.createSourceFile('snippet', text, ts.ScriptTarget.Latest, true, kind)
+    const spread = nextElision(file)
+    if (spread === undefined) return text
+    const call = spread.parent
+    const trailing =
+      (ts.isCallExpression(call) || ts.isNewExpression(call)) &&
+      call.arguments?.at(-1) === spread &&
+      !ts.isOptionalChain(call)
+    if (!trailing) {
+      const at = spread.expression.pos
+      text = `${text.slice(0, at)}${ELISION}${text.slice(at)}`
+      continue
+    }
+    const callee = text.slice(call.expression.getStart(file), call.expression.end)
+    const explicit = call.arguments.slice(0, -1)
+    const args =
+      explicit.length > 0 ? text.slice(explicit[0].getStart(file), explicit.at(-1).end) : ''
+    const wrapper = ts.isNewExpression(call) ? '__prefixNew' : '__prefix'
+    const replaced = text.slice(call.getStart(file), call.end)
+    const rebuilt = `${wrapper}(${callee}, [${args}])`
+    const lost = replaced.split('\n').length - rebuilt.split('\n').length
+    text = `${text.slice(0, call.getStart(file))}${rebuilt}${'\n'.repeat(lost)}${text.slice(call.end)}`
   }
-  visit(file)
-  return at.reduceRight((text, pos) => `${text.slice(0, pos)}${ELISION}${text.slice(pos)}`, code)
+  return text
 }
 
 /** The text that stands in for a missing spread expression, and that identifies it later. */
