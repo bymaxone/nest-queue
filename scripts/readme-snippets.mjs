@@ -355,22 +355,20 @@ function prepareSnippet(code, exporters, ext) {
 }
 
 /** Declarations behind a call whose trailing arguments are elided: the explicit arguments are
- * checked against the leading parameters of the real signature, and the call keeps its type. */
+ * checked against the leading parameters of the real signature. */
 const ELISION_TYPES = `export {}
 declare global {
-  type __Prefix<T extends readonly unknown[]> = number extends T['length']
-    ? T
-    : T extends readonly [infer H, ...infer R]
-      ? [] | [H, ...__Prefix<R>]
-      : []
+  type __Prefix<T extends readonly unknown[]> = Required<T> extends readonly [infer H, ...infer R]
+    ? [] | [H, ...__Prefix<R>]
+    : T
   function __prefix<F extends (...args: never[]) => unknown>(
     callee: F,
     args: __Prefix<Parameters<F>>,
-  ): ReturnType<F>
+  ): void
   function __prefixNew<C extends abstract new (...args: never[]) => unknown>(
     ctor: C,
     args: __Prefix<ConstructorParameters<C>>,
-  ): InstanceType<C>
+  ): void
 }
 `
 
@@ -398,9 +396,10 @@ function nextElision(file) {
  * Fill each bare `...` a snippet uses to say "the usual arguments", "the other elements" or "the
  * other properties", so that it parses and the rest of the snippet is still checked.
  *
- * - A trailing call or `new` argument turns the call into `__prefix(callee, [explicit args])`,
- *   which checks the explicit arguments against the leading parameters of the real signature and
- *   keeps the call's type.
+ * - A trailing call or `new` argument turns the call into a pair, `(__prefix(callee, [explicit
+ *   args]), callee(explicit args, ...any))`: the first checks the explicit arguments against the
+ *   leading parameters of the real signature, the second keeps the call's own type, type
+ *   arguments and inference included.
  * - Any other elision becomes a spread of `any`, accepted in an array, an object literal and a
  *   call; a fixed-arity callee still reports `TS2556` for it, which `isArgumentElision` tolerates
  *   at that exact position only.
@@ -430,12 +429,17 @@ function fillElisions(code, ext) {
       continue
     }
     const callee = text.slice(call.expression.getStart(file), call.expression.end)
-    const explicit = call.arguments.slice(0, -1)
-    const args =
-      explicit.length > 0 ? text.slice(explicit[0].getStart(file), explicit.at(-1).end) : ''
-    const wrapper = ts.isNewExpression(call) ? '__prefixNew' : '__prefix'
+    const open = text.indexOf('(', call.typeArguments?.end ?? call.expression.end)
+    const typeArguments = text.slice(call.expression.end, open).trim()
+    // Everything between the parentheses is kept up to the elision, so each explicit argument
+    // stays on its README line; the elision and what follows it keep only their line breaks.
+    const explicit = text.slice(open + 1, spread.getStart(file))
+    const tail = text.slice(spread.end, call.end - 1).replace(/[^\n]/g, '')
+    const check = ts.isNewExpression(call) ? '__prefixNew' : '__prefix'
+    const typed = `${ts.isNewExpression(call) ? 'new ' : ''}${callee}${typeArguments}`
+    const flat = explicit.replace(/\s*\n\s*/g, ' ')
+    const rebuilt = `(${check}(${callee}${typeArguments}, [${explicit}${tail}]), ${typed}(${flat}...${ELISION}))`
     const replaced = text.slice(call.getStart(file), call.end)
-    const rebuilt = `${wrapper}(${callee}, [${args}])`
     const lost = replaced.split('\n').length - rebuilt.split('\n').length
     text = `${text.slice(0, call.getStart(file))}${rebuilt}${'\n'.repeat(lost)}${text.slice(call.end)}`
   }
