@@ -12,7 +12,13 @@
  *   imported, so an example that omits the import still makes a checked claim.
  * - The names a snippet takes from its surrounding prose are declared, typed, in
  *   `readme-prelude.d.ts`, so a call through one of them is checked instead of resolving to `any`,
- *   and any other undeclared name is an error.
+ *   and any other undeclared name is an error. The prelude is compiled as a `.ts` file: a
+ *   declaration file is never diagnosed under `skipLibCheck`, and a prelude type that stopped
+ *   resolving would become `any` unnoticed.
+ *
+ * A bare `...` that stands for "the usual arguments", "the other elements" or "the other
+ * properties" is filled in from the parse tree. Any other syntax error is reported, however many
+ * ellipses sit elsewhere in the snippet.
  *
  * Run after `pnpm build`: the snippets compile against `dist/`.
  */
@@ -84,8 +90,10 @@ function scaffoldConsumer() {
       2,
     )}\n`,
   )
-  // The names a snippet uses without introducing them, typed for real.
-  copyFileSync(join(ROOT, 'scripts', 'readme-prelude.d.ts'), join(GATE_DIR, 'prelude.d.ts'))
+  // The names a snippet uses without introducing them, typed for real. Copied with a `.ts`
+  // extension: the repository tsconfig sets `skipLibCheck`, a declaration file is never
+  // diagnosed, and a prelude type that stopped resolving would turn into `any` unnoticed.
+  copyFileSync(join(ROOT, 'scripts', 'readme-prelude.d.ts'), join(GATE_DIR, 'prelude.ts'))
 }
 
 // ---------------------------------------------------------------------------
@@ -320,15 +328,15 @@ const IMPORT = /^import\s(?:[\s\S]*?from\s+)?['"][^'"]+['"]\s*;?\n/gm
  *
  * @param code - The snippet source.
  * @param exporters - Exported name → the snippet file that defines it.
+ * @param ext - The snippet's file extension, `ts` or `tsx`.
  * @returns The text to compile and the number of header lines before the snippet body.
  */
-function prepareSnippet(code, exporters) {
+function prepareSnippet(code, exporters, ext) {
   const imports = (code.match(IMPORT) ?? []).map((i) => resolveRelativeImports(i, exporters))
-  // `{ ... }` is how a snippet says "the usual arguments". Left alone it is a parse
-  // error, and a parse error in a call hides every semantic error around it.
-  const body = code
-    .replace(IMPORT, (m) => '\n'.repeat(m.split('\n').length - 1))
-    .replaceAll('{ ... }', '{} as never')
+  const body = fillElisions(
+    code.replace(IMPORT, (m) => '\n'.repeat(m.split('\n').length - 1)),
+    ext,
+  )
   const missing = publicImports(boundNames(code))
   const header = `${missing ? `${missing}\n` : ''}${imports.join('')}`
   const declares = /^(export\s+)?(abstract\s+)?(class|interface|type|enum|function)\s/m.test(body)
@@ -346,31 +354,101 @@ function prepareSnippet(code, exporters) {
 }
 
 /**
+ * Fill each bare `...` a snippet uses to say "the usual arguments", "the other elements" or "the
+ * other properties" with a spread of `any`, which a call, an array and an object literal all
+ * accept whatever the callee declares.
+ * The parse tree decides what is an elision: a spread whose expression is missing. Regular
+ * expressions, template literals, JSX text, comments and strings are already resolved there, so
+ * none of them can pass for one, and a bare `...` anywhere else stays the syntax error it is.
+ *
+ * @param code - The snippet source.
+ * @param ext - The snippet's file extension, `ts` or `tsx`.
+ * @returns The source with every elision filled; line numbers are unchanged.
+ */
+function fillElisions(code, ext) {
+  const kind = ext === 'tsx' ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+  const file = ts.createSourceFile('snippet', code, ts.ScriptTarget.Latest, true, kind)
+  const at = []
+  const visit = (node) => {
+    const spread = node.kind === ts.SyntaxKind.SpreadElement || ts.isSpreadAssignment(node)
+    if (spread && node.expression.pos === node.expression.end) at.push(node.expression.pos)
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  return at.reduceRight((text, pos) => `${text.slice(0, pos)}${ELISION}${text.slice(pos)}`, code)
+}
+
+/** The text that stands in for a missing spread expression, and that identifies it later. */
+const ELISION = '({} as any)'
+
+/**
+ * Where a filled elision sits as a call or `new` argument, as `line:column` keys in README
+ * numbering. A fixed-arity callee reports `TS2556` at such a spread, because the arguments the
+ * snippet leaves out cannot be counted; that one diagnostic, at exactly that position, says
+ * nothing about the API, while every other diagnostic on the line still counts.
+ *
+ * @param text - The text that is compiled.
+ * @param ext - The snippet's file extension, `ts` or `tsx`.
+ * @param offset - Header lines before the snippet body.
+ * @returns The keys of the filled call-argument spreads.
+ */
+function argumentElisions(text, ext, offset) {
+  const kind = ext === 'tsx' ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+  const file = ts.createSourceFile('snippet', text, ts.ScriptTarget.Latest, true, kind)
+  const keys = new Set()
+  const visit = (node) => {
+    if (
+      ts.isSpreadElement(node) &&
+      node.expression.getText(file) === ELISION &&
+      (ts.isCallExpression(node.parent) || ts.isNewExpression(node.parent))
+    ) {
+      const { line, character } = file.getLineAndCharacterOfPosition(node.getStart(file))
+      keys.add(`${String(line + 1 - offset)}:${String(character + 1)}`)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  return keys
+}
+
+/** Whether a diagnostic is the arity error a filled call-argument elision leaves behind. */
+function isArgumentElision(line, elisions) {
+  if (!/error TS2556/.test(line)) return false
+  const at = /\((\d+),(\d+)\)/.exec(line)
+  const file = (/^([^(]+)\(/.exec(line)?.[1] ?? '').split(/[\\/]/).pop() ?? ''
+  return at !== null && (elisions.get(file)?.has(`${at[1]}:${at[2]}`) ?? false)
+}
+
+/**
  * Write each snippet into the gate directory, with its receivers bound and its header
  * added, and emit the ambient declarations that type the bound receivers.
  *
  * @param blocks - Every TypeScript block of the README.
- * @returns What the author wrote per file, and the header lines each file carries.
+ * @returns What the author wrote per file, the header lines each file carries, and where each
+ * file elides call arguments.
  */
 function writeSnippetFiles(blocks) {
   const classes = exportedClasses()
   const exporters = snippetExports(blocks)
   const sources = new Map()
   const offsets = new Map()
+  /** file name → the positions of its call-argument elisions. */
+  const elisions = new Map()
   /** `<slot>_<prop>` → the exported class that types it. */
   const bindings = new Map()
   blocks.forEach(({ ext, code }, i) => {
     const name = `snippet-${String(i + 1).padStart(2, '0')}.${ext}`
     const { rewritten, bound } = bindReceivers(code, classes, i, ext)
     for (const [prop, cls] of bound) bindings.set(`${i}_${prop}`, cls)
-    const { text, offset } = prepareSnippet(rewritten, exporters)
+    const { text, offset } = prepareSnippet(rewritten, exporters, ext)
     // The abbreviated-type check reads what the author wrote, not the header added here.
     sources.set(name, code)
     offsets.set(name, offset)
+    elisions.set(name, argumentElisions(text, ext, offset))
     writeFileSync(join(GATE_DIR, name), text)
   })
   if (bindings.size > 0) writeReceiverDeclarations(bindings)
-  return { sources, offsets }
+  return { sources, offsets, elisions }
 }
 
 /** Whether a snippet imports the package itself. */
@@ -401,10 +479,6 @@ function compileGate(offsets) {
     return `${where}(${position}): error TS${String(d.code)}: ${text}`
   })
 }
-
-/** Diagnostics that say nothing about the published API: a snippet that elides code with
- * `…` or shows a bare `return` is prose at that point, not a program. */
-const CONTEXT_ONLY = new Set(['TS1108', 'TS1109'])
 
 /** `Property 'x' does not exist on type 'Y'` is an API defect when `Y` comes from the
  * package, and snippet noise when `Y` is a class the snippet declares itself and
@@ -452,13 +526,13 @@ export function checkSnippets(fail) {
     return
   }
   scaffoldConsumer()
-  const { sources, offsets } = writeSnippetFiles(blocks)
+  const { sources, offsets, elisions } = writeSnippetFiles(blocks)
   try {
     const lines = compileGate(offsets)
     if (process.env.GATE_DEBUG) console.log(lines.join('\n'))
     const real = lines.filter(
       (l) =>
-        !CONTEXT_ONLY.has((/error (TS\d+)/.exec(l) ?? [])[1]) &&
+        !isArgumentElision(l, elisions) &&
         !isForeignModule(l) &&
         !isAbbreviatedLocalType(l, sources),
     )
@@ -472,7 +546,7 @@ export function checkSnippets(fail) {
     console.log(
       `  snippets: ${blocks.length} compiled against dist/` +
         (ignored > 0
-          ? ` (${ignored} diagnostic(s) ignored: a peer the fixture does not install, or a parse-level elision)`
+          ? ` (${ignored} diagnostic(s) ignored: a peer the fixture does not install)`
           : ''),
     )
   } finally {
