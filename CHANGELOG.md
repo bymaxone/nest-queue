@@ -22,8 +22,8 @@ No action required: behaviour, the public API, the types and the peer ranges are
 - **Several statements in `README.md` described behaviour the code does not have.** The prose and the
   tables were checked against the source, which the snippet gate does not do:
   - `shutdown.drainOnShutdown` was described as waiting for the queue to drain. It calls `drain()`
-    on every cached queue after the workers close, which removes the waiting and delayed jobs, so
-    it is for development and tests only.
+    on every cached queue after the workers close, which removes the waiting jobs, so it is for
+    development and tests only.
   - `@OnQueueEvent` was said to need `queueEvents: { enabled: true }`. No such option exists; the
     library opens the `QueueEvents` connection when it discovers the first listener.
   - Graceful Shutdown named `onApplicationShutdown`; `QueueLifecycle` runs from `onModuleDestroy`.
@@ -39,8 +39,16 @@ No action required: behaviour, the public API, the types and the peer ranges are
   - `QueueException.details` was described by four keys; it carries more, always scalar. The
     `cleanQueue` row named its second parameter `graceMs`, which is `gracePeriodMs`.
 
+- A warning callout under the Configuration table now says plainly that `shutdown.drainOnShutdown`
+  deletes the waiting jobs of every queue the process created and must not be enabled
+  in production; the table cell alone was easy to miss.
+
 ### Tests
 
+- The Mode A null-retries probe is exercised with real ioredis clients: a stock client with finite
+  retries is accepted, a client whose `duplicate()` ignores the override is refused with
+  `CONNECTION_REQUIRES_NULL_RETRIES`, the probe is closed in both cases, and BullMQ itself refuses
+  a Worker on the connection the probe rejected.
 - The README's option-defaults table and error-code catalog are now parsed and compared with
   `applyDefaults`, `DEFAULT_JOB_OPTIONS` and `QUEUE_ERROR_CODES`, so a default or a code that drifts
   fails the suite instead of reaching the npm page.
