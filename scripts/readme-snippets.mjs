@@ -12,7 +12,13 @@
  *   imported, so an example that omits the import still makes a checked claim.
  * - The names a snippet takes from its surrounding prose are declared, typed, in
  *   `readme-prelude.d.ts`, so a call through one of them is checked instead of resolving to `any`,
- *   and any other undeclared name is an error.
+ *   and any other undeclared name is an error. The prelude is compiled as a `.ts` file: a
+ *   declaration file is never diagnosed under `skipLibCheck`, and a prelude type that stopped
+ *   resolving would become `any` unnoticed.
+ *
+ * No syntax error is tolerated. A bare `...` standing for omitted arguments, elements or
+ * properties is one, and so is anything else the parser rejects: filling the gap would hide the
+ * explicit members around it from the type checker, so an example is written out in full.
  *
  * Run after `pnpm build`: the snippets compile against `dist/`.
  */
@@ -84,8 +90,10 @@ function scaffoldConsumer() {
       2,
     )}\n`,
   )
-  // The names a snippet uses without introducing them, typed for real.
-  copyFileSync(join(ROOT, 'scripts', 'readme-prelude.d.ts'), join(GATE_DIR, 'prelude.d.ts'))
+  // The names a snippet uses without introducing them, typed for real. Copied with a `.ts`
+  // extension: the repository tsconfig sets `skipLibCheck`, a declaration file is never
+  // diagnosed, and a prelude type that stopped resolving would turn into `any` unnoticed.
+  copyFileSync(join(ROOT, 'scripts', 'readme-prelude.d.ts'), join(GATE_DIR, 'prelude.ts'))
 }
 
 // ---------------------------------------------------------------------------
@@ -324,11 +332,7 @@ const IMPORT = /^import\s(?:[\s\S]*?from\s+)?['"][^'"]+['"]\s*;?\n/gm
  */
 function prepareSnippet(code, exporters) {
   const imports = (code.match(IMPORT) ?? []).map((i) => resolveRelativeImports(i, exporters))
-  // `{ ... }` is how a snippet says "the usual arguments". Left alone it is a parse
-  // error, and a parse error in a call hides every semantic error around it.
-  const body = code
-    .replace(IMPORT, (m) => '\n'.repeat(m.split('\n').length - 1))
-    .replaceAll('{ ... }', '{} as never')
+  const body = code.replace(IMPORT, (m) => '\n'.repeat(m.split('\n').length - 1))
   const missing = publicImports(boundNames(code))
   const header = `${missing ? `${missing}\n` : ''}${imports.join('')}`
   const declares = /^(export\s+)?(abstract\s+)?(class|interface|type|enum|function)\s/m.test(body)
@@ -402,10 +406,6 @@ function compileGate(offsets) {
   })
 }
 
-/** Diagnostics that say nothing about the published API: a snippet that elides code with
- * `…` or shows a bare `return` is prose at that point, not a program. */
-const CONTEXT_ONLY = new Set(['TS1108', 'TS1109'])
-
 /** `Property 'x' does not exist on type 'Y'` is an API defect when `Y` comes from the
  * package, and snippet noise when `Y` is a class the snippet declares itself and
  * abbreviates — a README example routinely writes `this.repo` without spelling out the
@@ -456,12 +456,7 @@ export function checkSnippets(fail) {
   try {
     const lines = compileGate(offsets)
     if (process.env.GATE_DEBUG) console.log(lines.join('\n'))
-    const real = lines.filter(
-      (l) =>
-        !CONTEXT_ONLY.has((/error (TS\d+)/.exec(l) ?? [])[1]) &&
-        !isForeignModule(l) &&
-        !isAbbreviatedLocalType(l, sources),
-    )
+    const real = lines.filter((l) => !isForeignModule(l) && !isAbbreviatedLocalType(l, sources))
     if (real.length > 0) {
       fail(
         'snippets',
@@ -472,7 +467,7 @@ export function checkSnippets(fail) {
     console.log(
       `  snippets: ${blocks.length} compiled against dist/` +
         (ignored > 0
-          ? ` (${ignored} diagnostic(s) ignored: a peer the fixture does not install, or a parse-level elision)`
+          ? ` (${ignored} diagnostic(s) ignored: a peer the fixture does not install)`
           : ''),
     )
   } finally {
