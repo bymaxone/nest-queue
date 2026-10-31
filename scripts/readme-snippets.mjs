@@ -16,9 +16,9 @@
  *   declaration file is never diagnosed under `skipLibCheck`, and a prelude type that stopped
  *   resolving would become `any` unnoticed.
  *
- * A bare `...` that stands for "the other elements" of an array or "the other properties" of an
- * object literal is filled in from the parse tree. Any other syntax error is reported, a bare
- * `...` as a call argument included, however many ellipses sit elsewhere in the snippet.
+ * No syntax error is tolerated. A bare `...` standing for omitted arguments, elements or
+ * properties is one, and so is anything else the parser rejects: filling the gap would hide the
+ * explicit members around it from the type checker, so an example is written out in full.
  *
  * Run after `pnpm build`: the snippets compile against `dist/`.
  */
@@ -328,15 +328,11 @@ const IMPORT = /^import\s(?:[\s\S]*?from\s+)?['"][^'"]+['"]\s*;?\n/gm
  *
  * @param code - The snippet source.
  * @param exporters - Exported name → the snippet file that defines it.
- * @param ext - The snippet's file extension, `ts` or `tsx`.
  * @returns The text to compile and the number of header lines before the snippet body.
  */
-function prepareSnippet(code, exporters, ext) {
+function prepareSnippet(code, exporters) {
   const imports = (code.match(IMPORT) ?? []).map((i) => resolveRelativeImports(i, exporters))
-  const body = fillElisions(
-    code.replace(IMPORT, (m) => '\n'.repeat(m.split('\n').length - 1)),
-    ext,
-  )
+  const body = code.replace(IMPORT, (m) => '\n'.repeat(m.split('\n').length - 1))
   const missing = publicImports(boundNames(code))
   const header = `${missing ? `${missing}\n` : ''}${imports.join('')}`
   const declares = /^(export\s+)?(abstract\s+)?(class|interface|type|enum|function)\s/m.test(body)
@@ -351,41 +347,6 @@ function prepareSnippet(code, exporters, ext) {
     suffix = '}\n'
   }
   return { text: `${prefix}${body}${suffix}`, offset: prefix.split('\n').length - 1 }
-}
-
-/** The text that stands in for a missing spread expression. */
-const ELISION = '({} as any)'
-
-/**
- * Fill each bare `...` a snippet uses to say "the other elements" or "the other properties" of an
- * array or object literal, so that it parses and the rest of the snippet is still checked. A
- * spread of `any` is accepted in both and hides nothing: every explicit element is checked.
- *
- * The parse tree decides what is an elision: a spread whose expression is missing and whose
- * parent is an array or object literal. Regular expressions, template literals, JSX text,
- * comments and strings are already resolved there, so none of them can pass for one. A bare
- * `...` anywhere else, a call argument included, stays the syntax error it is: filling it would
- * leave the call's explicit arguments unchecked or its result mistyped, and a README example
- * can write the arguments out.
- *
- * @param code - The snippet source.
- * @param ext - The snippet's file extension, `ts` or `tsx`.
- * @returns The source with every array and object elision filled; line numbers are unchanged.
- */
-function fillElisions(code, ext) {
-  const kind = ext === 'tsx' ? ts.ScriptKind.TSX : ts.ScriptKind.TS
-  const file = ts.createSourceFile('snippet', code, ts.ScriptTarget.Latest, true, kind)
-  const at = []
-  const visit = (node) => {
-    const spread = ts.isSpreadElement(node) || ts.isSpreadAssignment(node)
-    const literal =
-      spread &&
-      (ts.isArrayLiteralExpression(node.parent) || ts.isObjectLiteralExpression(node.parent))
-    if (literal && node.expression.pos === node.expression.end) at.push(node.expression.pos)
-    ts.forEachChild(node, visit)
-  }
-  visit(file)
-  return at.reduceRight((text, pos) => `${text.slice(0, pos)}${ELISION}${text.slice(pos)}`, code)
 }
 
 /**
@@ -406,7 +367,7 @@ function writeSnippetFiles(blocks) {
     const name = `snippet-${String(i + 1).padStart(2, '0')}.${ext}`
     const { rewritten, bound } = bindReceivers(code, classes, i, ext)
     for (const [prop, cls] of bound) bindings.set(`${i}_${prop}`, cls)
-    const { text, offset } = prepareSnippet(rewritten, exporters, ext)
+    const { text, offset } = prepareSnippet(rewritten, exporters)
     // The abbreviated-type check reads what the author wrote, not the header added here.
     sources.set(name, code)
     offsets.set(name, offset)
