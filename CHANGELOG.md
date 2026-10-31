@@ -14,8 +14,10 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [1.2.5] — 2026-10-31
 
 No action required: behaviour, the public API, the types and the peer ranges are unchanged.
-`dist/` is byte-identical to the published 1.2.4 (`diff -r` of a fresh build against the unpacked
-1.2.4 tarball prints nothing); only `README.md`, this file and the version in `package.json` change in the package.
+Measured with `diff -r` of a fresh build against the unpacked 1.2.4 tarball, `dist/` differs in
+one comment line only, the description of the `drainOnShutdown` step, which sits in the bundles
+(`index.mjs`, `index.cjs`) and in the declarations (`index.d.ts`, `index.d.cts`); the package
+otherwise changes in `README.md`, this file and the version in `package.json`.
 
 ### Documentation
 
@@ -48,6 +50,13 @@ No action required: behaviour, the public API, the types and the peer ranges are
   an options object, so it is now `new BullMQOtel({ tracerName: 'my-service' })`. The
   `WorkerRegistry.register` example passed `processor:`; the property is `handler`. Two fragments
   also used `path` and `Module` without importing them.
+
+- **Further README statements were wrong, and the exports nothing described are now listed.** The
+  Configuration table said that injecting `FlowService` or `MetricsService` while disabled throws;
+  both are always provided and every method throws `FLOW_DISABLED` or `METRICS_DISABLED`. The
+  `@OnQueueEvent` example declared `(jobId, returnValue)`, but the handler receives one serialized
+  payload object (`completed` carries `{ jobId, returnvalue, prev? }`), so the example and the prose
+  above it now say so. An "Other exports" table now covers the exports the README never named.
 
 ### Tests
 
