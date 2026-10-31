@@ -6,6 +6,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import type { Telemetry } from 'bullmq'
 import { BymaxQueueModule } from '../bymax-queue.module'
 import { DEFAULT_JOB_OPTIONS } from '../constants/default-options'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
@@ -52,12 +53,11 @@ function seconds(text: string): number {
   return Number(match[1]) * (match[2] === 'h' ? 3600 : 86_400)
 }
 
-const documented = new Map(
-  tableRows(section('⚙️ Configuration')).map(([option = '', , fallback = '']) => [
-    option.replaceAll('`', ''),
-    fallback,
-  ]),
-)
+const rows = tableRows(section('⚙️ Configuration')).map(([option = '', , fallback = '']) => ({
+  option: option.replaceAll('`', ''),
+  fallback,
+}))
+const documented = new Map(rows.map(({ option, fallback }) => [option, fallback]))
 
 const resolved = applyDefaults({ connection })
 
@@ -74,13 +74,26 @@ const leaves: Record<string, unknown> = {
   isGlobal: BymaxQueueModule.forRoot({ connection }).global,
 }
 
-describe('README Configuration table', () => {
-  // A row for an option that does not exist, or a missing row for one that does, is the drift
-  // this guards: the table is the only place a consumer learns the full option list.
-  it('documents exactly the options the module accepts', () => {
-    const expected = [...Object.keys(leaves), 'connection', 'defaultJobOptions', 'telemetry']
+/** Options whose value is itself an object that the table documents as a single row. */
+const SINGLE_ROW_OPTIONS = new Set(['defaultJobOptions', 'queueOptions', 'telemetry'])
 
-    expect([...documented.keys()].sort()).toEqual(expected.sort())
+/** Every option the module accepts, read off the resolved shape instead of listed by hand. */
+const accepted = [
+  ...Object.entries(applyDefaults({ connection, telemetry: {} as Telemetry })).flatMap(
+    ([key, value]) =>
+      typeof value === 'object' && !SINGLE_ROW_OPTIONS.has(key)
+        ? Object.keys(value).map((inner) => `${key}.${inner}`)
+        : [key],
+  ),
+  'connection',
+  'isGlobal',
+]
+
+describe('README Configuration table', () => {
+  // A row for an option that does not exist, a missing row for one that does, or a row listed twice
+  // is the drift this guards: the table is the only place a consumer learns the full option list.
+  it('documents exactly the options the module accepts, once each', () => {
+    expect(rows.map(({ option }) => option).sort()).toEqual([...accepted].sort())
   })
 
   // The two options with no default must say so, rather than quote a value that is not applied.

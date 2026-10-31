@@ -9,6 +9,14 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [1.2.5] — 2026-10-31
+
+No action required: behaviour, the public API, the types and the peer ranges are unchanged.
+`dist/` is byte-identical to the published 1.2.4 (`diff -r` of a fresh build against the unpacked
+1.2.4 tarball prints nothing); only `README.md`, this file and the version in `package.json` change in the package.
+
 ### Documentation
 
 - **Several statements in `README.md` described behaviour the code does not have.** The prose and the
@@ -637,7 +645,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.4...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.5...HEAD
+[1.2.5]: https://github.com/bymaxone/nest-queue/compare/v1.2.4...v1.2.5
 [1.2.4]: https://github.com/bymaxone/nest-queue/compare/v1.2.3...v1.2.4
 [1.2.3]: https://github.com/bymaxone/nest-queue/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/bymaxone/nest-queue/compare/v1.2.1...v1.2.2
