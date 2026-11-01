@@ -529,3 +529,124 @@ describe('ProcessorDiscoveryService — PROCESSOR_METADATA_KEY written on constr
     expect(meta?.queueName).toBe('verify')
   })
 })
+
+describe('ProcessorDiscoveryService — a failing @OnWorkerEvent / @OnQueueEvent handler', () => {
+  /** A promise that rejects with `reason`, whatever it is, after a tick. */
+  async function rejectLater(reason: unknown): Promise<never> {
+    await Promise.resolve()
+    throw reason
+  }
+
+  /** Bind one processor class and return the listeners registered on the worker and QueueEvents. */
+  function bind(processor: object): {
+    worker: MockWorker
+    qe: MockQueueEvents
+  } {
+    const worker: MockWorker = { on: jest.fn() }
+    const qe: MockQueueEvents = { on: jest.fn() }
+    new ProcessorDiscoveryService(
+      mockDiscovery([makeWrapper(processor)]),
+      mockRegistry(worker),
+      mockEventsRegistry(qe),
+    ).onModuleInit()
+    return { worker, qe }
+  }
+
+  /** Let the promise microtasks of a rejected listener settle. */
+  async function settle(): Promise<void> {
+    await new Promise<void>((resolve) => setImmediate(resolve))
+  }
+
+  it.each([
+    ['rejects asynchronously', async () => Promise.reject(new Error('boom')), 'boom'],
+    [
+      'throws synchronously',
+      () => {
+        throw new Error('boom')
+      },
+      'boom',
+    ],
+    [
+      'rejects with a null-prototype value',
+      () => rejectLater(Object.create(null)),
+      'unknown error',
+    ],
+  ])(
+    'logs a handler that %s instead of raising an unhandled rejection',
+    async (_label, body, text) => {
+      // The listener is bound straight onto an EventEmitter, which neither awaits it nor catches a
+      // throw: a rejected promise is an unhandledRejection (the Node default ends the process) and a
+      // synchronous throw escapes `emit` into BullMQ's own code. A failing handler is the consumer's
+      // bug, never a reason to take the process down, and it must still be reported.
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+      const unhandled = jest.fn()
+      process.on('unhandledRejection', unhandled)
+
+      @Processor('email', { concurrency: 1 })
+      class FailingProcessor {
+        @Process()
+        handle(_job: Job): Promise<void> {
+          return Promise.resolve()
+        }
+
+        @OnWorkerEvent('completed')
+        onCompleted(): unknown {
+          return body()
+        }
+
+        @OnQueueEvent('completed')
+        onQueueCompleted(): unknown {
+          return body()
+        }
+      }
+
+      const { worker, qe } = bind(new FailingProcessor())
+      const workerListener = worker.on.mock.calls.find(([ev]) => ev === 'completed')?.[1]
+      const queueListener = qe.on.mock.calls.find(([ev]) => ev === 'completed')?.[1]
+
+      expect(() => workerListener?.({ id: '1' })).not.toThrow()
+      expect(() => queueListener?.({ jobId: '1' })).not.toThrow()
+      await settle()
+      process.off('unhandledRejection', unhandled)
+
+      expect(unhandled).not.toHaveBeenCalled()
+      expect(errorSpy).toHaveBeenCalledTimes(2)
+      for (const [line] of errorSpy.mock.calls) {
+        expect(String(line)).toContain('queue.event_handler_failed')
+        expect(String(line)).toContain(text)
+      }
+      expect(String(errorSpy.mock.calls[0]?.[0])).toBe(
+        `@OnWorkerEvent("completed") handler FailingProcessor.onCompleted failed (queue.event_handler_failed): ${text}`,
+      )
+      expect(String(errorSpy.mock.calls[1]?.[0])).toBe(
+        `@OnQueueEvent("completed") handler FailingProcessor.onQueueCompleted failed (queue.event_handler_failed): ${text}`,
+      )
+      errorSpy.mockRestore()
+    },
+  )
+
+  it('still calls a healthy handler with its arguments and its own `this`', () => {
+    // Wrapping the listener must not change what a working handler receives.
+    const received: unknown[][] = []
+
+    @Processor('email', { concurrency: 1 })
+    class HealthyProcessor {
+      readonly tag = 'self'
+
+      @Process()
+      handle(_job: Job): Promise<void> {
+        return Promise.resolve()
+      }
+
+      @OnWorkerEvent('completed')
+      onCompleted(...args: unknown[]): void {
+        received.push([this.tag, ...args])
+      }
+    }
+
+    const { worker } = bind(new HealthyProcessor())
+    worker.on.mock.calls.find(([ev]) => ev === 'completed')?.[1]?.('a', 'b')
+
+    expect(received).toEqual([['self', 'a', 'b']])
+  })
+})

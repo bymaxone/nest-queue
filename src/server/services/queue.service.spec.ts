@@ -33,6 +33,8 @@ const queueInstances: MockQueue[] = []
 const queueConstructorArgs: unknown[][] = []
 
 jest.mock('bullmq', () => ({
+  defaultRepeatStrategy: jest.requireActual<{ defaultRepeatStrategy: unknown }>('bullmq')
+    .defaultRepeatStrategy,
   Queue: jest.fn().mockImplementation((...args: unknown[]) => {
     queueConstructorArgs.push(args)
     const instance = Object.assign(new EventEmitter(), {
@@ -661,17 +663,17 @@ describe('QueueService — bulk and scheduler hardening', () => {
     }
   })
 
-  it('classifies a non-object rejection as non-operational instead of crashing on it', async () => {
-    // The operational check reads `.code` off whatever was thrown. BullMQ is not
-    // obliged to throw an Error — a rejected promise can carry null — and reading
-    // a property off null inside the error handler would replace the caller's
-    // failure with a TypeError from our own code.
+  it('passes a non-object rejection through untouched instead of crashing on it', async () => {
+    // BullMQ is not obliged to throw an Error — a rejected promise can carry null — and our own
+    // code must not replace the caller's failure with a TypeError by reading a property off it.
+    // The write's failures now propagate as they are (only a cron parse error is relabelled),
+    // so the rejection value itself is what the caller sees.
     const { service } = makeService()
     service.getOrCreateQueue('cleanup')
     queueInstances[0]?.upsertJobScheduler.mockRejectedValue(null)
 
     await expect(
       service.upsertJobScheduler('cleanup', 'nightly', { pattern: '0 3 * * *' }),
-    ).rejects.toBeInstanceOf(QueueException)
+    ).rejects.toBeNull()
   })
 })

@@ -27,6 +27,10 @@ import type {
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { DEFAULT_WORKER_CONCURRENCY } from '../constants/default-options'
+import { describeError } from '../utils/describe-error'
+
+/** Stable code in the log line of a failing `@OnWorkerEvent` / `@OnQueueEvent` handler. */
+const EVENT_HANDLER_FAILED = 'queue.event_handler_failed'
 
 /**
  * Minimal event-emitter interface used to attach listeners to BullMQ `Worker`
@@ -175,7 +179,14 @@ export class ProcessorDiscoveryService implements OnModuleInit {
     for (const { eventName, methodKey } of workerListeners) {
       const method = instance[methodKey]
       if (typeof method === 'function') {
-        workerEmitter.on(eventName, (method as (...args: unknown[]) => unknown).bind(instance))
+        workerEmitter.on(
+          eventName,
+          this.guardListener(instance, method as (...args: unknown[]) => unknown, {
+            decorator: '@OnWorkerEvent',
+            eventName,
+            methodKey,
+          }),
+        )
       }
     }
 
@@ -187,8 +198,50 @@ export class ProcessorDiscoveryService implements OnModuleInit {
       for (const { eventName, methodKey } of queueListeners) {
         const method = instance[methodKey]
         if (typeof method === 'function') {
-          qeEmitter.on(eventName, (method as (...args: unknown[]) => unknown).bind(instance))
+          qeEmitter.on(
+            eventName,
+            this.guardListener(instance, method as (...args: unknown[]) => unknown, {
+              decorator: '@OnQueueEvent',
+              eventName,
+              methodKey,
+            }),
+          )
         }
+      }
+    }
+  }
+
+  /**
+   * Bind an event listener so a failing handler is reported instead of escaping.
+   *
+   * An `EventEmitter` neither awaits a listener nor catches its throw: a rejected promise becomes
+   * an `unhandledRejection`, which ends the process by default, and a synchronous throw escapes
+   * `emit` into BullMQ's own code. A failing handler is the consumer's defect, never a reason to
+   * stop the application, but it must still be visible, so the failure is logged with the handler
+   * and a stable code and the process carries on.
+   *
+   * @param instance - The provider the handler belongs to (its `this`).
+   * @param method - The handler method.
+   * @param origin - Which decorator, event and method name the listener comes from.
+   * @returns The listener to register on the emitter.
+   */
+  private guardListener(
+    instance: object,
+    method: (...args: unknown[]) => unknown,
+    origin: { decorator: string; eventName: string; methodKey: string | symbol },
+  ): (...args: unknown[]) => void {
+    const report = (cause: unknown): void => {
+      this.logger.error(
+        `${origin.decorator}("${origin.eventName}") handler ` +
+          `${instance.constructor.name}.${String(origin.methodKey)} failed ` +
+          `(${EVENT_HANDLER_FAILED}): ${describeError(cause)}`,
+      )
+    }
+    return (...args: unknown[]): void => {
+      try {
+        void Promise.resolve(method.apply(instance, args)).catch(report)
+      } catch (cause) {
+        report(cause)
       }
     }
   }

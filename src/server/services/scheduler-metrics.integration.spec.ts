@@ -23,6 +23,8 @@ interface MockQueue {
 const queueInstances: MockQueue[] = []
 
 jest.mock('bullmq', () => ({
+  defaultRepeatStrategy: jest.requireActual<{ defaultRepeatStrategy: unknown }>('bullmq')
+    .defaultRepeatStrategy,
   Queue: jest.fn().mockImplementation(() => {
     const instance = Object.assign(new EventEmitter(), {
       upsertJobScheduler: jest.fn().mockResolvedValue({ id: 'repeat:nightly:1' } as Job),

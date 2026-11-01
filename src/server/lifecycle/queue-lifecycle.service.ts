@@ -16,12 +16,16 @@ import { Inject, Injectable, Logger, type OnModuleDestroy } from '@nestjs/common
 import type { Worker } from 'bullmq'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
+import { describeError } from '../utils/describe-error'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { ConnectionResolver } from '../services/connection-resolver.service'
 import { FlowService } from '../services/flow.service'
 import { QueueService } from '../services/queue.service'
 import { WorkerRegistry } from '../services/worker-registry.service'
 import { QueueEventsRegistry } from '../services/queue-events-registry.service'
+
+/** The rejection of a graceful worker close that ran out of the drain budget. */
+class DrainTimeoutError extends Error {}
 
 /**
  * Ordered graceful-shutdown service. Implementing the protocol in one place
@@ -79,12 +83,15 @@ export class QueueLifecycle implements OnModuleDestroy {
     for (const [name, worker] of this.workers.getAll()) {
       try {
         await this.closeWorkerWithTimeout(worker, drainTimeoutMs)
-      } catch {
+      } catch (cause) {
         forced++
         this.logger.warn(
-          `Worker "${name}" exceeded the ${String(drainTimeoutMs)}ms drain budget — ` +
-            `forcing close (${QUEUE_ERROR_CODES.SHUTDOWN_TIMEOUT_EXCEEDED}); ` +
-            'the in-flight job becomes stalled and is retried',
+          cause instanceof DrainTimeoutError
+            ? `Worker "${name}" exceeded the ${String(drainTimeoutMs)}ms drain budget — ` +
+                `forcing close (${QUEUE_ERROR_CODES.SHUTDOWN_TIMEOUT_EXCEEDED}); ` +
+                'the in-flight job becomes stalled and is retried'
+            : `Worker "${name}" failed to close gracefully (${describeError(cause)}) — ` +
+                'forcing close; the in-flight job becomes stalled and is retried',
         )
         // Best-effort force-close, never awaited: a genuinely stuck worker must
         // not block the remaining teardown steps. A rejection is swallowed.
@@ -113,8 +120,7 @@ export class QueueLifecycle implements OnModuleDestroy {
         closed,
         new Promise<never>((_resolve, reject) => {
           timer = setTimeout(() => {
-            // Stryker disable next-line StringLiteral: equivalent — this rejection only loses the race; the caller catches it and emits the warning, whose text IS asserted, so the message never reaches an observable surface
-            reject(new Error('drain timeout'))
+            reject(new DrainTimeoutError())
           }, timeoutMs)
         }),
       ])
@@ -156,8 +162,13 @@ export class QueueLifecycle implements OnModuleDestroy {
    */
   private async drainQueuesIfRequested(): Promise<void> {
     if (!this.resolved.shutdown.drainOnShutdown) return
-    for (const [, queue] of this.queues.getCachedQueues()) {
-      await queue.drain().catch(() => undefined)
+    for (const [name, queue] of this.queues.getCachedQueues()) {
+      await queue.drain().catch((cause: unknown) => {
+        this.logger.warn(
+          `Queue "${name}" could not be drained on shutdown (drainOnShutdown): ` +
+            `${describeError(cause)}; its waiting jobs remain`,
+        )
+      })
     }
   }
 
