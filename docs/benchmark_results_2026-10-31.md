@@ -4,13 +4,13 @@ A local, hand-run measurement of `@bymax-one/nest-queue` 1.2.5 (built from `main
 
 ## Setup
 
-| Item      | Value                                                                                                                                                                                                                                                                                                                                                                                                   |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Machine   | Apple M4 Max, 14 cores, 36 GB, macOS 27.2                                                                                                                                                                                                                                                                                                                                                               |
-| Redis     | 8.10.3, standalone, `redis:8-alpine` (`redis@sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537`), in Docker Desktop 29.9.2 (Linux VM, aarch64), reached through a published loopback port                                                                                                                                                                                         |
-| Node      | v24.21.0                                                                                                                                                                                                                                                                                                                                                                                                |
-| Libraries | BullMQ 6.3.4, ioredis 6.0.0                                                                                                                                                                                                                                                                                                                                                                             |
-| Load      | `uptime` before run 1: `load averages: 7.37 14.22 23.09`; after run 1: `6.76 13.53 22.58`; before run 2: `7.10 12.82 21.95`; after run 2: `6.79 12.30 21.50`. The machine had other sessions logged in (15 users) but no heavy run active; the one-minute load stayed near 7 on 14 cores and fell slightly. Only the start and end of each run were sampled, so a spike in between would not show here. |
+| Item      | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Machine   | Apple M4 Max, 14 cores, 36 GB, macOS 27.2                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Redis     | 8.10.3, standalone, `redis:8-alpine` (`redis@sha256:21090af93f8324db2f0f0f4f38a7c60369d47d917e000c3423d89d2ae2883537`), in Docker Desktop 29.9.2 (Linux VM, aarch64), reached through a published loopback port                                                                                                                                                                                                                                                                                              |
+| Node      | v24.21.0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Libraries | BullMQ 6.3.4, ioredis 6.0.0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Load      | `uptime` before run 1: `load averages: 7.37 14.22 23.09`; after run 1: `6.76 13.53 22.58`; before run 2: `7.10 12.82 21.95`; after run 2: `6.79 12.30 21.50`; before run 3: `8.34 12.05 17.23`; after run 3: `9.47 11.91 17.00`. The machine had other sessions logged in (15 users) and no other heavy run active (run 3 was granted a quiet window); the one-minute load stayed between 7 and 9.5 on 14 cores. Only the start and end of each run were sampled, so a spike in between would not show here. |
 
 ## Commands
 
@@ -23,7 +23,7 @@ docker stop nq-bench          # --rm removes the container
 
 Defaults used: 2000 sequential enqueues, 10 000 concurrent enqueues with 100 in flight, 20 batches of `enqueueBulk(1000)`, 1000 latency jobs paced at 200 per second with a no-op handler, a 5000-job burst per concurrency. Every key lives under a unique prefix and is deleted at the end.
 
-## Results (run 2; run 1 agreed within a few percent)
+## Results (throughput and connections from run 2, latency and burst from run 3; runs 1 and 2 agree on throughput and connections within a few percent)
 
 ### Enqueue throughput
 
@@ -33,17 +33,17 @@ Defaults used: 2000 sequential enqueues, 10 000 concurrent enqueues with 100 in 
 | single, 100 in flight | 10 000 |        160 | 62 680 | the same per job                                                                                               |
 | `enqueueBulk(1000)`   | 20 000 |        388 | 51 533 | the same per job, pipelined 1000 to a batch                                                                    |
 
-Run 1 gave 5274, 61 322 and 50 684 jobs per second for the same three rows.
+Run 1 gave 5274, 61 322 and 50 684 jobs per second for the same three rows; run 3 gave 5351, 61 822 and 50 817.
 
-### End-to-end latency (enqueue to handler finished)
+### End-to-end latency (enqueue to job completed)
 
-1000 jobs paced at 200 per second, no-op handler, so this is the queueing and delivery overhead and nothing else.
+1000 jobs paced at 200 per second, no-op handler, sampled when the worker's `completed` event fires, so this is the queueing, delivery and completion overhead and nothing else. An earlier measurement sampled at the start of the handler (p50 1.0 to 1.3 ms) and is superseded by this one.
 
 | Concurrency | p50 ms | p95 ms | p99 ms | Burst drain, jobs/s (5000 jobs through `enqueueBulk`) |
 | ----------: | -----: | -----: | -----: | ----------------------------------------------------: |
-|           1 |   1.01 |   2.02 |   3.20 |                                                  4516 |
-|          10 |   1.31 |   2.65 |   3.69 |                                                14 476 |
-|          50 |   1.28 |   2.81 |   4.40 |                                                19 108 |
+|           1 |   1.39 |   2.82 |   3.86 |                                                  4401 |
+|          10 |   1.83 |   3.34 |   4.29 |                                                14 615 |
+|          50 |   1.79 |   3.28 |   4.41 |                                                18 814 |
 
 ### Redis connections held (`INFO clients` delta, the script's own connection excluded)
 
@@ -66,7 +66,7 @@ Run 1 gave 5274, 61 322 and 50 684 jobs per second for the same three rows.
 - **One round trip per enqueue.** A single `enqueue` is one `evalsha`; the other commands in the table are the steps of that Lua script and run on the server. There is no per-job chatter to batch. The sequential figure (about 5400 per second) is the round-trip time of a loopback Docker port, not Redis; with 100 in flight the same call reaches about 62 000 per second, so callers that enqueue many jobs should not await them one by one.
 - **Producers are free.** A queue shares the module's connection: ten queues hold the same single connection, flows add none, and Mode A adds none of its own.
 - **Each worker holds two connections and each observed queue's `QueueEvents` holds two.** `CLIENT LIST` shows, per worker, one named blocking connection (`bzpopmin`) and one unnamed duplicate; per observed queue, one named blocking connection (`xread`) and one unnamed duplicate. Five workers on five queues are ten connections; observing five queues is ten more. Everything is released on close (the last column is zero in every row).
-- **Latency is flat in the low milliseconds.** p50 is about 1.0 to 1.3 ms and p99 is 3.2 to 4.4 ms at 200 jobs per second for all three concurrencies; concurrency 1 is slightly lower at p50, which is expected for an unloaded single slot. Concurrency pays off under load: draining a burst goes from about 4500 to 14 500 to 19 100 jobs per second at 1, 10 and 50.
+- **Latency is flat in the low milliseconds.** p50 is about 1.4 to 1.8 ms and p99 is 3.9 to 4.4 ms at 200 jobs per second for all three concurrencies; concurrency 1 is slightly lower at p50, which is expected for an unloaded single slot. Concurrency pays off under load: draining a burst goes from about 4400 to 14 600 to 18 800 jobs per second at 1, 10 and 50.
 
 ## Findings for the maintainers
 
