@@ -3,6 +3,7 @@
  * @layer server/utils
  */
 
+import { runInNewContext } from 'node:vm'
 import { describeError } from './describe-error'
 
 describe('describeError', () => {
@@ -14,6 +15,14 @@ describe('describeError', () => {
   it('returns the message of an error-like object that is not an Error', () => {
     // A cross-realm or hand-built error has a string message but fails instanceof Error.
     expect(describeError({ message: 'from another realm' })).toBe('from another realm')
+  })
+
+  it('returns the message of an Error created in another realm', () => {
+    // An Error from a vm context, a worker or Jest's sandbox fails instanceof Error here, so the
+    // message has to be read off the value rather than gated on the constructor.
+    const foreign: unknown = runInNewContext('new Error("from another context")')
+    expect(foreign instanceof Error).toBe(false)
+    expect(describeError(foreign)).toBe('from another context')
   })
 
   it('returns an empty message as is', () => {
