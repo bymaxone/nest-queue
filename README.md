@@ -215,8 +215,8 @@ export class EmailProcessor {
 }
 ```
 
-Register the service and the processor in a feature module that `AppModule` imports, as `EmailModule`
-above. `isGlobal: true` above makes `QueueService` injectable there without importing `BymaxQueueModule` again:
+Register the service and the processor in a feature module that `AppModule` imports, like the `EmailModule`
+imported above. `isGlobal: true` above makes `QueueService` injectable there without importing `BymaxQueueModule` again:
 
 ```typescript
 import { Module } from '@nestjs/common'
