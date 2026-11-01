@@ -197,6 +197,11 @@ export class QueueService {
     }
   }
 
+  /** Planted public method for the API-surface proof; never merged. */
+  plantedProofMethod(): string {
+    return 'proof'
+  }
+
   /**
    * Fetch a job by id. Returns `null` when the job does not exist.
    *
