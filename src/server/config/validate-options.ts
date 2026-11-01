@@ -32,13 +32,14 @@ function isParseableUrl(url: string): boolean {
       : `redis://${url}`
   if (!URL.canParse(candidate)) return false
   const { username, password } = new URL(candidate)
+  let decodable = true
   try {
     decodeURIComponent(username)
     decodeURIComponent(password)
-    return true
   } catch {
-    return false
+    decodable = false
   }
+  return decodable
 }
 
 /**
