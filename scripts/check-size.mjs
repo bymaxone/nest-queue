@@ -4,12 +4,14 @@ import { readFileSync } from 'node:fs'
 import { brotliCompressSync } from 'node:zlib'
 
 /**
- * Brotli-compressed bundle budgets in bytes. The server entry carries the full
- * NestJS module surface; the shared entry is types and constants only.
+ * Brotli-compressed bundle budgets in bytes, measured on the bundles after
+ * `scripts/strip-bundle-comments.mjs` (server 8,274 B, shared 396 B) with about
+ * 11% headroom. The server entry carries the full NestJS module surface; the
+ * shared entry is types and constants only.
  */
 const BUDGETS = {
-  'dist/server/index.mjs': 18_432,
-  'dist/shared/index.mjs': 2_500,
+  'dist/server/index.mjs': 9_200,
+  'dist/shared/index.mjs': 440,
 }
 
 let failed = false
