@@ -6,7 +6,7 @@
  * Measures, against the built package in `dist/`:
  *
  * - enqueue throughput: sequential `enqueue`, concurrent `enqueue` and `enqueueBulk` of 1000;
- * - end-to-end latency (enqueue to handler finished) at worker concurrency 1, 10 and 50, with
+ * - end-to-end latency (enqueue to job completed) at worker concurrency 1, 10 and 50, with
  *   the enqueues paced so the queue never backs up, and the drain throughput of a burst;
  * - the Redis commands one job costs, from the `INFO commandstats` delta;
  * - the Redis connections each feature opens, from `INFO clients`.
@@ -116,6 +116,15 @@ const rate = (count, ms) => Math.round((count / ms) * 1000)
 const rows = []
 const row = (...cells) => rows.push(`| ${cells.join(' | ')} |`)
 
+/** Wait for a condition, failing after two minutes so a lost job cannot hang the run. */
+async function until(condition, what) {
+  const deadline = performance.now() + 120_000
+  while (!condition()) {
+    if (performance.now() > deadline) throw new Error(`Timed out waiting for ${what}`)
+    await sleep(10)
+  }
+}
+
 /** Run `count` operations with at most `limit` in flight; resolves with the elapsed ms. */
 async function pool(count, limit, task) {
   let next = 0
@@ -162,14 +171,15 @@ async function latency(concurrency) {
   const { app, queue, workers } = await boot({ connection: { url: URL_ } })
   const name = `lat${String(concurrency)}`
   const samples = []
-  let finished = 0
-  workers.register({
+  const worker = workers.register({
     queueName: name,
-    handler: async (job) => {
-      samples.push(performance.now() - job.data.t0)
-      finished += 1
-    },
+    handler: async () => undefined,
     options: { concurrency },
+  })
+  // `completed` fires once the job is marked finished in Redis, so the sample spans the whole
+  // path: enqueue, delivery, the handler and the completion write.
+  worker.on('completed', (job) => {
+    samples.push(performance.now() - job.data.t0)
   })
   await sleep(500)
   const interval = 1000 / LATENCY_RATE
@@ -180,7 +190,7 @@ async function latency(concurrency) {
     if (wait > 1) await sleep(wait)
     await queue.enqueue(name, 'job', { t0: performance.now() })
   }
-  while (finished < LATENCY_JOBS) await sleep(20)
+  await until(() => samples.length >= LATENCY_JOBS, 'latency jobs to complete')
   samples.sort((a, b) => a - b)
   const latencyRow = [
     String(concurrency),
@@ -190,12 +200,13 @@ async function latency(concurrency) {
   ]
   const burstName = `burst${String(concurrency)}`
   let drained = 0
-  workers.register({
+  const burstWorker = workers.register({
     queueName: burstName,
-    handler: async () => {
-      drained += 1
-    },
+    handler: async () => undefined,
     options: { concurrency },
+  })
+  burstWorker.on('completed', () => {
+    drained += 1
   })
   await sleep(300)
   const burstJobs = Array.from({ length: BURST }, (_, i) => ({ name: 'job', data: { i } }))
@@ -203,7 +214,7 @@ async function latency(concurrency) {
   for (let at = 0; at < BURST; at += BULK_SIZE) {
     await queue.enqueueBulk(burstName, burstJobs.slice(at, at + BULK_SIZE))
   }
-  while (drained < BURST) await sleep(5)
+  await until(() => drained >= BURST, 'burst jobs to complete')
   const burstMs = performance.now() - burstStart
   await app.close()
   return [...latencyRow, String(rate(BURST, burstMs))]
@@ -211,7 +222,7 @@ async function latency(concurrency) {
 
 async function latencyTable() {
   console.log(
-    `\n## End-to-end latency (enqueue to handler finished), ${LATENCY_JOBS} jobs paced at ${LATENCY_RATE}/s, no-op handler\n`,
+    `\n## End-to-end latency (enqueue to job completed), ${LATENCY_JOBS} jobs paced at ${LATENCY_RATE}/s, no-op handler\n`,
   )
   console.log(
     '| Concurrency | p50 ms | p95 ms | p99 ms | Burst drain jobs/s (enqueueBulk, ' +
