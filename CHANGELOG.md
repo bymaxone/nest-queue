@@ -9,20 +9,29 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [1.2.6] — 2026-10-31
+
+No action required: behaviour, the public API, the types and the peer ranges are unchanged.
+Measured with `diff -r` of a fresh build against the unpacked 1.2.5 tarball, `dist/` is identical;
+the package otherwise changes in `README.md`, this file and the version in `package.json`.
+
 ### Documentation
 
 - **The README Quick Start now shows where `EmailService` and the processor are registered.** The
   `AppModule` snippet imports an `EmailModule` that lists both as providers, so a reader who copies
-  the snippets in order ends with a module graph that resolves, instead of a service and a processor no module
-  provides.
+  the snippets in order ends with a module graph that resolves, instead of a service and a processor
+  no module provides.
 
 ### Tests
 
-- **The README Quick Start now runs.** A spec boots a Nest application context from the
-  module options, the `QueueService` enqueue and the `@Processor` / `@Process` handler copied from the
-  README (handler body aside), with BullMQ and ioredis replaced by in-memory doubles, and asserts the job the
-  service enqueues is the job the decorated handler receives. The snippet gate only compiles the
-  README; this executes it, so a wrong argument shape or an unresolved dependency fails a test.
+- **The README Quick Start now runs.** A spec boots a Nest application context from the module
+  options, the `QueueService` enqueue and the `@Processor` / `@Process` handler copied from the
+  README (handler body aside), with BullMQ and ioredis replaced by in-memory doubles, and asserts
+  the job the service enqueues is the job the decorated handler receives. The snippet gate only
+  compiles the README; this executes it, so a wrong argument shape or an unresolved dependency fails
+  a test.
 
 ---
 
@@ -693,7 +702,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.5...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.6...HEAD
+[1.2.6]: https://github.com/bymaxone/nest-queue/compare/v1.2.5...v1.2.6
 [1.2.5]: https://github.com/bymaxone/nest-queue/compare/v1.2.4...v1.2.5
 [1.2.4]: https://github.com/bymaxone/nest-queue/compare/v1.2.3...v1.2.4
 [1.2.3]: https://github.com/bymaxone/nest-queue/compare/v1.2.2...v1.2.3
