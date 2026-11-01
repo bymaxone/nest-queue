@@ -11,6 +11,25 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.8] — 2026-11-01
+
+No action required: behaviour, the public API, the types and the peer ranges are unchanged.
+Measured with `diff -r` of a fresh build against the unpacked 1.2.7 tarball, `dist/` is identical;
+the package otherwise changes in `README.md`, this file and the version in `package.json`.
+
+### Documentation
+
+- **The README now states how many Redis connections the library holds.** A new "Redis connections"
+  section gives the budget measured against Redis 8: 1 for the module in Mode B and none of its own
+  in Mode A, 2 per worker, 2 per queue observed with `@OnQueueEvent`, and none for producers and
+  flows, all released on close. It carries a worked example (20 workers and 5 observed queues hold
+  51 connections in Mode B) and a note on connection quotas of managed Redis plans.
+- **The Mode B description of the connections was wrong.** It said the library opens one connection
+  per worker and per observed queue; each of those holds two, a blocking connection and a command
+  connection.
+
+---
+
 ## [1.2.7] — 2026-10-31
 
 Action required if your `connection.url` can be empty or malformed: an invalid or empty
@@ -728,7 +747,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.7...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.8...HEAD
+[1.2.8]: https://github.com/bymaxone/nest-queue/compare/v1.2.7...v1.2.8
 [1.2.7]: https://github.com/bymaxone/nest-queue/compare/v1.2.6...v1.2.7
 [1.2.6]: https://github.com/bymaxone/nest-queue/compare/v1.2.5...v1.2.6
 [1.2.5]: https://github.com/bymaxone/nest-queue/compare/v1.2.4...v1.2.5
