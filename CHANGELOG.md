@@ -11,6 +11,14 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.10] — 2026-11-01
+
+### Fixed
+
+- A throwaway proof entry that plants a public method and is never merged.
+
+---
+
 ## [1.2.9] — 2026-11-01
 
 No action required: behaviour for an `Error` with a string `message` is unchanged, and the public API, the types
