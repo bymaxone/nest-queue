@@ -9,6 +9,13 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Documentation
+
+- **The README Quick Start now shows where `EmailService` and the processor are registered.** The
+  `AppModule` snippet imports an `EmailModule` that lists both as providers, so a reader who copies
+  the snippets in order ends with an app that boots, instead of a service and a processor no module
+  provides.
+
 ### Tests
 
 - **The README Quick Start now runs.** A spec boots a Nest application context from the

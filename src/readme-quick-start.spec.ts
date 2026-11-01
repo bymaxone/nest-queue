@@ -66,17 +66,6 @@ jest.mock('bullmq', () => ({
     }),
 }))
 
-// --- README: "Wire the module in your root AppModule" ---
-@Module({
-  imports: [
-    BymaxQueueModule.forRoot({
-      connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
-      isGlobal: true,
-    }),
-  ],
-})
-class AppModule {}
-
 // --- README: "Enqueue a job from any service" ---
 @Injectable()
 class EmailService {
@@ -103,14 +92,25 @@ class EmailProcessor {
   }
 }
 
-// --- README: "Register the processor in your module alongside BymaxQueueModule" ---
+// --- README: "Register the service and the processor in a feature module" ---
 @Module({
-  providers: [EmailProcessor, EmailService],
+  providers: [EmailService, EmailProcessor],
 })
 class EmailModule {}
 
-@Module({ imports: [AppModule, EmailModule] })
-class RootModule {}
+// --- README: "Wire the module in your root AppModule" ---
+// Declared after `EmailModule` here because a class cannot be named in a decorator before its
+// declaration; the README shows `AppModule` first and imports `EmailModule` from another file.
+@Module({
+  imports: [
+    BymaxQueueModule.forRoot({
+      connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
+      isGlobal: true,
+    }),
+    EmailModule,
+  ],
+})
+class AppModule {}
 
 describe('README Quick Start', () => {
   let app: INestApplicationContext
@@ -119,7 +119,7 @@ describe('README Quick Start', () => {
     added.length = 0
     processors.clear()
     received.length = 0
-    app = await NestFactory.createApplicationContext(RootModule, { logger: false })
+    app = await NestFactory.createApplicationContext(AppModule, { logger: false })
     await app.init()
   })
 
