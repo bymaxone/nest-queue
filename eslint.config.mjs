@@ -101,6 +101,15 @@ export default tseslint.config(
     },
   },
   {
+    // The README Quick Start is run as written, and its handler is `async` with no `await`
+    // and returns `Promise<void>`, which is what a reader copies.
+    files: ['src/readme-quick-start.spec.ts'],
+    rules: {
+      '@typescript-eslint/no-invalid-void-type': 'off',
+      '@typescript-eslint/require-await': 'off',
+    },
+  },
+  {
     files: ['test/types/**/*.ts'],
     rules: {
       // The invariant-equality helper compares two generic signatures that each
