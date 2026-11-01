@@ -17,6 +17,7 @@ import type { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
 import { duplicateConnection } from '../utils/duplicate-connection'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
+import { describeError } from '../utils/describe-error'
 import type { WorkerOptions } from '../interfaces/worker-options.interface'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
@@ -139,7 +140,7 @@ export class WorkerRegistry {
         HttpStatus.INTERNAL_SERVER_ERROR,
         {
           queueName,
-          cause: cause instanceof Error ? cause.message : String(cause),
+          cause: describeError(cause),
         },
       )
     }
@@ -187,7 +188,7 @@ export class WorkerRegistry {
         HttpStatus.INTERNAL_SERVER_ERROR,
         {
           queueName,
-          cause: cause instanceof Error ? cause.message : String(cause),
+          cause: describeError(cause),
         },
       )
     }

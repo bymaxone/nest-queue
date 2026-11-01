@@ -16,6 +16,33 @@ function invalid(reason: string): never {
 }
 
 /**
+ * Whether ioredis can parse `url`. It reads a `redis://` or `rediss://` URL as it is and prefixes
+ * every other string with a scheme (`redis:` for `//host`, `redis://` otherwise) before handing it
+ * to the WHATWG parser, which rejects what it cannot read and makes the client constructor throw
+ * `Invalid URL`. It then percent-decodes the user name and the password, which throws on a
+ * malformed escape such as a literal `%` the parser itself accepts. A unix socket path never
+ * reaches the parser there, and with the prefix it always parses here, so it needs no case of its
+ * own.
+ */
+function isParseableUrl(url: string): boolean {
+  const candidate = /^rediss?:\/\//i.test(url)
+    ? url
+    : url.startsWith('//')
+      ? `redis:${url}`
+      : `redis://${url}`
+  if (!URL.canParse(candidate)) return false
+  const { username, password } = new URL(candidate)
+  let decodable = true
+  try {
+    decodeURIComponent(username)
+    decodeURIComponent(password)
+  } catch {
+    decodable = false
+  }
+  return decodable
+}
+
+/**
  * Validate user-provided options at module bootstrap. Fails fast with an
  * actionable reason and never silently corrects a value.
  *
@@ -37,6 +64,19 @@ export function validateOptions(opts: BymaxQueueModuleOptions): void {
   }
   if (hasClient && (hasUrl || hasOptions)) {
     invalid('connection.client is mutually exclusive with url/options')
+  }
+
+  // ioredis reads an unusable url (absent, empty, `null`, an object) as "no url" and connects to
+  // localhost:6379, and a number as a port, so the mistake would surface as a connection to the
+  // wrong server rather than as an error.
+  if (hasUrl) {
+    const url: unknown = cfg.url
+    if (typeof url !== 'string' || url.trim() === '') {
+      invalid('connection.url must be a non-empty string')
+    }
+    if (!isParseableUrl(url)) {
+      invalid('connection.url is not a valid Redis URL')
+    }
   }
 
   const drainTimeoutMs = opts.shutdown?.drainTimeoutMs

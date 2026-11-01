@@ -11,6 +11,32 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.7] — 2026-10-31
+
+Action required if your `connection.url` can be empty or malformed: an invalid or empty
+`connection.url` now fails the boot with `INVALID_OPTIONS`; before 1.2.7 it silently connected to
+`localhost:6379`. A valid `url` needs no change. The public API, the types (`index.d.ts` and
+`index.d.cts` are identical) and the peer ranges are unchanged. Measured with `diff -r` of a fresh
+build against the unpacked 1.2.6 tarball, only the two runtime bundles (`index.mjs`, `index.cjs`)
+differ.
+
+### Fixed
+
+- **`connection.url` is now validated.** `forRoot` refuses a `url` that is not a non-empty string
+  with `INVALID_OPTIONS` ("connection.url must be a non-empty string"). Before, `ioredis` read an
+  absent, empty, whitespace-only, `null` or object `url` as no url at all and connected to
+  `localhost:6379`, and a number as a port, so a missing `REDIS_URL` surfaced as a connection to the
+  wrong server instead of an error. A string `ioredis` cannot parse (`not a url`, `redis://h:abc`)
+  is refused the same way ("connection.url is not a valid Redis URL"), where it used to throw a raw
+  `Invalid URL` from the client constructor. Unix socket paths, `host:port` and `redis://` /
+  `rediss://` URLs, with or without `options`, are unaffected.
+- **A worker that fails to start no longer hides the failure behind a second error.** The
+  `WORKER_REGISTRATION_FAILED` details were built with `String(cause)`, which throws a `TypeError`
+  for a null-prototype value; the cause is now described by a helper that cannot throw, so the
+  registration failure reaches the caller as the typed exception.
+
+---
+
 ## [1.2.6] — 2026-10-31
 
 No action required: behaviour, the public API, the types and the peer ranges are unchanged.
@@ -702,7 +728,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.6...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.7...HEAD
+[1.2.7]: https://github.com/bymaxone/nest-queue/compare/v1.2.6...v1.2.7
 [1.2.6]: https://github.com/bymaxone/nest-queue/compare/v1.2.5...v1.2.6
 [1.2.5]: https://github.com/bymaxone/nest-queue/compare/v1.2.4...v1.2.5
 [1.2.4]: https://github.com/bymaxone/nest-queue/compare/v1.2.3...v1.2.4
