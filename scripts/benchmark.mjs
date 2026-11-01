@@ -247,11 +247,8 @@ async function connectionRow(label, scenario, options = {}) {
   row(label, String(open), String(left))
 }
 
-async function connections() {
-  const sharedClient = new Redis(URL_)
-  // Counted before the baseline is read, so its own connection is not billed to a scenario.
-  await sharedClient.ping()
-  console.log('\n## Redis connections held (INFO clients delta, admin excluded)\n')
+/** Scenarios where the caller owns the client (Mode A) and the module opens none of its own. */
+async function consumerOwnedConnections(sharedClient) {
   await connectionRow('module, Mode B (library-owned)', async () => undefined)
   await connectionRow('module, Mode A (your client, not counted)', async () => undefined, {
     connection: { client: sharedClient },
@@ -270,6 +267,10 @@ async function connections() {
     },
     { connection: { client: sharedClient } },
   )
+}
+
+/** Scenarios where the module owns its connection (Mode B). */
+async function libraryOwnedConnections() {
   await connectionRow('Mode B + 1 queue (one enqueue)', ({ queue }) => queue.enqueue('c1', 'j', {}))
   await connectionRow('Mode B + 10 queues', async ({ queue }) => {
     for (let i = 0; i < 10; i += 1) await queue.enqueue(`c${String(i)}`, 'j', {})
@@ -298,6 +299,15 @@ async function connections() {
       }),
     { flows: { enabled: true } },
   )
+}
+
+async function connections() {
+  const sharedClient = new Redis(URL_)
+  // Counted before the baseline is read, so its own connection is not billed to a scenario.
+  await sharedClient.ping()
+  console.log('\n## Redis connections held (INFO clients delta, admin excluded)\n')
+  await consumerOwnedConnections(sharedClient)
+  await libraryOwnedConnections()
   console.log('| Scenario | Connections while open | Left after close |')
   console.log('| --- | ---: | ---: |')
   console.log(rows.join('\n'))
