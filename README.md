@@ -313,8 +313,41 @@ BymaxQueueModule.forRoot({
 })
 ```
 
-The library opens one connection for queues, one per worker and one per queue that has an
-`@OnQueueEvent` listener. The worker and `QueueEvents` connections carry `maxRetriesPerRequest: null`.
+The library opens one connection for all queues and flows, and two for each worker and for each
+queue that has an `@OnQueueEvent` listener ([the budget is below](#-redis-connections)). The worker
+and `QueueEvents` connections carry `maxRetriesPerRequest: null`.
+
+---
+
+## 🔌 Redis connections
+
+How many connections the library holds is linear in what you register, so you can budget it before
+you deploy. Counts were read from `INFO clients` against Redis 8 with BullMQ 6 and `ioredis` 6, and
+every connection is released when the application context closes.
+
+| What you register                              | Connections held                                                               |
+| ---------------------------------------------- | ------------------------------------------------------------------------------ |
+| The module (Mode B, library-owned connection)  | 1, shared by every producer and every flow                                     |
+| The module (Mode A, your client)               | 0 of its own; your client is yours and is never counted                        |
+| A queue you enqueue to, with `QueueService`    | 0 more: queues share the module's connection                                   |
+| `FlowService` (flows enabled)                  | 0 more                                                                         |
+| Each worker (`@Processor` or `WorkerRegistry`) | 2: a blocking connection that waits for jobs, and a command connection         |
+| Each queue observed with `@OnQueueEvent`       | 2: a blocking connection that reads the event stream, and a command connection |
+
+Producers and flows add nothing, so the cost comes from consumers. The blocking connection of a
+worker cannot be shared: it is parked inside a blocking command until a job arrives.
+
+**Worked example.** One application instance in Mode B with 20 workers and 5 queues observed with
+`@OnQueueEvent` holds 1 + (2 × 20) + (2 × 5) = **51** connections; in Mode A the same instance holds
+50, plus whatever your own client uses. Each instance of the application opens its own set, so three
+instances hold 153.
+
+**Managed Redis.** Hosted Redis plans cap the number of concurrent connections, and a plan sized for
+a handful of clients is exhausted by one instance with a few dozen workers. Multiply the table by
+the number of instances you run (include rolling deploys, where old and new instances overlap) and
+compare it with the limit of your plan; self-managed Redis allows 10 000 by default (`maxclients`).
+In `CLIENT LIST`, the blocking connection of a worker has a name that starts with
+`<prefix>:<base64 of the queue name>`, which identifies it; the command connection is unnamed.
 
 ---
 
