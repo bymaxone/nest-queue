@@ -241,6 +241,36 @@ describe('QueueService — enqueueBulk', () => {
   })
 })
 
+describe('QueueService — enqueueBulk failure cause', () => {
+  it.each([
+    ['an Error', new Error('redis down'), 'redis down'],
+    ['null', null, 'null'],
+    ['undefined', undefined, 'undefined'],
+    ['a plain { message }', { message: 'plain failure' }, 'plain failure'],
+    ['a null-prototype object', Object.create(null) as object, 'unknown error'],
+  ])(
+    'reports a rejection with %s as a typed exception with a string cause',
+    async (_l, rejection, cause) => {
+      // Reading `.message` off a rejected value throws a TypeError for null and undefined, which
+      // would replace the typed failure with a second error.
+      const { service } = makeService()
+      service.getOrCreateQueue('email')
+      queueInstances[0]?.addBulk.mockRejectedValue(rejection)
+
+      const err: unknown = await service
+        .enqueueBulk('email', [{ name: 'a', data: {} }])
+        .catch((e: unknown) => e)
+
+      expect(err).toBeInstanceOf(QueueException)
+      const body = (err as QueueException).getResponse() as {
+        error: { code: string; details: { cause: unknown } }
+      }
+      expect(body.error.code).toBe('queue.bulk_enqueue_failed')
+      expect(body.error.details.cause).toBe(cause)
+    },
+  )
+})
+
 describe('QueueService — inspection', () => {
   it('returns the job when found', async () => {
     // getJob returns the BullMQ job as-is when present.

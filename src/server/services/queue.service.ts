@@ -17,6 +17,7 @@ import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { validateJobSchedulerOptions } from '../utils/validate-job-scheduler-options'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
+import { describeError } from '../utils/describe-error'
 
 /** Maximum number of jobs accepted by a single `enqueueBulk` call. */
 const MAX_BULK_SIZE = 1000
@@ -190,7 +191,7 @@ export class QueueService {
         QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED,
         HttpStatus.INTERNAL_SERVER_ERROR,
         {
-          cause: (err as Error).message,
+          cause: describeError(err),
         },
       )
     }
