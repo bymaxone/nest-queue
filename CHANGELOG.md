@@ -11,6 +11,59 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.10] — 2026-11-01
+
+Action required only if code relies on the status of a failed schedule: `upsertJobScheduler` no
+longer reports every failure as `INVALID_REPEAT_OPTIONS` (400), see the Apply note. Healthy use is
+unchanged. The public API, the types (the declaration files differ only in JSDoc comments) and the
+peer ranges are unchanged. Measured with `diff -r` of a fresh build against the unpacked 1.2.9 tarball,
+the runtime bundles (`index.mjs`, `index.cjs`) differ in code.
+
+### Fixed
+
+- **A failed schedule write was reported as an invalid cron.** `upsertJobScheduler` turned every
+  error without a string `code` into `INVALID_REPEAT_OPTIONS` (400, "pattern must be a valid cron
+  expression"). A Redis reply error carries no `code`, so a replica refusing the write (`READONLY`),
+  an out-of-memory server (`OOM`) or a missing login (`NOAUTH`) was reported as the caller's mistake,
+  and the caller was told not to retry. The pattern is now checked first with BullMQ's own repeat
+  strategy, a pure function with no Redis call, and only a pattern it refuses is
+  `INVALID_REPEAT_OPTIONS`; every failure of the write itself reaches the caller as it is. A
+  consumer-supplied `settings.repeatStrategy` replaces the parser, so the pattern is not checked.
+  A malformed pattern on a schedule whose iteration `limit` is already reached is now rejected as
+  well; BullMQ's own upsert returns before parsing such a schedule and silently accepts it.
+- **A failing `@OnWorkerEvent` or `@OnQueueEvent` handler could end the process.** The listener was
+  bound straight onto the emitter, which neither awaits it nor catches a throw: an async handler
+  that rejected became an unhandled rejection, which ends a Node process by default, and a
+  synchronous throw was re-emitted as `error`. The failure is now logged with the handler's name
+  and the code `queue.event_handler_failed`, and the process carries on.
+- **`drainOnShutdown` failed silently.** A queue whose drain failed kept its waiting jobs with no
+  trace in the log; it now logs a warning naming the queue and the cause.
+- **A worker whose close failed was logged as a drain timeout.** Any rejection of the graceful
+  close was reported as "exceeded the drain budget"; a real error, such as a lost connection, now
+  has its own message with the cause. The worker is force-closed either way.
+
+### Documentation
+
+- **A duplicate does not add a job.** The README and the JSDoc of `enqueue`, `enqueueBulk` and the
+  flow methods now say that when a custom `jobId` already exists, or a `deduplication` rule keeps
+  the job already there, BullMQ answers with the id of the existing job together with the data of
+  this call, so the returned object does not describe what is stored; `getJob` returns it.
+- **The scheduler and event-handler behaviour above is described in the README.**
+- **Correction to 1.2.9.** On 1.2.8 only the `FlowProducer` listener could end the process; on
+  `Queue`, `Worker` and `QueueEvents` BullMQ's wrapper re-emitted the `TypeError` and the error was
+  reported with a misleading log line. 1.2.9 fixes both.
+
+#### Apply to a derived backend
+
+- If you branch on `INVALID_REPEAT_OPTIONS` to detect any failure of `upsertJobScheduler`, change
+  it: a valid pattern whose write fails now throws the original error (a Redis reply error, a
+  connection error), not a 400 `QueueException`. An unparseable pattern is still
+  `INVALID_REPEAT_OPTIONS`, now thrown before Redis is asked.
+- A listener that fails is now logged instead of ending the process. If something relied on the
+  crash to stop a faulty deploy, watch for the log code `queue.event_handler_failed`.
+
+---
+
 ## [1.2.9] — 2026-11-01
 
 No action required: behaviour for an `Error` with a string `message` is unchanged, and the public API, the types
@@ -768,7 +821,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.9...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.10...HEAD
+[1.2.10]: https://github.com/bymaxone/nest-queue/compare/v1.2.9...v1.2.10
 [1.2.9]: https://github.com/bymaxone/nest-queue/compare/v1.2.8...v1.2.9
 [1.2.8]: https://github.com/bymaxone/nest-queue/compare/v1.2.7...v1.2.8
 [1.2.7]: https://github.com/bymaxone/nest-queue/compare/v1.2.6...v1.2.7

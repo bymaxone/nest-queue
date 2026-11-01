@@ -5,7 +5,7 @@
  */
 
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common'
-import { type Job, type JobsOptions, Queue, type QueueOptions } from 'bullmq'
+import { defaultRepeatStrategy, type Job, type JobsOptions, Queue, type QueueOptions } from 'bullmq'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import type { BulkJob } from '../interfaces/queue-job-data.interface'
@@ -22,27 +22,39 @@ import { describeError } from '../utils/describe-error'
 /** Maximum number of jobs accepted by a single `enqueueBulk` call. */
 const MAX_BULK_SIZE = 1000
 
-/**
- * Whether a thrown value is an operational fault rather than bad input.
- *
- * Node system errors, ioredis errors and BullMQ's own failures all carry a string
- * `code` (`ECONNREFUSED`, `ETIMEDOUT`, `NR_CLOSED`, ...). A cron parse error from
- * BullMQ's bundled parser is a bare `Error` and carries none. That difference is
- * what separates "your schedule is wrong" from "the server is unreachable" on a
- * call that can fail either way.
- *
- * @param err - The caught value.
- * @returns `true` when the value carries a string `code`.
- */
-function isOperationalError(err: unknown): boolean {
-  return typeof (err as { code?: unknown } | null)?.code === 'string'
-}
-
 /** A typed job in the library's public shape. */
 type TypedJob<TData, TResult> = Job<TData, TResult>
 
 /** Status filter accepted by {@link QueueService.cleanQueue}, matching BullMQ. */
 type CleanableStatus = 'completed' | 'failed' | 'delayed' | 'wait' | 'active' | 'paused'
+
+/**
+ * Refuse a cron pattern BullMQ's parser cannot read, before Redis is asked.
+ *
+ * The parser throws a bare `Error` with no type and no `code`, and so does every Redis server
+ * reply error (`READONLY`, `OOM`, `NOAUTH`, a script error), so the two cannot be told apart
+ * after the write is attempted. The check therefore runs BullMQ's own repeat strategy, the
+ * pure function `upsertJobScheduler` calls for a pattern, where any throw can only be the
+ * pattern; the write that follows reports every failure as it is. A consumer-supplied repeat
+ * strategy replaces the parser, so the pattern is theirs to define and is not checked here.
+ *
+ * @param repeat - The pattern schedule being upserted.
+ * @param queueOptions - The queue options the module resolved.
+ * @throws {QueueException} `INVALID_REPEAT_OPTIONS` (400) when the pattern does not parse.
+ */
+function assertValidCron(
+  repeat: JobSchedulerRepeatOptions,
+  queueOptions: ResolvedQueueOptions['queueOptions'],
+): void {
+  if (queueOptions.settings?.repeatStrategy !== undefined) return
+  try {
+    defaultRepeatStrategy(Date.now(), repeat)
+  } catch {
+    throw new QueueException(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS, HttpStatus.BAD_REQUEST, {
+      reason: 'pattern must be a valid cron expression (5- or 6-field)',
+    })
+  }
+}
 
 /**
  * The central interaction point with BullMQ queues. Maintains a per-name `Queue`
@@ -135,7 +147,11 @@ export class QueueService {
    * @param jobName - Job identifier used by `@Process` to dispatch.
    * @param data - Typed job payload.
    * @param options - Per-job BullMQ options (priority, delay, `jobId`, `deduplication`, ...).
-   * @returns The created job.
+   * @returns The job BullMQ returned. When a custom `jobId` already exists, or a `deduplication`
+   *   rule keeps the job already there (one with `replace` swaps it for the new job), nothing new
+   *   is added: BullMQ answers with the id of the EXISTING job and the data and options of THIS
+   *   call, so the returned object does not describe what is stored. Call
+   *   {@link QueueService.getJob} when you need the stored job.
    * @example Throttle: at most one reindex per term every 5 seconds. Both variable
    *   fields are percent-encoded, so no other tenant/term pair can build this key.
    *   const dedupId = `${encodeURIComponent(tenantId)}:reindex:${encodeURIComponent(term)}`
@@ -161,6 +177,9 @@ export class QueueService {
    *
    * @param queueName - Target queue.
    * @param jobs - Job descriptors (length must not exceed the bulk size cap).
+   * @returns The jobs BullMQ returned, in input order. An entry whose custom `jobId` already
+   *   exists is not added again: it carries the EXISTING id with the data of this call, as for
+   *   {@link QueueService.enqueue}.
    */
   async enqueueBulk<TData = unknown, TResult = unknown>(
     queueName: string,
@@ -256,9 +275,9 @@ export class QueueService {
    * never duplicates it. This supersedes the repeatable-jobs surface removed in
    * BullMQ v6.
    *
-   * The schedule is structurally validated first; the cron string itself is
-   * parsed by BullMQ at registration time, and a parse failure is rethrown as
-   * `INVALID_REPEAT_OPTIONS` (400).
+   * The schedule is validated first, and a cron pattern BullMQ's parser rejects
+   * is `INVALID_REPEAT_OPTIONS` (400) before Redis is asked; any other failure
+   * propagates as it is.
    *
    * @param queueName - Target queue.
    * @param schedulerId - Stable, unique scheduler identifier (the upsert key).
@@ -283,26 +302,7 @@ export class QueueService {
       data: template?.data ?? {},
       ...(template?.opts === undefined ? {} : { opts: template.opts }),
     }
-    if ('pattern' in repeat) {
-      try {
-        const job = await queue.upsertJobScheduler(schedulerId, repeat, jobTemplate)
-        return job as Job<TData, TResult>
-      } catch (err) {
-        // BullMQ delegates cron parsing to its bundled parser, so an unparseable
-        // pattern surfaces here as a throw — but so does a Redis outage, and every
-        // other fault on this path. Reporting those as a 400 "invalid cron" names
-        // the one thing that is correct, hides the one that is broken, and tells
-        // the caller not to retry when retrying is exactly right.
-        //
-        // Operational faults carry a string `code` (ECONNREFUSED, ETIMEDOUT,
-        // NR_CLOSED, ...); a cron parse error is a bare Error and carries none.
-        // Anything with a code propagates untouched, status and message intact.
-        if (isOperationalError(err)) throw err
-        throw new QueueException(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS, HttpStatus.BAD_REQUEST, {
-          reason: 'pattern must be a valid cron expression (5- or 6-field)',
-        })
-      }
-    }
+    if ('pattern' in repeat) assertValidCron(repeat, this.options.queueOptions)
     const job = await queue.upsertJobScheduler(schedulerId, repeat, jobTemplate)
     return job as Job<TData, TResult>
   }

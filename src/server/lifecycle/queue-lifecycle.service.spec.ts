@@ -272,6 +272,39 @@ describe('QueueLifecycle.onModuleDestroy — bounded drain', () => {
   })
 })
 
+describe('QueueLifecycle.onModuleDestroy — why a worker was forced', () => {
+  it('tells a close that failed apart from a drain that timed out', async () => {
+    // A close() that rejects with a real error (Redis went away during shutdown) is not a drain
+    // that ran out of budget; calling it one sends the operator after the wrong cause. The worker
+    // is still force-closed, and the log carries the real reason.
+    const close = jest
+      .fn()
+      .mockImplementation((force?: boolean) =>
+        force === true ? Promise.resolve() : Promise.reject(new Error('Connection is closed.')),
+      )
+    const { lifecycle } = makeLifecycle({
+      workers: new Map([['email', makeWorker(close)]]),
+      resolved: makeResolved({ drainTimeoutMs: 5000 }),
+    })
+
+    await lifecycle.onModuleDestroy()
+
+    expect(close).toHaveBeenCalledWith(true)
+    const lines = warnSpy.mock.calls.map(([line]) => String(line))
+    expect(
+      lines.some((line) => line.includes('"email"') && line.includes('Connection is closed.')),
+    ).toBe(true)
+    expect(lines.some((line) => line.includes('failed to close'))).toBe(true)
+    expect(
+      lines.some((line) =>
+        line.includes('forcing close; the in-flight job becomes stalled and is retried'),
+      ),
+    ).toBe(true)
+    expect(lines.some((line) => line.includes('drain budget'))).toBe(false)
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('forced 1 worker(s)'))
+  })
+})
+
 describe('QueueLifecycle.onModuleDestroy — conditional drain', () => {
   it('drains every cached queue when drainOnShutdown is enabled', async () => {
     // drainOnShutdown removes waiting/delayed jobs; the swallowed drain error is tolerated.
@@ -286,6 +319,41 @@ describe('QueueLifecycle.onModuleDestroy — conditional drain', () => {
     expect(queueDrain).toHaveBeenCalledTimes(1)
     // Draining precedes closing, and closing is delegated to the service.
     expect(queuesCloseAll).toHaveBeenCalledTimes(1)
+  })
+
+  it('warns, naming the queue and the cause, when a drain fails, and carries on', async () => {
+    // drainOnShutdown promises the waiting jobs are removed; a drain that fails leaves them in
+    // Redis, so that has to be visible, while the rest of the shutdown must still run.
+    const queueClose = jest.fn().mockResolvedValue(undefined)
+    const queueDrain = jest.fn().mockRejectedValue(new Error('drain failed'))
+    const { lifecycle, queuesCloseAll, connectionDestroy } = makeLifecycle({
+      queues: new Map([['email', makeQueue(queueClose, queueDrain)]]),
+      resolved: makeResolved({ drainOnShutdown: true }),
+    })
+
+    await lifecycle.onModuleDestroy()
+
+    const lines = warnSpy.mock.calls.map(([line]) => String(line))
+    expect(lines.some((line) => line.includes('"email"') && line.includes('drain failed'))).toBe(
+      true,
+    )
+    expect(lines.some((line) => line.includes('drainOnShutdown'))).toBe(true)
+    expect(queuesCloseAll).toHaveBeenCalledTimes(1)
+    expect(connectionDestroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('stays silent when every drain succeeds', async () => {
+    // The warning is for a failure only.
+    const queueDrain = jest.fn().mockResolvedValue(undefined)
+    const { lifecycle } = makeLifecycle({
+      queues: new Map([['email', makeQueue(jest.fn().mockResolvedValue(undefined), queueDrain)]]),
+      resolved: makeResolved({ drainOnShutdown: true }),
+    })
+
+    await lifecycle.onModuleDestroy()
+
+    expect(queueDrain).toHaveBeenCalledTimes(1)
+    expect(warnSpy).not.toHaveBeenCalled()
   })
 })
 

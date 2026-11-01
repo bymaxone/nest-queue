@@ -67,6 +67,9 @@ export class FlowService {
    *
    * @param flow - Flow tree definition.
    * @returns The root `JobNode` containing the created job and its children.
+   *   A job whose custom `jobId` already exists is not added again: its node carries the EXISTING
+   *   id with the data of this call, so the tree does not describe what is stored; call
+   *   `QueueService.getJob` when you need it.
    * @throws {QueueException} `FLOW_DISABLED` (503) when flows are not enabled.
    */
   async add(flow: FlowJob): Promise<JobNode> {
@@ -78,6 +81,7 @@ export class FlowService {
    *
    * @param flows - Flow tree definitions.
    * @returns The root `JobNode` for each flow, in input order.
+   *   A job whose custom `jobId` already exists is not added again; see {@link FlowService.add}.
    * @throws {QueueException} `FLOW_DISABLED` (503) when flows are not enabled.
    */
   async addBulk(flows: readonly FlowJob[]): Promise<JobNode[]> {

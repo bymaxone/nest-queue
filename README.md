@@ -557,6 +557,8 @@ onFailed(job: Job | undefined, err: Error): void {
 }
 ```
 
+A listener that throws, or returns a promise that rejects, is logged with the handler's name and the code `queue.event_handler_failed` and the process carries on; it is never an unhandled rejection. Handle the error inside the listener when the failure matters.
+
 ### `@OnQueueEvent(eventName)`
 
 Listens to BullMQ `QueueEvents` (global, cross-process events). The library opens one shared `QueueEvents` connection per queue when it discovers the first listener for it; there is no option to enable.
@@ -602,6 +604,7 @@ const schedulers = await this.queue.getJobSchedulers('notifications')
 
 Cron-with-seconds (6-field patterns) is supported. Patterns are validated by BullMQ's
 own `cron-parser`, not a hand-rolled regex.
+A pattern the parser rejects is `INVALID_REPEAT_OPTIONS` (400) before Redis is asked. Every other failure of the upsert, such as a read-only replica or a lost connection, reaches you as it is.
 
 ---
 
@@ -642,6 +645,10 @@ await this.queue.enqueue(
   },
 )
 ```
+
+### A duplicate does not add a job
+
+When a custom `jobId` already exists, or a `deduplication` rule keeps the job that is already there (a rule with `replace` swaps it for the new one instead), `enqueue`, `enqueueBulk` and the flow methods add nothing: BullMQ answers with the id of the **existing** job together with the data and options of **this** call, so the returned object does not describe what is stored. Call `QueueService.getJob` when you need the stored job.
 
 ### OpenTelemetry
 
