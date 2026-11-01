@@ -347,7 +347,7 @@ a handful of clients is exhausted by one instance with a few dozen workers. Mult
 the number of instances you run (include rolling deploys, where old and new instances overlap) and
 compare it with the limit of your plan; self-managed Redis allows 10 000 by default (`maxclients`).
 In `CLIENT LIST`, the blocking connection of a worker has a name that starts with
-`<prefix>:<base64 of the queue name>`, which tells the library's connections apart from yours.
+`<prefix>:<base64 of the queue name>`, which identifies it; the command connection is unnamed.
 
 ---
 
