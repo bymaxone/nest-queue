@@ -17,6 +17,10 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - A throwaway proof entry that plants a public method and is never merged.
 
+#### Apply to a derived backend
+
+No action: `QueueService` gains `plantedProofMethod()`, a method of a throwaway proof that is never merged.
+
 ---
 
 ## [1.2.9] — 2026-11-01
