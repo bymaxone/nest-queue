@@ -215,8 +215,8 @@ export class ProcessorDiscoveryService implements OnModuleInit {
    * Bind an event listener so a failing handler is reported instead of escaping.
    *
    * An `EventEmitter` neither awaits a listener nor catches its throw: a rejected promise becomes
-   * an `unhandledRejection`, which ends the process by default, and a synchronous throw escapes
-   * `emit` into BullMQ's own code. A failing handler is the consumer's defect, never a reason to
+   * an `unhandledRejection`, which ends the process by default, and BullMQ re-emits a synchronous
+   * throw as `error`. A failing handler is the consumer's defect, never a reason to
    * stop the application, but it must still be visible, so the failure is logged with the handler
    * and a stable code and the process carries on.
    *

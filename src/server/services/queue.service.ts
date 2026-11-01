@@ -275,9 +275,9 @@ export class QueueService {
    * never duplicates it. This supersedes the repeatable-jobs surface removed in
    * BullMQ v6.
    *
-   * The schedule is structurally validated first; the cron string itself is
-   * parsed by BullMQ at registration time, and a parse failure is rethrown as
-   * `INVALID_REPEAT_OPTIONS` (400).
+   * The schedule is validated first, and a cron pattern BullMQ's parser rejects
+   * is `INVALID_REPEAT_OPTIONS` (400) before Redis is asked; any other failure
+   * propagates as it is.
    *
    * @param queueName - Target queue.
    * @param schedulerId - Stable, unique scheduler identifier (the upsert key).

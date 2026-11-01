@@ -17,7 +17,7 @@ Action required only if code relies on the status of a failed schedule: `upsertJ
 longer reports every failure as `INVALID_REPEAT_OPTIONS` (400), see the Apply note. Healthy use is
 unchanged. The public API, the types (the declaration files differ only in JSDoc comments) and the
 peer ranges are unchanged. Measured with `diff -r` of a fresh build against the unpacked 1.2.9 tarball,
-only the two runtime bundles (`index.mjs`, `index.cjs`) differ.
+the runtime bundles (`index.mjs`, `index.cjs`) differ in code.
 
 ### Fixed
 
@@ -34,7 +34,7 @@ only the two runtime bundles (`index.mjs`, `index.cjs`) differ.
 - **A failing `@OnWorkerEvent` or `@OnQueueEvent` handler could end the process.** The listener was
   bound straight onto the emitter, which neither awaits it nor catches a throw: an async handler
   that rejected became an unhandled rejection, which ends a Node process by default, and a
-  synchronous throw escaped `emit` into BullMQ. The failure is now logged with the handler's name
+  synchronous throw was re-emitted as `error`. The failure is now logged with the handler's name
   and the code `queue.event_handler_failed`, and the process carries on.
 - **`drainOnShutdown` failed silently.** A queue whose drain failed kept its waiting jobs with no
   trace in the log; it now logs a warning naming the queue and the cause.
