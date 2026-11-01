@@ -168,6 +168,7 @@ Wire the module in your root `AppModule`:
 ```typescript
 import { Module } from '@nestjs/common'
 import { BymaxQueueModule } from '@bymax-one/nest-queue'
+import { EmailModule } from './email.module'
 
 @Module({
   imports: [
@@ -175,6 +176,7 @@ import { BymaxQueueModule } from '@bymax-one/nest-queue'
       connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
       isGlobal: true,
     }),
+    EmailModule,
   ],
 })
 export class AppModule {}
@@ -213,14 +215,16 @@ export class EmailProcessor {
 }
 ```
 
-Register the processor in your module alongside `BymaxQueueModule`:
+Register the service and the processor in a feature module that `AppModule` imports, like the `EmailModule`
+imported above. `isGlobal: true` above makes `QueueService` injectable there without importing `BymaxQueueModule` again:
 
 ```typescript
 import { Module } from '@nestjs/common'
 import { EmailProcessor } from './email.processor'
+import { EmailService } from './email.service'
 
 @Module({
-  providers: [EmailProcessor],
+  providers: [EmailService, EmailProcessor],
 })
 export class EmailModule {}
 ```
