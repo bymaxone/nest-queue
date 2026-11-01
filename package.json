@@ -55,6 +55,7 @@
   },
   "scripts": {
     "build": "pnpm clean && tsup",
+    "check:api": "node scripts/check-api-surface.mjs",
     "check:exports": "attw --pack .",
     "check:mutants": "node scripts/check-mutation-directives.mjs",
     "check:published": "node scripts/check-published-surface.mjs",
