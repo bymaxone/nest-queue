@@ -13,7 +13,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.2.9] — 2026-11-01
 
-No action required: behaviour for every `Error` is unchanged, and the public API, the types
+No action required: behaviour for an `Error` with a string `message` is unchanged, and the public API, the types
 (`index.d.ts` and `index.d.cts` are identical) and the peer ranges are unchanged. Measured with
 `diff -r` of a fresh build against the unpacked 1.2.8 tarball, only the two runtime bundles
 (`index.mjs`, `index.cjs`) differ.
@@ -21,7 +21,7 @@ No action required: behaviour for every `Error` is unchanged, and the public API
 ### Fixed
 
 - **The fallback `error` listener no longer throws on an emission that is not an `Error`.** The
-  listener the library attaches to every `Queue`, `Worker`, `QueueEvents` and `FlowProducer` read
+  listener the library attaches to every `Queue`, `Worker` and `QueueEvents`, and to the `FlowProducer` when flows are enabled, read
   `err.message` directly, so `emit('error', undefined)` or `emit('error', null)` threw a `TypeError`
   out of the listener, and out of `emit` to its caller, which can end the process. It now logs
   whatever value arrived, falling back to a fixed phrase for one it cannot print.
