@@ -84,6 +84,29 @@ jobs:
             exit 1
           fi
 
+      - name: Extract release notes from CHANGELOG
+        # The GitHub Release body is the tag's own CHANGELOG section, so the notes a reader
+        # sees are the ones reviewed in the release PR. It runs before the gates and the
+        # publish: a version with no section, or an empty one, stops the release before
+        # anything is published, and there is no fallback text. The heading is matched as a
+        # literal, so the dots in `1.2.7` match only dots, and only the heading's own first
+        # bracket counts, so a second bracketed token on another heading cannot start the
+        # section. The notes go through a file, never through a shell or an output variable,
+        # so nothing inside the CHANGELOG is evaluated or can end the value.
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          awk -v ver="$VERSION" '
+            /^## \[/ {
+              if (found) exit
+              if (index($0, "## [" ver "]") == 1) { found = 1; next }
+            }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/release-notes.md"; then
+            echo "CHANGELOG.md has no non-empty section for $VERSION"
+            exit 1
+          fi
+
       - name: Verify (typecheck · test:types · lint · tests · build)
         run: pnpm prepublishOnly
 
@@ -136,38 +159,12 @@ jobs:
             npm publish --provenance --access public --ignore-scripts
           fi
 
-      - name: Extract release notes from CHANGELOG
-        # Pulls the section for the current tag out of CHANGELOG.md so the GitHub
-        # Release body stays in sync with the changelog. Falls back to a generic
-        # pointer when the section is not found.
-        id: changelog
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          NOTES=$(awk -v ver="$VERSION" '
-            /^## \[/ {
-              if (found) exit
-              if ($0 ~ "\\[" ver "\\]") { found=1; next }
-            }
-            found { print }
-          ' CHANGELOG.md)
-          if [ -z "$NOTES" ]; then
-            NOTES="See [CHANGELOG.md](./CHANGELOG.md) for details."
-          fi
-          {
-            echo 'notes<<EOF'
-            echo "$NOTES"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
-
       - name: Create GitHub Release
-        # Notes are passed via env var (NOT `${{ ... }}` interpolation) so that
-        # backticks, `$()`, and other shell metacharacters inside the CHANGELOG
-        # cannot be evaluated by bash — a script-injection vector that would
-        # otherwise let CHANGELOG content execute arbitrary commands on the runner.
+        # The notes come from the file written before the build, never from an
+        # expression or a shell variable, so nothing inside the CHANGELOG is evaluated.
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_NOTES: ${{ steps.changelog.outputs.notes }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
-            --notes "$RELEASE_NOTES"
+            --notes-file "$RUNNER_TEMP/release-notes.md"
