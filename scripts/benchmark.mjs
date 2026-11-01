@@ -167,8 +167,8 @@ async function enqueueThroughput() {
   )
 }
 
-async function latency(concurrency) {
-  const { app, queue, workers } = await boot({ connection: { url: URL_ } })
+/** Paced enqueue to job completed, as the p50, p95 and p99 of the samples in milliseconds. */
+async function pacedLatency({ queue, workers }, concurrency) {
   const name = `lat${String(concurrency)}`
   const samples = []
   const worker = workers.register({
@@ -192,12 +192,11 @@ async function latency(concurrency) {
   }
   await until(() => samples.length >= LATENCY_JOBS, 'latency jobs to complete')
   samples.sort((a, b) => a - b)
-  const latencyRow = [
-    String(concurrency),
-    percentile(samples, 50).toFixed(2),
-    percentile(samples, 95).toFixed(2),
-    percentile(samples, 99).toFixed(2),
-  ]
+  return [50, 95, 99].map((p) => percentile(samples, p).toFixed(2))
+}
+
+/** Jobs per second to drain a burst enqueued through `enqueueBulk`, counted at `completed`. */
+async function burstDrain({ queue, workers }, concurrency) {
   const burstName = `burst${String(concurrency)}`
   let drained = 0
   const burstWorker = workers.register({
@@ -215,9 +214,15 @@ async function latency(concurrency) {
     await queue.enqueueBulk(burstName, burstJobs.slice(at, at + BULK_SIZE))
   }
   await until(() => drained >= BURST, 'burst jobs to complete')
-  const burstMs = performance.now() - burstStart
+  return rate(BURST, performance.now() - burstStart)
+}
+
+async function latency(concurrency) {
+  const { app, queue, workers } = await boot({ connection: { url: URL_ } })
+  const percentiles = await pacedLatency({ queue, workers }, concurrency)
+  const burst = await burstDrain({ queue, workers }, concurrency)
   await app.close()
-  return [...latencyRow, String(rate(BURST, burstMs))]
+  return [String(concurrency), ...percentiles, String(burst)]
 }
 
 async function latencyTable() {
