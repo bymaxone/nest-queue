@@ -1,7 +1,7 @@
 /**
- * Pins `scripts/check-api-surface.mjs`, the gate that fails a release whose built public
- * declarations differ from the previous published version unless the CHANGELOG section of the
- * version being released holds the "Apply to a derived backend" note.
+ * Pins `scripts/check-api-surface.mjs`, the gate for the built public declarations. A
+ * difference from the previous published version, at any bump level, fails unless the CHANGELOG
+ * section of the released version holds the "Apply to a derived backend" note.
  *
  * Layer: repository tooling, tests. The script is plain Node and is run here the way the
  * release workflow runs it, as a child process against two small `dist/` directories, so
