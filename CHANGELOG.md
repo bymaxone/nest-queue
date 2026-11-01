@@ -11,9 +11,9 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Tests
 
-- **The README Quick Start now runs as written.** A spec boots a Nest application context from the
-  module options, the `QueueService` enqueue and the `@Processor` / `@Process` handler exactly as the
-  README shows them, with BullMQ and ioredis replaced by in-memory doubles, and asserts the job the
+- **The README Quick Start now runs.** A spec boots a Nest application context from the
+  module options, the `QueueService` enqueue and the `@Processor` / `@Process` handler copied from the
+  README (handler body aside), with BullMQ and ioredis replaced by in-memory doubles, and asserts the job the
   service enqueues is the job the decorated handler receives. The snippet gate only compiles the
   README; this executes it, so a wrong argument shape or an unresolved dependency fails a test.
 
