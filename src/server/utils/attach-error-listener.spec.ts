@@ -6,18 +6,14 @@
 
 import { EventEmitter } from 'node:events'
 import { runInNewContext } from 'node:vm'
-import type { Logger } from '@nestjs/common'
+import { Logger } from '@nestjs/common'
 import { attachDefaultErrorListener } from './attach-error-listener'
 
-/** A logger double that records the `error` lines. */
-function makeLogger(): { logger: Logger; lines: string[] } {
-  const lines: string[] = []
-  const logger = {
-    error: (line: string): void => {
-      lines.push(line)
-    },
-  } as unknown as Logger
-  return { logger, lines }
+/** A real Nest logger whose `error` is spied on, so no cast is needed to satisfy `Logger`. */
+function makeLogger(): { logger: Logger; lines: () => unknown[] } {
+  const logger = new Logger('attach-error-listener.spec')
+  const spy = jest.spyOn(logger, 'error').mockImplementation(() => undefined)
+  return { logger, lines: () => spy.mock.calls.map((call: unknown[]): unknown => call[0]) }
 }
 
 describe('attachDefaultErrorListener', () => {
@@ -45,6 +41,6 @@ describe('attachDefaultErrorListener', () => {
     attachDefaultErrorListener(emitter, logger, 'Worker', 'email')
 
     expect(() => emitter.emit('error', value)).not.toThrow()
-    expect(lines).toEqual([`Worker for queue "email" emitted an error: ${expected}`])
+    expect(lines()).toEqual([`Worker for queue "email" emitted an error: ${expected}`])
   })
 })
