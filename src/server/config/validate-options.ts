@@ -19,12 +19,26 @@ function invalid(reason: string): never {
  * Whether ioredis can parse `url`. It reads a `redis://` or `rediss://` URL as it is and prefixes
  * every other string with a scheme (`redis:` for `//host`, `redis://` otherwise) before handing it
  * to the WHATWG parser, which rejects what it cannot read and makes the client constructor throw
- * `Invalid URL`. A unix socket path never reaches the parser there, and with the prefix it always
- * parses here, so it needs no case of its own.
+ * `Invalid URL`. It then percent-decodes the user name and the password, which throws on a
+ * malformed escape such as a literal `%` the parser itself accepts. A unix socket path never
+ * reaches the parser there, and with the prefix it always parses here, so it needs no case of its
+ * own.
  */
 function isParseableUrl(url: string): boolean {
-  if (/^rediss?:\/\//i.test(url)) return URL.canParse(url)
-  return URL.canParse(url.startsWith('//') ? `redis:${url}` : `redis://${url}`)
+  const candidate = /^rediss?:\/\//i.test(url)
+    ? url
+    : url.startsWith('//')
+      ? `redis:${url}`
+      : `redis://${url}`
+  if (!URL.canParse(candidate)) return false
+  const { username, password } = new URL(candidate)
+  try {
+    decodeURIComponent(username)
+    decodeURIComponent(password)
+    return true
+  } catch {
+    return false
+  }
 }
 
 /**

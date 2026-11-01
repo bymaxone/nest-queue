@@ -134,6 +134,9 @@ describe('validateOptions', () => {
     'h:abc',
     '//a b:1',
     'a:redis://h',
+    'redis://u:p%zz@h',
+    'redis://%E0%A4%A@h',
+    'redis://:%E0@h',
   ]
   // Strings ioredis accepts, in every form its parser handles.
   const parseable = [
@@ -147,6 +150,7 @@ describe('validateOptions', () => {
     'h',
     '/var/run/redis.sock',
     '/tmp/redis.sock?db=2',
+    'redis://u:p%40x@h',
   ]
 
   it.each(unparseable)('throws a typed error when connection.url is %j', (url) => {
