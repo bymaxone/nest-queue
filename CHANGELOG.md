@@ -21,8 +21,8 @@ the package otherwise changes in `README.md`, this file and the version in `pack
 
 - **The README Quick Start now shows where `EmailService` and the processor are registered.** The
   `AppModule` snippet imports an `EmailModule` that lists both as providers, so a reader who copies
-  the snippets in order ends with a module graph that resolves, instead of a service and a processor
-  no module provides.
+  the snippets in order ends with a module graph that resolves, instead of a service no module provides
+  and a processor module the root never imports.
 
 ### Tests
 
