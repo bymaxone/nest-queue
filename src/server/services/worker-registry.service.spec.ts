@@ -230,6 +230,35 @@ describe('WorkerRegistry.register', () => {
     )
   })
 
+  it('reports a null-prototype constructor throw as a typed exception, not a TypeError', () => {
+    // String(Object.create(null)) throws, so describing the cause must not depend on it: the
+    // registration failure has to reach the caller as QUEUE_ERROR, not as a TypeError.
+    const { Worker: MockWorker } = jest.requireMock<{ Worker: jest.Mock }>('bullmq')
+    MockWorker.mockImplementationOnce(() => {
+      const cause: unknown = Object.create(null) // renders with neither String() nor a message
+      throw cause
+    })
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
+    const details = detailsOf(() => registry.register({ queueName: 'email', handler: noopHandler }))
+    expect(details.queueName).toBe('email')
+    expect(details.cause).toBe('unknown error')
+  })
+
+  it('reports a null-prototype sandboxed constructor throw as a typed exception', () => {
+    // The sandboxed path shares the rule: a cause String() cannot render still yields the exception.
+    const { Worker: MockWorker } = jest.requireMock<{ Worker: jest.Mock }>('bullmq')
+    MockWorker.mockImplementationOnce(() => {
+      const cause: unknown = Object.create(null) // renders with neither String() nor a message
+      throw cause
+    })
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
+    const details = detailsOf(() =>
+      registry.registerSandboxed({ queueName: 'sb', processorFile: '/tmp/p.js' }),
+    )
+    expect(details.queueName).toBe('sb')
+    expect(details.cause).toBe('unknown error')
+  })
+
   it('forwards lockDuration and stalledInterval when provided', () => {
     // Optional BullMQ options must be forwarded only when explicitly set.
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())
