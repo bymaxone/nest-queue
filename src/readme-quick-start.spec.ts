@@ -21,15 +21,16 @@ import type { Job } from './server'
 
 /** A job as the Queue double stores it. */
 interface AddedJob {
+  readonly id: string
   readonly queueName: string
   readonly name: string
   readonly data: unknown
 }
 
 const added: AddedJob[] = []
-/** The processor function each Worker double was constructed with, by queue name. */
 /** What the README handler received, in order. */
 const received: string[] = []
+/** The processor function each Worker double was constructed with, by queue name. */
 const processors = new Map<string, (job: unknown) => Promise<unknown>>()
 
 jest.mock('ioredis', () => {
@@ -50,8 +51,9 @@ jest.mock('bullmq', () => ({
   Queue: jest.fn().mockImplementation((queueName: string) =>
     Object.assign(new EventEmitter(), {
       add: (name: string, data: unknown) => {
-        added.push({ queueName, name, data })
-        return Promise.resolve({ id: String(added.length), name, data })
+        const job = { id: String(added.length + 1), queueName, name, data }
+        added.push(job)
+        return Promise.resolve(job)
       },
       close: () => Promise.resolve(),
     }),
@@ -130,12 +132,14 @@ describe('README Quick Start', () => {
     // @Process('welcome') method of the @Processor('email') class receives that job.
     await app.get(EmailService).sendWelcome('user-1')
 
-    expect(added).toEqual([{ queueName: 'email', name: 'welcome', data: { userId: 'user-1' } }])
+    expect(added).toEqual([
+      { id: '1', queueName: 'email', name: 'welcome', data: { userId: 'user-1' } },
+    ])
     const process = processors.get('email')
     expect(process).toBeDefined()
 
-    const job = { id: '1', name: 'welcome', data: { userId: 'user-1' } }
-    await process?.(job)
+    // The worker is handed the job the queue stored for this enqueue, not a job built here.
+    await process?.(added[0])
 
     expect(received).toEqual(['user-1'])
   })
