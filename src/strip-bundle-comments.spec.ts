@@ -10,6 +10,7 @@ import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const SCRIPT = resolve(__dirname, '..', 'scripts', 'strip-bundle-comments.mjs')
 
@@ -231,5 +232,95 @@ describe('strip-bundle-comments', () => {
 
     expect(status).toBe(1)
     expect(output).toContain('run the build first')
+  })
+})
+
+/** Runs an ES module snippet that imports the script, and returns what it printed. */
+function inScript(body: string): string {
+  const code = `import * as strip from ${JSON.stringify(pathToFileURL(SCRIPT).href)}\n${body}`
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], {
+    encoding: 'utf8',
+  })
+  if (result.status !== 0) throw new Error(`snippet failed: ${result.stderr}`)
+  return result.stdout
+}
+
+/** What a program prints when Node runs it. */
+function printed(dist: string): string {
+  return spawnSync(process.execPath, [join(dist, 'server', 'index.mjs')], { encoding: 'utf8' })
+    .stdout
+}
+
+describe('strip-bundle-comments never changes the program', () => {
+  // A comment that is the only separator between two tokens must leave one space, or the two
+  // tokens fuse into a different one. Each source prints something that the fused form changes.
+  it.each([
+    ['a keyword and a number', 'function f() { return/*x*/1 }\nconsole.log(String(f()))\n'],
+    ['a keyword and a name', 'const a = 5\nconsole.log(typeof/*x*/a)\n'],
+    ['two names around an operator word', 'console.log("a"/*x*/in{a:1})\n'],
+    ['a plus and a plus', 'let a = 1, b = 2\nconsole.log(a+/*x*/+b)\n'],
+    ['a minus and a minus', 'let a = 1, b = 2\nconsole.log(a-/*x*/-b)\n'],
+    ['a plus and an increment', 'let a = 1, b = 2\nconsole.log(a+/*x*/++b)\n'],
+    ['a division and a regular expression', 'console.log(8/*x*//2)\n'],
+    [
+      'a blank, the comment, then a name',
+      'function f() { return /*x*/1 }\nconsole.log(String(f()))\n',
+    ],
+  ])('keeps %s apart', (_label, source) => {
+    const dist = layout({ 'index.mjs': source })
+    const before = printed(dist)
+
+    expect(run(dist).status).toBe(0)
+
+    expect(read(dist, 'index.mjs')).not.toContain('/*')
+    expect(printed(dist)).toBe(before)
+  })
+
+  // Punctuation that can never join its neighbour needs no space.
+  it('adds no space next to a bracket, a comma or a semicolon', () => {
+    const dist = layout({ 'index.mjs': 'console.log(/*a*/1,/*b*/2);/*c*/[/*d*/3].length\n' })
+
+    run(dist)
+
+    expect(read(dist, 'index.mjs')).toBe('console.log(1,2);[3].length\n')
+  })
+
+  describe('the check against the program', () => {
+    // The strip proves its own work: the program with the comments printed away must be the same.
+    it('accepts a result that differs from the source only in comments', () => {
+      const out = inScript(
+        `console.log(strip.sameProgram('function f(){return/*x*/ 1}', 'function f(){return 1}'))`,
+      )
+
+      expect(out.trim()).toBe('true')
+    })
+
+    it.each([
+      ['fused tokens', 'function f(){return/*x*/1}', 'function f(){return1}'],
+      ['two pluses that became an increment', 'a+/*x*/+b', 'a++b'],
+      ['a changed value', 'const a = 1', 'const a = 2'],
+    ])('rejects %s', (_label, before, after) => {
+      const out = inScript(
+        `console.log(strip.sameProgram(${JSON.stringify(before)}, ${JSON.stringify(after)}))`,
+      )
+
+      expect(out.trim()).toBe('false')
+    })
+
+    // A strip that breaks the program must stop the build and leave the bundle as it was.
+    it('writes nothing and fails when the strip changes the program', () => {
+      const dist = layout({ 'index.mjs': 'function f() { return /*x*/ 1 }\n' })
+      const source = read(dist, 'index.mjs')
+
+      const out = inScript(
+        `const r = strip.stripDirectory(${JSON.stringify(dist)}, (s) => s.replace(/\\/\\*x\\*\\/ /, '').replace('return 1', 'return1'))\n` +
+          `console.log(JSON.stringify({ ok: r.ok, message: r.message }))`,
+      )
+
+      const result = JSON.parse(out) as { ok: boolean; message: string }
+      expect(result.ok).toBe(false)
+      expect(result.message).toContain('index.mjs')
+      expect(read(dist, 'index.mjs')).toBe(source)
+    })
   })
 })

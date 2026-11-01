@@ -35,6 +35,26 @@ const ts = require('typescript')
 const BUNDLE_FILE_RE = /^index\.(mjs|cjs)$/
 const KEPT_COMMENT_RE = /^\/\*!|^\/\/!|@license|@preserve|__PURE__|__NO_SIDE_EFFECTS__|^\/\/ src\//
 
+/** Characters that never join the character next to them into a longer token. */
+const NEVER_JOINS = new Set('(){}[];,')
+
+/**
+ * Whether two stretches of code, once the comment between them is gone, would touch in a way that
+ * lets the parser read a different token: `return` and `1` as `return1`, `+` and `+` as `++`, `/`
+ * and `/` as a comment. Anything but whitespace or a bracket, comma or semicolon on both sides is
+ * treated as able to join.
+ *
+ * @param {string} left - Code before the comment, without the blanks that preceded it.
+ * @param {string} right - Code after the comment.
+ * @returns {boolean} `true` when one space has to stay between them.
+ */
+function needsSpace(left, right) {
+  const a = left.at(-1)
+  const b = right.at(0)
+  if (a === undefined || b === undefined) return false
+  return !/\s/.test(a) && !/\s/.test(b) && !NEVER_JOINS.has(a) && !NEVER_JOINS.has(b)
+}
+
 /**
  * Removes the comments of one bundle.
  *
@@ -81,13 +101,39 @@ export function stripComments(source) {
       // statement), so one break stays when code follows it.
       const lineBreak =
         before.trim() !== '' && after.trim() !== '' && source.slice(pos, end).includes('\n')
+      const kept = output.slice(0, pos - (before.length - before.trimEnd().length))
       output =
-        output.slice(0, pos - (before.length - before.trimEnd().length)) +
-        (lineBreak ? '\n' : '') +
+        kept +
+        (lineBreak ? '\n' : needsSpace(kept, output.slice(end)) ? ' ' : '') +
         output.slice(end)
     }
   }
   return output
+}
+
+/** The program of a bundle, printed without its comments or its formatting. */
+function printProgram(source) {
+  const file = ts.createSourceFile(
+    'bundle.js',
+    source,
+    ts.ScriptTarget.Latest,
+    false,
+    ts.ScriptKind.JS,
+  )
+  return ts.createPrinter({ removeComments: true }).printFile(file)
+}
+
+/**
+ * Whether two bundles are the same program: parsed and printed without comments, they are equal.
+ * A strip that fused two tokens, dropped a line break the parser counted, or removed code reads
+ * differently here even when both files are valid.
+ *
+ * @param {string} before - The bundle as built.
+ * @param {string} after - The bundle with its comments removed.
+ * @returns {boolean} `true` when only comments and formatting differ.
+ */
+export function sameProgram(before, after) {
+  return printProgram(before) === printProgram(after)
 }
 
 /** The `index.mjs` and `index.cjs` files under `root`, never a declaration file. */
@@ -104,19 +150,55 @@ function bundleFiles(root) {
   return found.sort()
 }
 
+/**
+ * Strips every bundle under `root`, after proving that each one is still the same program.
+ * Nothing is written unless every bundle passes.
+ *
+ * @param {string} root - Directory that holds the bundles, `dist` for the build.
+ * @param {(source: string) => string} [strip] - The strip to apply; a test passes a broken one.
+ * @returns {{ ok: boolean, message?: string, files: { path: string, before: number, after: number }[] }}
+ */
+export function stripDirectory(root, strip = stripComments) {
+  const paths = bundleFiles(root)
+  if (paths.length === 0) {
+    return {
+      ok: false,
+      message: `No index.mjs or index.cjs under ${root}: run the build first.`,
+      files: [],
+    }
+  }
+  const results = paths.map((path) => {
+    const before = readFileSync(path, 'utf8')
+    return { path, before, after: strip(before) }
+  })
+  const changed = results.filter((result) => result.after !== result.before)
+  const diverged = changed.filter((result) => !sameProgram(result.before, result.after))
+  if (diverged.length > 0) {
+    return {
+      ok: false,
+      message: `Removing the comments changed the program of: ${diverged.map((r) => r.path).join(', ')}. Nothing was written.`,
+      files: [],
+    }
+  }
+  for (const { path, after } of changed) writeFileSync(path, after)
+  return {
+    ok: true,
+    files: results.map(({ path, before, after }) => ({
+      path,
+      before: before.length,
+      after: after.length,
+    })),
+  }
+}
+
 function main() {
-  const root = resolve(process.argv[2] ?? 'dist')
-  const files = bundleFiles(root)
-  if (files.length === 0) {
-    console.error(`No index.mjs or index.cjs under ${root}: run the build first.`)
+  const result = stripDirectory(resolve(process.argv[2] ?? 'dist'))
+  if (!result.ok) {
+    console.error(result.message)
     return 1
   }
-  for (const path of files) {
-    const before = readFileSync(path, 'utf8')
-    const after = stripComments(before)
-    if (after !== before) writeFileSync(path, after)
-    console.log(`${path}: ${before.length} -> ${after.length} bytes`)
-  }
+  for (const { path, before, after } of result.files)
+    console.log(`${path}: ${before} -> ${after} bytes`)
   return 0
 }
 
