@@ -11,6 +11,52 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.11] — 2026-11-06
+
+Action required only if you extend or replace `QueueLifecycle`, or rely on the order in which the
+library closes its resources: the producer side now closes after the HTTP server stops, see the Apply
+note. Healthy use is unchanged. The public API and the peer ranges are unchanged; the declaration
+files differ because `QueueLifecycle` now also implements `OnApplicationShutdown` (and in JSDoc).
+Measured with `diff -r` of a fresh build against the unpacked 1.2.10 tarball, the runtime bundles
+(`index.mjs`, `index.cjs`) differ in code.
+
+### Fixed
+
+- **A request still being served when the application closed could not enqueue.** NestJS runs every
+  `onModuleDestroy` hook before it stops the HTTP server, and `QueueLifecycle` closed the flow
+  producer, the cached queues and the library-owned Redis connection in that hook. A request that
+  enqueued in the window between the two (a request in flight during `app.close()`, or a
+  `SIGTERM` with shutdown hooks enabled) failed with `Connection is closed.` in Mode B. Those three
+  resources are now released in `onApplicationShutdown`, which NestJS runs after the server has
+  stopped. Consumption still stops first: workers drain within `shutdown.drainTimeoutMs`, then
+  queue-events and the connections opened for workers and queue-events close, all in
+  `onModuleDestroy`. `shutdown.drainOnShutdown` now runs in `onApplicationShutdown` too, right before
+  the queues close, so a job enqueued late is drained with the rest. The log line `Queue shutdown
+complete in Nms (forced N worker(s))` is now written once, at the end, and its time covers both
+  hooks. In Mode A the consumer's client is untouched, as before.
+
+### Changed
+
+- **The shipped bundles no longer carry comments.** `dist/server/index.mjs` and `index.cjs` are
+  smaller (the server bundle is about 8.3 kB brotli, from 15 kB); the declaration files keep their
+  JSDoc, and the runtime behaviour of the bundles is unchanged.
+
+### Documentation
+
+- **The README describes the two shutdown hooks** and when each resource closes.
+
+#### Apply to a derived backend
+
+- If you subclass or wrap `QueueLifecycle`, or call `onModuleDestroy()` yourself to tear the library
+  down in a test, also call `onApplicationShutdown()` afterwards: the flow producer, the cached
+  queues and the library-owned connection are no longer closed by `onModuleDestroy()`. Nest calls
+  both when the application closes.
+- If you enqueue from a hook that runs after the library's `onModuleDestroy` (for example your own
+  `beforeApplicationShutdown`), the enqueue now succeeds instead of failing with
+  `Connection is closed.`; if you worked around that failure, the workaround can go.
+
+---
+
 ## [1.2.10] — 2026-11-01
 
 Action required only if code relies on the status of a failed schedule: `upsertJobScheduler` no
@@ -821,7 +867,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.10...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.11...HEAD
+[1.2.11]: https://github.com/bymaxone/nest-queue/compare/v1.2.10...v1.2.11
 [1.2.10]: https://github.com/bymaxone/nest-queue/compare/v1.2.9...v1.2.10
 [1.2.9]: https://github.com/bymaxone/nest-queue/compare/v1.2.8...v1.2.9
 [1.2.8]: https://github.com/bymaxone/nest-queue/compare/v1.2.7...v1.2.8

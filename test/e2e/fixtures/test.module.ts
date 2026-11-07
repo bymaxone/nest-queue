@@ -13,6 +13,7 @@ import { SlowProcessor } from './processors/slow.processor'
 import { RetryProcessor } from './processors/retry.processor'
 import { DedupProcessor } from './processors/dedup.processor'
 import { DlqProcessor } from './processors/dlq.processor'
+import { ShutdownRequestProbe } from './shutdown-request.probe'
 import {
   FlowChildProcessor,
   FlowLeafProcessor,
@@ -51,6 +52,7 @@ export function buildTestModule(connection: QueueConnectionConfig): DynamicModul
       RetryProcessor,
       DedupProcessor,
       DlqProcessor,
+      ShutdownRequestProbe,
       FlowRecorder,
       FlowLeafProcessor,
       FlowChildProcessor,
