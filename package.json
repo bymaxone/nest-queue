@@ -58,6 +58,7 @@
     "check:api": "node scripts/check-api-surface.mjs",
     "check:exports": "attw --pack .",
     "check:mutants": "node scripts/check-mutation-directives.mjs",
+    "check:file-length": "node scripts/check-file-length.mjs",
     "check:published": "node scripts/check-published-surface.mjs",
     "clean": "rm -rf dist coverage",
     "lint": "eslint src scripts test",
