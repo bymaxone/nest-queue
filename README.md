@@ -282,7 +282,7 @@ BymaxQueueModule.forRootAsync({
 })
 ```
 
-`BymaxCacheModule` is global and provides `ConnectionManager`; `getClient()` returns the shared
+`BymaxCacheModule` is global by default and provides `ConnectionManager`; `getClient()` returns the shared
 client. It is typed `Redis | Cluster`, and Mode A takes a standalone `Redis`, so run
 `@bymax-one/nest-cache` in standalone mode.
 
