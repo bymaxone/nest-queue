@@ -37,6 +37,9 @@ importers:
       '@arethetypeswrong/cli':
         specifier: ^0.18.5
         version: 0.18.5
+      '@bymax-one/nest-cache':
+        specifier: 1.2.8
+        version: 1.2.8(@nestjs/common@11.2.8(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.8(@nestjs/common@11.2.8(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(reflect-metadata@0.2.2)(rxjs@7.8.2))(ioredis@6.0.0(supports-color@8.1.1))(reflect-metadata@0.2.2)
       '@commitlint/cli':
         specifier: ^21.2.1
         version: 21.2.4(conventional-commits-parser@7.1.3)(typescript@6.0.3)
@@ -528,6 +531,15 @@ packages:
 
   '@braidai/lang@1.1.2':
     resolution: {integrity: sha512-qBcknbBufNHlui137Hft8xauQMTZDKdophmLFv05r2eNmdIv/MlPuP4TdUknHG68UdWLgVZwgxVe735HzJNIwA==}
+
+  '@bymax-one/nest-cache@1.2.8':
+    resolution: {integrity: sha512-Ey55ZtW30fcEClgzmcs9HlJWY74SG0MGG2M4sgjkQJ8fVWVWsFfiFgyXyAykmTkDAcaMywXpOLIrFsQFbQb2Tg==}
+    engines: {node: '>=24.0.0'}
+    peerDependencies:
+      '@nestjs/common': ^11.0.16
+      '@nestjs/core': ^11.1.18
+      ioredis: 6.0.0
+      reflect-metadata: ^0.2.0
 
   '@colors/colors@1.5.0':
     resolution: {integrity: sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ==}
@@ -4618,6 +4630,13 @@ snapshots:
   '@borewit/text-codec@0.2.2': {}
 
   '@braidai/lang@1.1.2': {}
+
+  '@bymax-one/nest-cache@1.2.8(@nestjs/common@11.2.8(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@11.2.8(@nestjs/common@11.2.8(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(reflect-metadata@0.2.2)(rxjs@7.8.2))(ioredis@6.0.0(supports-color@8.1.1))(reflect-metadata@0.2.2)':
+    dependencies:
+      '@nestjs/common': 11.2.8(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1)
+      '@nestjs/core': 11.2.8(@nestjs/common@11.2.8(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      ioredis: 6.0.0(supports-color@8.1.1)
+      reflect-metadata: 0.2.2
 
   '@colors/colors@1.5.0':
     optional: true

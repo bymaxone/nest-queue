@@ -422,16 +422,21 @@ function isAbbreviatedLocalType(line, sources) {
   return new RegExp(`\\b(class|interface|type)\\s+${escaped}\\b`).test(own)
 }
 
-/** An import of some OTHER package the fixture does not install — a documented optional
- * integration. Reported as uncovered, not as a failure. A relative specifier is never foreign:
- * it must resolve to a README snippet that exports what it imports. Neither is the package
- * itself or any subpath of it: those resolve through `exports`, so one that does not is a
- * wrong import. */
+/** Packages a README snippet may import although the fixture cannot resolve them, each with the
+ * reason. Empty on purpose: every other package a snippet imports is installed here as a dev
+ * dependency, so a wrong name or member is checked against its real types. Adding an entry
+ * un-checks every snippet line that touches that package, so it needs a reason a reviewer can
+ * weigh. */
+const UNCHECKED_IMPORTS = new Map([])
+
+/** An import the fixture cannot resolve, and that is allowed to stay unresolved. A specifier
+ * missing from {@link UNCHECKED_IMPORTS} is a failure, whatever package it names. A relative
+ * specifier must resolve to a README snippet that exports what it imports, and the package itself
+ * and its subpaths resolve through `exports`, so neither is ever allowed. */
 function isForeignModule(line) {
   if (!/error TS2307/.test(line)) return false
   const specifier = /Cannot find module '([^']+)'/.exec(line)?.[1] ?? ''
-  const ownPackage = specifier === PKG.name || specifier.startsWith(`${PKG.name}/`)
-  return !specifier.startsWith('.') && !ownPackage
+  return UNCHECKED_IMPORTS.has(specifier)
 }
 
 /**
@@ -467,7 +472,7 @@ export function checkSnippets(fail) {
     console.log(
       `  snippets: ${blocks.length} compiled against dist/` +
         (ignored > 0
-          ? ` (${ignored} diagnostic(s) ignored: a peer the fixture does not install)`
+          ? ` (${ignored} diagnostic(s) ignored: an import listed in UNCHECKED_IMPORTS)`
           : ''),
     )
   } finally {

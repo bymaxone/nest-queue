@@ -270,17 +270,21 @@ Worker and QueueEvents connections are duplicated from this client with
 
 ```typescript
 import { BymaxQueueModule } from '@bymax-one/nest-queue'
-import { CACHE_REDIS_CLIENT } from '@bymax-one/nest-cache'
+import { ConnectionManager } from '@bymax-one/nest-cache'
 import type { Redis } from 'ioredis'
 
 BymaxQueueModule.forRootAsync({
-  inject: [CACHE_REDIS_CLIENT],
-  useFactory: (queueRedis: Redis) => ({
-    connection: { client: queueRedis },
+  inject: [ConnectionManager],
+  useFactory: (cache: ConnectionManager) => ({
+    connection: { client: cache.getClient() as Redis },
     isGlobal: true,
   }),
 })
 ```
+
+`BymaxCacheModule` is global by default and provides `ConnectionManager`; `getClient()` returns the shared
+client. It is typed `Redis | Cluster`, and Mode A takes a standalone `Redis`, so run
+`@bymax-one/nest-cache` in standalone mode.
 
 Mode A is the recommended setup when you already have `@bymax-one/nest-cache` in the app.
 One client is shared; the lib duplicates it per role and applies the correct retry policy

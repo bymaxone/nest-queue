@@ -11,6 +11,20 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.12] — 2026-11-07
+
+Documentation only. `dist/` is byte-identical to 1.2.11 (checked with `diff -r` of a fresh build
+against the unpacked 1.2.11 tarball); the package ships a corrected README.
+
+### Documentation
+
+- **The README's Mode A example now compiles and runs.** It imported `CACHE_REDIS_CLIENT` from
+  `@bymax-one/nest-cache`, a name that package does not export. The example now injects
+  `ConnectionManager` and passes `cache.getClient()`, and says that `getClient()` is typed
+  `Redis | Cluster` while Mode A takes a standalone `Redis`.
+
+---
+
 ## [1.2.11] — 2026-11-06
 
 Action required only if you extend or replace `QueueLifecycle`, or rely on the order in which the
@@ -867,7 +881,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.11...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.12...HEAD
+[1.2.12]: https://github.com/bymaxone/nest-queue/compare/v1.2.11...v1.2.12
 [1.2.11]: https://github.com/bymaxone/nest-queue/compare/v1.2.10...v1.2.11
 [1.2.10]: https://github.com/bymaxone/nest-queue/compare/v1.2.9...v1.2.10
 [1.2.9]: https://github.com/bymaxone/nest-queue/compare/v1.2.8...v1.2.9
