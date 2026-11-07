@@ -63,6 +63,7 @@
     "clean": "rm -rf dist coverage",
     "lint": "eslint src scripts test",
     "lint:fix": "eslint src scripts test --fix",
+    "mutation:const-tables": "node scripts/mutate-const-tables.mjs -- pnpm exec jest --config jest.mutants.config.ts --findRelatedTests {file} --coverage=false --silent",
     "mutation": "stryker run",
     "mutation:full": "node -e \"require('node:fs').rmSync('reports/stryker-incremental.json',{force:true,recursive:true})\" && stryker run",
     "mutation:dry-run": "stryker run --dryRunOnly",
