@@ -38,8 +38,8 @@ complete in Nms (forced N worker(s))` is now written once, at the end, and its t
 ### Changed
 
 - **The shipped bundles no longer carry comments.** `dist/server/index.mjs` and `index.cjs` are
-  smaller (the server bundle is about 8.3 kB brotli, from 15 kB); the declaration files keep their
-  JSDoc, and the runtime behaviour of the bundles is unchanged.
+  smaller; the declaration files keep their JSDoc, and the comment removal does not change the
+  runtime behaviour of the bundles.
 
 ### Documentation
 
