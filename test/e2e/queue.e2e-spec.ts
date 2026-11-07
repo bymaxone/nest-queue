@@ -25,6 +25,7 @@ import { SlowProcessor } from './fixtures/processors/slow.processor'
 import { RetryProcessor } from './fixtures/processors/retry.processor'
 import { DedupProcessor } from './fixtures/processors/dedup.processor'
 import { FlowRecorder } from './fixtures/processors/flow.processors'
+import { ShutdownRequestProbe } from './fixtures/shutdown-request.probe'
 
 /** Poll `predicate` until it is truthy or the timeout elapses. */
 async function waitFor(
@@ -162,7 +163,12 @@ describe('E2E — queue library against real Redis', () => {
     const retry = app.get(RetryProcessor)
     const queues = app.get(QueueService)
 
-    await queues.enqueue('retry', 'retry', {}, { attempts: 3, backoff: { type: 'exponential', delay: 50 } })
+    await queues.enqueue(
+      'retry',
+      'retry',
+      {},
+      { attempts: 3, backoff: { type: 'exponential', delay: 50 } },
+    )
     await waitFor(() => retry.succeeded, 15_000)
 
     expect(retry.attempts).toBe(3)
@@ -214,5 +220,57 @@ describe('E2E — queue library against real Redis', () => {
     await waitFor(async () => (await queues.getMetrics('risky-dlq')).counts.waiting >= 1, 15_000)
     const metrics = await queues.getMetrics('risky-dlq')
     expect(metrics.counts.waiting).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('E2E — a request that enqueues while the application closes', () => {
+  /** Ids of every Redis client other than the ones in `keep`, read from the server. */
+  async function foreignClientIds(keep: readonly number[]): Promise<number[]> {
+    const listing = (await maintenance.client('LIST')) as string
+    return listing
+      .split('\n')
+      .map((line) => /(?:^|\s)id=(\d+)/.exec(line)?.[1])
+      .filter((id): id is string => id !== undefined)
+      .map(Number)
+      .filter((id) => !keep.includes(id))
+  }
+
+  it('Mode B: the enqueue resolves and the library leaves no connection behind', async () => {
+    // The probe enqueues after every onModuleDestroy hook has run and before the HTTP server
+    // stops, as an in-flight request would. The library-owned connection must still be open then.
+    const localApp = await bootApp(redis.url)
+    const probe = localApp.get(ShutdownRequestProbe)
+    const mine = await maintenance.client('ID')
+
+    await localApp.close()
+
+    expect(probe.outcome).toHaveProperty('jobId')
+    expect(probe.outcome).not.toHaveProperty('error')
+    expect(await maintenance.llen('bull:echo:wait')).toBe(1)
+    await waitFor(async () => (await foreignClientIds([mine])).length === 0, 5_000)
+  })
+
+  it('Mode A: the enqueue resolves, the consumer client stays open, nothing else remains', async () => {
+    // The shared client is the consumer's: it must survive the close, and no Queue the late
+    // enqueue created may keep a connection of its own.
+    const client = new Redis(redis.url, { maxRetriesPerRequest: 20 })
+    const localApp = await NestFactory.createApplicationContext(buildTestModule({ client }), {
+      logger: false,
+    })
+    const probe = localApp.get(ShutdownRequestProbe)
+    const mine = await maintenance.client('ID')
+    const shared = await client.client('ID')
+
+    await localApp.close()
+
+    try {
+      expect(probe.outcome).toHaveProperty('jobId')
+      expect(probe.outcome).not.toHaveProperty('error')
+      expect(await maintenance.llen('bull:echo:wait')).toBe(1)
+      expect(client.status).toBe('ready')
+      await waitFor(async () => (await foreignClientIds([mine, shared])).length === 0, 5_000)
+    } finally {
+      await client.quit()
+    }
   })
 })

@@ -102,6 +102,12 @@ function makeLifecycle(args: {
   return { lifecycle, queuesCloseAll, flowDestroy, connectionDestroy }
 }
 
+/** Run both hooks in the order NestJS does when the application closes. */
+async function closeApp(lifecycle: QueueLifecycle): Promise<void> {
+  await lifecycle.onModuleDestroy()
+  await lifecycle.onApplicationShutdown()
+}
+
 let warnSpy: jest.SpyInstance
 let logSpy: jest.SpyInstance
 
@@ -111,9 +117,9 @@ beforeEach(() => {
   warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
 })
 
-describe('QueueLifecycle.onModuleDestroy — happy path', () => {
+describe('QueueLifecycle shutdown — happy path', () => {
   it('runs the teardown steps in the documented order', async () => {
-    // workers → queue-events → duplicated connections → flow → queues → connection.
+    // workers → queue-events → duplicated connections, then (after the HTTP server) flow → queues → connection.
     const workerClose = jest.fn().mockImplementation(() => {
       order.push('worker')
       return Promise.resolve()
@@ -158,7 +164,7 @@ describe('QueueLifecycle.onModuleDestroy — happy path', () => {
       connectionDestroy,
     })
 
-    await lifecycle.onModuleDestroy()
+    await closeApp(lifecycle)
 
     expect(order).toEqual([
       'worker',
@@ -179,7 +185,7 @@ describe('QueueLifecycle.onModuleDestroy — happy path', () => {
   it('is a no-op-safe sweep when nothing was registered', async () => {
     // Empty registries must complete without throwing and still tear down the connection.
     const { lifecycle, connectionDestroy } = makeLifecycle({})
-    await expect(lifecycle.onModuleDestroy()).resolves.toBeUndefined()
+    await expect(closeApp(lifecycle)).resolves.toBeUndefined()
     expect(connectionDestroy).toHaveBeenCalledTimes(1)
   })
 
@@ -190,14 +196,14 @@ describe('QueueLifecycle.onModuleDestroy — happy path', () => {
     jest.setSystemTime(1_000)
     const { lifecycle } = makeLifecycle({})
 
-    await lifecycle.onModuleDestroy()
+    await closeApp(lifecycle)
 
     expect(logSpy).toHaveBeenCalledWith('Queue shutdown complete in 0ms (forced 0 worker(s))')
     jest.useRealTimers()
   })
 })
 
-describe('QueueLifecycle.onModuleDestroy — bounded drain', () => {
+describe('QueueLifecycle shutdown — bounded drain', () => {
   it('force-closes a worker that exceeds the drain budget and continues teardown', async () => {
     // A graceful close that never resolves must be force-closed after the timeout.
     jest.useFakeTimers()
@@ -215,7 +221,7 @@ describe('QueueLifecycle.onModuleDestroy — bounded drain', () => {
       resolved: makeResolved({ drainTimeoutMs: 5000 }),
     })
 
-    const pending = lifecycle.onModuleDestroy()
+    const pending = closeApp(lifecycle)
     await jest.advanceTimersByTimeAsync(5000)
     await pending
     // Flush the fire-and-forget force-close rejection handler.
@@ -246,7 +252,7 @@ describe('QueueLifecycle.onModuleDestroy — bounded drain', () => {
       workers: new Map([['email', makeWorker(workerClose)]]),
     })
 
-    await lifecycle.onModuleDestroy()
+    await closeApp(lifecycle)
 
     // Exactly one drain timer is armed; it must be cleared with the same handle.
     expect(setSpy).toHaveBeenCalledTimes(1)
@@ -267,12 +273,12 @@ describe('QueueLifecycle.onModuleDestroy — bounded drain', () => {
       workers: new Map([['email', makeWorker(close)]]),
     })
 
-    await expect(lifecycle.onModuleDestroy()).resolves.toBeUndefined()
+    await expect(closeApp(lifecycle)).resolves.toBeUndefined()
     expect(close).toHaveBeenCalledWith(true)
   })
 })
 
-describe('QueueLifecycle.onModuleDestroy — why a worker was forced', () => {
+describe('QueueLifecycle shutdown — why a worker was forced', () => {
   it('tells a close that failed apart from a drain that timed out', async () => {
     // A close() that rejects with a real error (Redis went away during shutdown) is not a drain
     // that ran out of budget; calling it one sends the operator after the wrong cause. The worker
@@ -287,7 +293,7 @@ describe('QueueLifecycle.onModuleDestroy — why a worker was forced', () => {
       resolved: makeResolved({ drainTimeoutMs: 5000 }),
     })
 
-    await lifecycle.onModuleDestroy()
+    await closeApp(lifecycle)
 
     expect(close).toHaveBeenCalledWith(true)
     const lines = warnSpy.mock.calls.map(([line]) => String(line))
@@ -305,7 +311,7 @@ describe('QueueLifecycle.onModuleDestroy — why a worker was forced', () => {
   })
 })
 
-describe('QueueLifecycle.onModuleDestroy — conditional drain', () => {
+describe('QueueLifecycle shutdown — conditional drain', () => {
   it('drains every cached queue when drainOnShutdown is enabled', async () => {
     // drainOnShutdown removes waiting/delayed jobs; the swallowed drain error is tolerated.
     const queueClose = jest.fn().mockResolvedValue(undefined)
@@ -315,7 +321,7 @@ describe('QueueLifecycle.onModuleDestroy — conditional drain', () => {
       resolved: makeResolved({ drainOnShutdown: true }),
     })
 
-    await expect(lifecycle.onModuleDestroy()).resolves.toBeUndefined()
+    await expect(closeApp(lifecycle)).resolves.toBeUndefined()
     expect(queueDrain).toHaveBeenCalledTimes(1)
     // Draining precedes closing, and closing is delegated to the service.
     expect(queuesCloseAll).toHaveBeenCalledTimes(1)
@@ -331,7 +337,7 @@ describe('QueueLifecycle.onModuleDestroy — conditional drain', () => {
       resolved: makeResolved({ drainOnShutdown: true }),
     })
 
-    await lifecycle.onModuleDestroy()
+    await closeApp(lifecycle)
 
     const lines = warnSpy.mock.calls.map(([line]) => String(line))
     expect(lines.some((line) => line.includes('"email"') && line.includes('drain failed'))).toBe(
@@ -350,14 +356,14 @@ describe('QueueLifecycle.onModuleDestroy — conditional drain', () => {
       resolved: makeResolved({ drainOnShutdown: true }),
     })
 
-    await lifecycle.onModuleDestroy()
+    await closeApp(lifecycle)
 
     expect(queueDrain).toHaveBeenCalledTimes(1)
     expect(warnSpy).not.toHaveBeenCalled()
   })
 })
 
-describe('QueueLifecycle.onModuleDestroy — error resilience', () => {
+describe('QueueLifecycle shutdown — error resilience', () => {
   it('swallows failures from every teardown step and disconnects on a failed quit', async () => {
     // One failing step must never abort the rest of the ordered sequence.
     const workerClose = jest.fn().mockResolvedValue(undefined)
@@ -380,11 +386,103 @@ describe('QueueLifecycle.onModuleDestroy — error resilience', () => {
       connectionDestroy,
     })
 
-    await expect(lifecycle.onModuleDestroy()).resolves.toBeUndefined()
+    await expect(closeApp(lifecycle)).resolves.toBeUndefined()
     expect(eventsClose).toHaveBeenCalledTimes(1)
     expect(workerDisconnect).toHaveBeenCalledTimes(1)
     expect(flowDestroy).toHaveBeenCalledTimes(1)
     expect(queuesCloseAll).toHaveBeenCalledTimes(1)
     expect(connectionDestroy).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('QueueLifecycle shutdown — the two hooks', () => {
+  /** Build a lifecycle whose every step records its name in `order`. */
+  function makeRecording(drainOnShutdown = false): ReturnType<typeof makeLifecycle> {
+    const step = (name: string): jest.Mock =>
+      jest.fn().mockImplementation(() => {
+        order.push(name)
+        return Promise.resolve()
+      })
+    return makeLifecycle({
+      workers: new Map([['email', makeWorker(step('worker'))]]),
+      workerConnections: new Map([['email', makeConnection(step('worker-conn'), jest.fn())]]),
+      events: new Map([['email', makeQueueEvents(step('events'))]]),
+      eventConnections: new Map([['email', makeConnection(step('event-conn'), jest.fn())]]),
+      queues: new Map([['email', makeQueue(jest.fn(), step('drain'))]]),
+      queuesCloseAll: step('queue'),
+      flowDestroy: step('flow'),
+      connectionDestroy: step('connection'),
+      resolved: makeResolved({ drainOnShutdown }),
+    })
+  }
+
+  it('onModuleDestroy stops consumption and leaves every producer-side resource open', async () => {
+    // A request still being served can enqueue after this hook returns, so the queues, the flow
+    // producer and the Queue-role connection must all still be open when it does.
+    const { lifecycle } = makeRecording(true)
+
+    await lifecycle.onModuleDestroy()
+
+    expect(order).toEqual(['worker', 'events', 'worker-conn', 'event-conn'])
+    expect(logSpy).not.toHaveBeenCalled()
+  })
+
+  it('onApplicationShutdown releases the producer side, draining first when asked', async () => {
+    // Draining needs the queues open, so it precedes the close; the connection goes last.
+    const { lifecycle } = makeRecording(true)
+    await lifecycle.onModuleDestroy()
+    order.length = 0
+
+    await lifecycle.onApplicationShutdown()
+
+    expect(order).toEqual(['drain', 'flow', 'queue', 'connection'])
+  })
+
+  it('onApplicationShutdown does not drain unless drainOnShutdown is set', async () => {
+    // The default is production-safe: waiting jobs are left in Redis.
+    const { lifecycle } = makeRecording(false)
+    await lifecycle.onModuleDestroy()
+    order.length = 0
+
+    await lifecycle.onApplicationShutdown()
+
+    expect(order).toEqual(['flow', 'queue', 'connection'])
+  })
+
+  it('logs one total that spans both hooks and carries the forced-worker count', async () => {
+    // The summary must cover the time spent between the hooks (the HTTP server stopping) and the
+    // workers that had to be force-closed in the first one.
+    jest.useFakeTimers()
+    jest.setSystemTime(1_000)
+    const close = jest
+      .fn()
+      .mockImplementation((force?: boolean) =>
+        force === true ? Promise.resolve() : Promise.reject(new Error('close failed')),
+      )
+    const { lifecycle } = makeLifecycle({ workers: new Map([['email', makeWorker(close)]]) })
+
+    await lifecycle.onModuleDestroy()
+    jest.setSystemTime(1_500)
+    await lifecycle.onApplicationShutdown()
+
+    expect(logSpy).toHaveBeenCalledTimes(1)
+    expect(logSpy).toHaveBeenCalledWith('Queue shutdown complete in 500ms (forced 1 worker(s))')
+    jest.useRealTimers()
+  })
+
+  it('onApplicationShutdown still releases everything when onModuleDestroy never ran', async () => {
+    // A context can reach the shutdown hook without the destroy hook having completed; the
+    // release must not depend on state the first hook sets.
+    jest.useFakeTimers()
+    jest.setSystemTime(1_000)
+    const { lifecycle, flowDestroy, queuesCloseAll, connectionDestroy } = makeLifecycle({})
+
+    await lifecycle.onApplicationShutdown()
+
+    expect(flowDestroy).toHaveBeenCalledTimes(1)
+    expect(queuesCloseAll).toHaveBeenCalledTimes(1)
+    expect(connectionDestroy).toHaveBeenCalledTimes(1)
+    expect(logSpy).toHaveBeenCalledWith('Queue shutdown complete in 0ms (forced 0 worker(s))')
+    jest.useRealTimers()
   })
 })

@@ -1,8 +1,11 @@
 /**
  * @fileoverview `QueueLifecycle` — the single, ordered graceful-shutdown
- * orchestrator. On `onModuleDestroy` it drains every worker within a bounded
- * budget, then tears down queue-events, the connections the library opened,
- * the flow producer, the cached queues, and finally the Queue-role connection.
+ * orchestrator, split across the two NestJS hooks that bracket the HTTP server.
+ * On `onModuleDestroy` it stops consumption: it drains every worker within a
+ * bounded budget, then closes queue-events and the connections the library
+ * opened for them. On `onApplicationShutdown`, which NestJS runs only after the
+ * HTTP server has stopped, it releases what a request can still be using: the
+ * flow producer, the cached queues, and finally the Queue-role connection.
  *
  * Delivery is at-least-once: when a worker exceeds the drain budget it is
  * force-closed and its in-flight job becomes `stalled` and is retried by another
@@ -12,7 +15,13 @@
  * @layer server/lifecycle
  */
 
-import { Inject, Injectable, Logger, type OnModuleDestroy } from '@nestjs/common'
+import {
+  Inject,
+  Injectable,
+  Logger,
+  type OnApplicationShutdown,
+  type OnModuleDestroy,
+} from '@nestjs/common'
 import type { Worker } from 'bullmq'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
@@ -30,9 +39,15 @@ class DrainTimeoutError extends Error {}
 /**
  * Ordered graceful-shutdown service. Implementing the protocol in one place
  * guarantees the teardown order — workers drain first, then queue-events, then
- * the duplicated connections, then the flow producer, the queues, and finally
- * the Queue-role connection. Every step swallows its own errors so a single
- * failure never aborts the rest of the sequence.
+ * the duplicated connections; once the HTTP server has stopped, the flow
+ * producer, the queues, and finally the Queue-role connection. Every step
+ * swallows its own errors so a single failure never aborts the rest of the
+ * sequence.
+ *
+ * Why two hooks: NestJS runs `onModuleDestroy` before it stops the HTTP server,
+ * so a request that is still being served can enqueue a job after that hook has
+ * returned. The producer side (queues, flow producer, Queue-role connection)
+ * therefore waits for `onApplicationShutdown`, while consumption stops early.
  *
  * Connection ownership: in **Mode B** the library-owned Queue-role client is
  * quit by the connection resolver; in **Mode A** that step is a no-op and only
@@ -40,8 +55,10 @@ class DrainTimeoutError extends Error {}
  * — the consumer's shared client is never touched.
  */
 @Injectable()
-export class QueueLifecycle implements OnModuleDestroy {
+export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
   private readonly logger = new Logger(QueueLifecycle.name)
+  private startedAt: number | undefined
+  private forcedWorkers = 0
 
   constructor(
     @Inject(WorkerRegistry) private readonly workers: WorkerRegistry,
@@ -53,21 +70,31 @@ export class QueueLifecycle implements OnModuleDestroy {
   ) {}
 
   /**
-   * Run the ordered shutdown sequence. Called by NestJS when the application
-   * context closes (e.g. on `SIGTERM` with shutdown hooks enabled).
+   * Stop consumption: drain the workers within the bounded budget, then close
+   * queue-events and the connections the library opened for them. Called by
+   * NestJS when the application context closes (e.g. on `SIGTERM` with shutdown
+   * hooks enabled), before the HTTP server stops.
    */
   async onModuleDestroy(): Promise<void> {
-    const start = Date.now()
-    const forced = await this.closeWorkers()
+    this.startedAt = Date.now()
+    this.forcedWorkers = await this.closeWorkers()
     await this.closeQueueEvents()
     await this.closeDuplicatedConnections()
+  }
+
+  /**
+   * Release the producer side once the HTTP server has stopped: the optional
+   * queue drain, the flow producer, the cached queues, and the Queue-role
+   * connection, then log the total shutdown time.
+   */
+  async onApplicationShutdown(): Promise<void> {
     await this.drainQueuesIfRequested()
     await this.closeFlowProducer()
     await this.closeQueues()
     await this.teardownConnection()
     this.logger.log(
-      `Queue shutdown complete in ${String(Date.now() - start)}ms ` +
-        `(forced ${String(forced)} worker(s))`,
+      `Queue shutdown complete in ${String(Date.now() - (this.startedAt ?? Date.now()))}ms ` +
+        `(forced ${String(this.forcedWorkers)} worker(s))`,
     )
   }
 
