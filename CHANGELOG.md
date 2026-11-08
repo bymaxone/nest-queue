@@ -22,13 +22,13 @@ tarball. The package also ships a corrected README.
 
 - **An outage on a connection the library opens no longer prints `[ioredis] Unhandled error event`
   to stderr.** In Mode B the owned connection listened for `error` only while it waited for
-  `ready`, so every later outage reached ioredis with no listener, and ioredis wrote one line per
+  `ready`, so until BullMQ built something on it (BullMQ adds its own listener to a client it is
+  handed) a later outage reached ioredis with no listener, and ioredis wrote one line per
   reconnect attempt to raw stderr, outside the structured logger. The owned connection now keeps a
   listener for its whole life that logs through the module's logger. The same holds for the
   duplicate opened for each `QueueEvents` (BullMQ listens on its own copy, not on this one) and for
   the probe the Mode A check duplicates. Every error is logged as it arrives, with no throttling.
-  A client you pass in Mode A is yours and the library adds no listener to it; the duplicates it
-  makes from yours are guarded.
+  A client you pass in Mode A is yours and the library adds no listener to it.
 
 ### Documentation
 
