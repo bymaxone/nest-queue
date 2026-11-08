@@ -66,6 +66,7 @@ jest.mock('ioredis', () => ({
     disconnect: jest.fn(),
     duplicate: jest.fn().mockReturnValue({
       options: { maxRetriesPerRequest: null },
+      on: jest.fn(),
       disconnect: jest.fn(),
     }),
   })),
@@ -417,7 +418,7 @@ describe('BymaxQueueModule.forRootAsync', () => {
 
 /** Build a ready ioredis-like client whose duplicate honors the null override. */
 function makeReadyClient(): Redis {
-  const probe = { options: { maxRetriesPerRequest: null }, disconnect: jest.fn() }
+  const probe = { options: { maxRetriesPerRequest: null }, on: jest.fn(), disconnect: jest.fn() }
   const client = {
     status: 'ready',
     options: { maxRetriesPerRequest: null },

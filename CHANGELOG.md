@@ -13,8 +13,22 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.2.12] — 2026-11-07
 
-Documentation only. `dist/` is byte-identical to 1.2.11 (checked with `diff -r` of a fresh build
-against the unpacked 1.2.11 tarball); the package ships a corrected README.
+No action required. The public API, the declaration files and the peer ranges are unchanged
+(`check-api-surface` reports no difference against 1.2.11); the runtime bundles (`index.mjs`,
+`index.cjs`) differ in code, measured with `diff -r` of a fresh build against the unpacked 1.2.11
+tarball. The package also ships a corrected README.
+
+### Fixed
+
+- **An outage on a connection the library opens no longer prints `[ioredis] Unhandled error event`
+  to stderr.** In Mode B the owned connection listened for `error` only while it waited for
+  `ready`, so every later outage reached ioredis with no listener, and ioredis wrote one line per
+  reconnect attempt to raw stderr, outside the structured logger. The owned connection now keeps a
+  listener for its whole life that logs through the module's logger. The same holds for the
+  duplicate opened for each `QueueEvents` (BullMQ listens on its own copy, not on this one) and for
+  the probe the Mode A check duplicates. Every error is logged as it arrives, with no throttling.
+  A client you pass in Mode A is yours and the library adds no listener to it; the duplicates it
+  makes from yours are guarded.
 
 ### Documentation
 
