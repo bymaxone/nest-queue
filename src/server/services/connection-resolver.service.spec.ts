@@ -5,6 +5,7 @@
 
 import { EventEmitter } from 'node:events'
 import { inspect } from 'node:util'
+import { Logger } from '@nestjs/common'
 import type { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
 import { QueueException } from '../errors/queue-exception'
@@ -117,10 +118,11 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     })
     expect(resolver.getMode()).toBe('mode-b-owned')
     expect(resolver.isOwned()).toBe(true)
-    // The ready handler resolves the race; cleanup must then detach BOTH listeners
-    // so the unused 'error' subscription is not leaked once the client is ready.
+    // The ready handler resolves the race; cleanup detaches the startup listeners. The one
+    // listener left is the persistent logger: without it every later outage reaches ioredis with
+    // no handler and is printed to raw stderr.
     expect(client.listenerCount('ready')).toBe(0)
-    expect(client.listenerCount('error')).toBe(0)
+    expect(client.listenerCount('error')).toBe(1)
   })
 
   it('opens a client from options only', async () => {
@@ -184,7 +186,7 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     await assertion
 
     expect(client.listenerCount('ready')).toBe(0)
-    expect(client.listenerCount('error')).toBe(0)
+    expect(client.listenerCount('error')).toBe(1)
     jest.useRealTimers()
   })
 
@@ -219,10 +221,10 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     client.emit('error', boom)
 
     await expect(init).rejects.toBe(boom)
-    // The error handler rejects the race; cleanup must then detach BOTH listeners
-    // so the unused 'ready' subscription is not leaked once startup has failed.
+    // The error handler rejects the race; cleanup detaches the startup listeners so the unused
+    // 'ready' subscription is not leaked. Only the persistent logger stays on the client.
     expect(client.listenerCount('ready')).toBe(0)
-    expect(client.listenerCount('error')).toBe(0)
+    expect(client.listenerCount('error')).toBe(1)
   })
 
   it('quits the owned client on destroy', async () => {
@@ -248,6 +250,63 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     await resolver.teardown()
 
     expect(client.disconnect).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('ConnectionResolver — error events after startup', () => {
+  beforeEach(() => {
+    redisConstructor.mockReset()
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
+  it('logs an outage on the owned client through the module logger instead of leaving it unhandled', async () => {
+    // Once the client is ready the startup listeners are gone; an outage 6 s long produced six
+    // "[ioredis] Unhandled error event" lines on raw stderr, outside the structured logger.
+    const lines = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    const client = new FakeRedis('ready', null)
+    redisConstructor.mockReturnValue(asRedis(client))
+    await new ConnectionResolver(optionsWith({ url: 'redis://localhost:6379' })).init()
+
+    client.emit('error', new Error('ECONNREFUSED'))
+    client.emit('error', new Error('ECONNREFUSED'))
+
+    expect(lines.mock.calls.map((call: unknown[]): unknown => call[0])).toEqual([
+      'Redis connection (owned) emitted an error: ECONNREFUSED',
+      'Redis connection (owned) emitted an error: ECONNREFUSED',
+    ])
+  })
+
+  it('attaches the logger when the client is created, before startup can fail', async () => {
+    // A client that never reaches ready still emits errors while it retries; the listener must
+    // already be there when init rejects and the caller drops the resolver.
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    const client = new FakeRedis('connecting', null)
+    redisConstructor.mockReturnValue(asRedis(client))
+    const init = new ConnectionResolver({
+      connection: { url: 'redis://localhost:6379' },
+      connectionReadyTimeoutMs: 1,
+    }).init()
+
+    await expect(init).rejects.toBeInstanceOf(QueueException)
+    expect(client.listenerCount('error')).toBe(1)
+  })
+
+  it('adds no listener to a host-supplied client, and guards only its own probe', async () => {
+    // The host owns its client's error handling; the library only owns the probe it duplicates.
+    const probe = new FakeRedis('ready', null)
+    const client = new FakeRedis('ready', 20)
+    client.duplicate.mockReturnValue(asRedis(probe))
+    const lines = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    await new ConnectionResolver(optionsWith({ client: asRedis(client) })).init()
+
+    expect(client.listenerCount('error')).toBe(0)
+    expect(probe.listenerCount('error')).toBe(1)
+    // A late error on the probe is the library's to report, under its own label.
+    probe.emit('error', new Error('ECONNRESET'))
+    expect(lines).toHaveBeenCalledWith('Redis connection (probe) emitted an error: ECONNRESET')
   })
 })
 

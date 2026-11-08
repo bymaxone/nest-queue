@@ -31,10 +31,13 @@ jest.mock('bullmq', () => ({
   }),
 }))
 
-function fakeRedis(): Redis {
-  return {
-    duplicate: jest.fn().mockReturnValue({ status: 'ready', disconnect: jest.fn() }),
-  } as unknown as Redis
+/** The duplicate the registry takes: a real emitter, like an ioredis client. */
+function fakeDuplicate(): EventEmitter & { status: string; disconnect: jest.Mock } {
+  return Object.assign(new EventEmitter(), { status: 'ready', disconnect: jest.fn() })
+}
+
+function fakeRedis(duplicate = fakeDuplicate()): Redis {
+  return { duplicate: jest.fn().mockReturnValue(duplicate) } as unknown as Redis
 }
 
 function fakeConnection(redis?: Redis): ConnectionResolver {
@@ -50,6 +53,26 @@ function fakeOptions(prefix = 'bull'): ResolvedQueueOptions {
 
 beforeEach(() => {
   createdQueueEvents.length = 0
+})
+
+describe('QueueEventsRegistry.getOrCreate — the duplicated connection', () => {
+  it('logs an error the duplicate emits instead of leaving it unhandled', () => {
+    // BullMQ duplicates the connection it is given and never listens on the original, so without
+    // a listener of its own an outage prints "[ioredis] Unhandled error event" to raw stderr.
+    const lines = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    const duplicate = fakeDuplicate()
+    new QueueEventsRegistry(fakeConnection(fakeRedis(duplicate)), fakeOptions()).getOrCreate(
+      'email',
+    )
+
+    expect(duplicate.listenerCount('error')).toBe(1)
+    duplicate.emit('error', new Error('ECONNRESET'))
+
+    expect(lines).toHaveBeenCalledWith(
+      'Redis connection (queue events: email) emitted an error: ECONNRESET',
+    )
+    lines.mockRestore()
+  })
 })
 
 describe('QueueEventsRegistry.getOrCreate', () => {

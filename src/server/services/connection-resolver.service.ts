@@ -5,12 +5,13 @@
  * @layer server/services
  */
 
-import { HttpStatus, Inject, Injectable } from '@nestjs/common'
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common'
 import { Redis, type RedisOptions } from 'ioredis'
 import { BYMAX_QUEUE_OPTIONS } from '../bymax-queue.constants'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
 import type { QueueConnectionMode } from '../interfaces/queue-connection.interface'
 import { assertBlockingConnection, isClientUsable } from '../utils/validate-connection'
+import { attachClientErrorListener } from '../utils/attach-client-error-listener'
 import { duplicateConnection } from '../utils/duplicate-connection'
 import { DEFAULT_CONNECTION_READY_TIMEOUT_MS } from '../constants/default-options'
 import { QueueException } from '../errors/queue-exception'
@@ -44,6 +45,8 @@ type OwnedRedisOptions = Omit<RedisOptions, 'replyMapping'> & {
  */
 @Injectable()
 export class ConnectionResolver {
+  readonly #logger = new Logger(ConnectionResolver.name)
+
   /**
    * The resolved Redis client.
    *
@@ -75,6 +78,9 @@ export class ConnectionResolver {
       'url' in cfg
         ? new Redis(cfg.url, this.ownedOptions(cfg.options))
         : new Redis(this.ownedOptions(cfg.options))
+    // Before the first await, and for good: the startup race below removes its own listener once
+    // the client is ready, and a client with none prints every later outage to raw stderr.
+    attachClientErrorListener(this.#client, this.#logger, 'owned')
     await this.waitReady(
       this.#options.connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS,
     )
@@ -147,6 +153,7 @@ export class ConnectionResolver {
       )
     }
     const probe = duplicateConnection(client)
+    attachClientErrorListener(probe, this.#logger, 'probe')
     try {
       assertBlockingConnection(probe)
     } finally {
