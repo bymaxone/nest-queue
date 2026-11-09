@@ -170,6 +170,11 @@ const LOGIC_KINDS: ReadonlySet<ts.SyntaxKind> = new Set([
   ts.SyntaxKind.SwitchStatement,
   ts.SyntaxKind.TryStatement,
   ts.SyntaxKind.NewExpression,
+  ts.SyntaxKind.CallExpression,
+  ts.SyntaxKind.TaggedTemplateExpression,
+  ts.SyntaxKind.MethodDeclaration,
+  ts.SyntaxKind.GetAccessor,
+  ts.SyntaxKind.SetAccessor,
 ])
 
 /** Arithmetic over number literals alone (`24 * 3600`): a constant written out, not a decision. */
@@ -186,11 +191,38 @@ function isLiteralArithmetic(node: ts.Node): boolean {
   )
 }
 
+/** A `Symbol('description')` call: the one runtime call a constants file may make, since it builds a metadata key. */
+function isSymbolToken(node: ts.Node): boolean {
+  return (
+    ts.isCallExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === 'Symbol'
+  )
+}
+
+/** The runtime globals whose use makes a value depend on the environment rather than on the file. */
+const RUNTIME_GLOBALS: ReadonlySet<string> = new Set([
+  'process',
+  'globalThis',
+  'Date',
+  'Math',
+  'Reflect',
+  'Object',
+  'JSON',
+  'Promise',
+])
+
+/** A read of a runtime global, such as `process.env.X` or `Date.now`, which is not constant data. */
+function isRuntimeLookup(node: ts.Node): boolean {
+  return ts.isIdentifier(node) && RUNTIME_GLOBALS.has(node.text)
+}
+
 /** The names of the logic constructs a source file contains: none for a file that is only constant data. */
 function logicIn(text: string): string[] {
   const found: string[] = []
   const visit = (node: ts.Node): void => {
-    if (LOGIC_KINDS.has(node.kind) && !isLiteralArithmetic(node)) {
+    if (isRuntimeLookup(node)) found.push(`global ${node.getText()}`)
+    if (LOGIC_KINDS.has(node.kind) && !isLiteralArithmetic(node) && !isSymbolToken(node)) {
       found.push(ts.SyntaxKind[node.kind])
     }
     ts.forEachChild(node, visit)
@@ -294,6 +326,13 @@ describe('mutation scope', () => {
     expect(logicIn('export const A = () => 1')).not.toEqual([])
     expect(logicIn("export const A = process.env.X ? 'a' : 'b'")).not.toEqual([])
     expect(logicIn('export const A = new Map()')).not.toEqual([])
+    expect(logicIn('export const A = Math.random()')).not.toEqual([])
+    expect(logicIn('export const A = process.env.X')).not.toEqual([])
+    expect(logicIn('export const A = { value() { return 1 } } as const')).not.toEqual([])
+    expect(logicIn('export const A = { get value() { return 1 } }')).not.toEqual([])
+    expect(logicIn('export const A = { set value(v: number) {} }')).not.toEqual([])
+    expect(logicIn('export const A = tag`x`')).not.toEqual([])
+    expect(logicIn("export const A = Symbol('a')")).toEqual([])
     expect(logicIn('export const A = 24 * 3600')).toEqual([])
     expect(logicIn('export const A = B * 3600')).not.toEqual([])
     expect(logicIn('export const A = 1 < 2')).not.toEqual([])
