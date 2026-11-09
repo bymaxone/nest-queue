@@ -12,12 +12,13 @@
   "timeoutMS": 15000,
   "mutate": [
     "src/server/**/*.ts",
+    "src/shared/**/*.ts",
     "!src/**/*.spec.ts",
     "!src/**/index.ts",
     "!src/server/interfaces/**",
     "!src/server/constants/**",
     "!src/server/bymax-queue.constants.ts",
-    "!src/server/decorators/**"
+    "!src/shared/types/**"
   ],
   "thresholds": {
     "high": 100,

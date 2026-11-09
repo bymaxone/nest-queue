@@ -1,0 +1,18 @@
+[
+  {
+    "file": "src/check-api-surface.spec.ts",
+    "reason": "Runs scripts/check-api-surface.mjs on fixture directories; executes no code under src, so it can kill no mutant."
+  },
+  {
+    "file": "src/check-file-length.spec.ts",
+    "reason": "Runs scripts/check-file-length.mjs against throwaway git repositories; executes no code under src."
+  },
+  {
+    "file": "src/mutate-const-tables.spec.ts",
+    "reason": "Runs scripts/mutate-const-tables.mjs against fixture trees; executes no code under src."
+  },
+  {
+    "file": "src/strip-bundle-comments.spec.ts",
+    "reason": "Runs the bundle comment-stripping script on fixture directories; executes no code under src."
+  }
+]
