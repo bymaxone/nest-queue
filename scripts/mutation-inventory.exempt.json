@@ -12,10 +12,6 @@
     "reason": "Runs scripts/mutate-const-tables.mjs against fixture trees; executes no code under src."
   },
   {
-    "file": "src/shared/constants/job-status.spec.ts",
-    "reason": "Pins the JOB_STATUS table, a literal `as const` object that Stryker turns into no mutant; its entries are judged by `pnpm mutation:const-tables`."
-  },
-  {
     "file": "src/strip-bundle-comments.spec.ts",
     "reason": "Runs the bundle comment-stripping script on fixture directories; executes no code under src."
   },
