@@ -11,7 +11,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [1.2.12] — 2026-11-07
+## [1.2.12] — 2026-11-09
 
 No action required. The public API, the declaration files and the peer ranges are unchanged
 (`check-api-surface` reports no difference against 1.2.11); the runtime bundles (`index.mjs`,
