@@ -14,5 +14,9 @@
   {
     "file": "src/strip-bundle-comments.spec.ts",
     "reason": "Runs the bundle comment-stripping script on fixture directories; executes no code under src."
+  },
+  {
+    "file": "src/stryker-scope.spec.ts",
+    "reason": "Reads stryker.config.json, tsup.config.ts and the source text to pin the mutation scope; it executes no code under src, so it can kill no mutant."
   }
 ]
