@@ -23,6 +23,9 @@ describe('@Process decorator', () => {
     expect(entries).toHaveLength(1)
     expect(entries[0]!.jobName).toBeUndefined()
     expect(entries[0]!.methodKey).toBe('handle')
+    // The key itself is absent, not present-and-undefined: a host that tests `'jobName' in entry`
+    // must see a catch-all as one.
+    expect(Object.keys(entries[0]!)).toEqual(['methodKey'])
   })
 
   it('pushes a named entry when a jobName is supplied', () => {
