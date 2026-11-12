@@ -26,7 +26,8 @@ import { startRedisContainer, type RedisContainer } from './setup/testcontainers
 /** The Mode A snippet of the README, as the README writes it. */
 function readmeModeASnippet(): string {
   const readme = readFileSync(join(__dirname, '..', '..', 'README.md'), 'utf8')
-  const section = readme.slice(readme.indexOf('## 🔌 Mode A'), readme.indexOf('## 🔌 Mode B'))
+  const start = readme.indexOf('### Mode A')
+  const section = readme.slice(start, readme.indexOf('### Mode B', start))
   return /```typescript\n([\s\S]*?)```/.exec(section)?.[1] ?? ''
 }
 
@@ -78,7 +79,6 @@ describe('E2E — the README Mode A wiring', () => {
           inject: [ConnectionManager],
           useFactory: (cache: ConnectionManager) => ({
             connection: { client: cache.getClient() as Redis },
-            isGlobal: true,
           }),
         }),
       ],

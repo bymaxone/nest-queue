@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Typed BullMQ queues for NestJS</strong><br />
-  <sub>BullMQ 6 · Workers · Flows · Job Schedulers · Deduplication · OpenTelemetry · Graceful Shutdown · Zero Runtime Dependencies</sub>
+  <sub>BullMQ 6 · Workers · Flows · Job Schedulers · Deduplication · OpenTelemetry · Graceful Shutdown</sub>
 </p>
 
 <p align="center">
@@ -42,24 +42,13 @@ OpenTelemetry passthrough, and a tested bounded graceful-shutdown protocol.
 The library has **zero direct dependencies** — `bullmq`, `ioredis`, and `@nestjs/*` arrive as
 peer dependencies, so you control exact versions and the supply-chain surface stays minimal.
 
-### Why nest-queue?
-
-- **One setup, every queue.** A single `forRoot`/`forRootAsync`; queues are created on demand by
-  name — no `registerQueue()` per queue.
-- **Correct connections by default.** Dual-mode (bring-your-own client or lib-owned) with the
-  per-role `maxRetriesPerRequest` policy applied automatically — the Queue connection keeps
-  default retries (fail fast), only the duplicated Worker/QueueEvents connections force `null`.
-- **Current BullMQ API only.** Recurring jobs use Job Schedulers (`upsertJobScheduler`), never the
-  removed `addRepeatable`. Cron is validated by BullMQ's own parser, never a hand-rolled regex.
-- **Safe shutdown.** A bounded-drain protocol with at-least-once semantics, force-close, and
-  stalled-job accounting — verified against a real Redis (Testcontainers) E2E suite.
-
 ---
 
 ## 🔥 Features
 
 ### 📤 Producing
 
+- ✅ **One setup, every queue** — a single `forRoot` / `forRootAsync`; queues are created on demand by name, with no `registerQueue()` per queue
 - ✅ **Typed producer API** — `enqueue<TData, TResult>()` threads both generics through to the returned `Job`, so `job.data` and `job.returnvalue` need no cast
 - ✅ **Bounded bulk insert** — `enqueueBulk` adds up to 1 000 jobs in a single Redis roundtrip and rejects a larger batch outright, rather than letting one call inflate the heap
 - ✅ **Native deduplication** — simple, throttle, debounce and keep-last-if-active, passed straight through to BullMQ; the library writes no deduplication logic of its own
@@ -82,8 +71,6 @@ peer dependencies, so you control exact versions and the supply-chain surface st
 
 ### 🧩 Developer Experience
 
-- ✅ **Zero runtime dependencies** — BullMQ, ioredis and `@nestjs/*` all arrive as peer dependencies, so you pin the versions and the supply-chain surface stays yours
-- ✅ **Two subpaths** — the server surface, and `./shared` carrying types and constants that pull in nothing at all
 - ✅ **Stable error catalog** — namespaced codes exported from both subpaths, so a frontend maps a `code` without importing the server
 - ✅ **Dual-format output** — ESM + CJS with declarations for each format, verified against the packed tarball on every PR
 - ✅ **Opt-in observability** — OpenTelemetry passthrough via `bullmq-otel`, plus a `MetricsService` with a configurable TTL cache
@@ -132,19 +119,18 @@ Both subpaths ship ESM **and** CommonJS with declarations for each format, so a
 > A full reference application lives in
 > [`bymaxone/nest-queue-example`](https://github.com/bymaxone/nest-queue-example) —
 > an API and a web console exercising every public export against a real Redis.
->
-> The `test/consumer-app` directory in this repository is **not** that. It is a
-> typecheck fixture: a few hundred lines of application-shaped code that CI
-> compiles against the freshly built library on every pull request, to catch an
-> ergonomic break in the decorator API that a signature test cannot see.
 
 ---
 
 ## 🚀 Quick Start
 
+### 1. Install
+
 ```bash
 pnpm add @bymax-one/nest-queue bullmq ioredis reflect-metadata
 ```
+
+### 2. Load `reflect-metadata`
 
 `reflect-metadata` is loaded **once by your application**, before anything else — this
 is the standard NestJS entry point and the decorators in this library depend on it:
@@ -163,6 +149,8 @@ async function bootstrap(): Promise<void> {
 void bootstrap()
 ```
 
+### 3. Register the module
+
 Wire the module in your root `AppModule`:
 
 ```typescript
@@ -174,7 +162,6 @@ import { EmailModule } from './email.module'
   imports: [
     BymaxQueueModule.forRoot({
       connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
-      isGlobal: true,
     }),
     EmailModule,
   ],
@@ -182,7 +169,9 @@ import { EmailModule } from './email.module'
 export class AppModule {}
 ```
 
-Enqueue a job from any service:
+### 4. Enqueue a job
+
+From any service:
 
 ```typescript
 import { Injectable } from '@nestjs/common'
@@ -198,7 +187,9 @@ export class EmailService {
 }
 ```
 
-Process jobs with a decorated handler:
+### 5. Process jobs
+
+With a decorated handler:
 
 ```typescript
 import { Injectable } from '@nestjs/common'
@@ -215,8 +206,11 @@ export class EmailProcessor {
 }
 ```
 
-Register the service and the processor in a feature module that `AppModule` imports, like the `EmailModule`
-imported above. `isGlobal: true` above makes `QueueService` injectable there without importing `BymaxQueueModule` again:
+### 6. Register the providers
+
+Put the service and the processor in a feature module that `AppModule` imports, like the `EmailModule`
+above. The module is global by default (`isGlobal` defaults to `true`), so `QueueService` is injectable
+there without importing `BymaxQueueModule` again:
 
 ```typescript
 import { Module } from '@nestjs/common'
@@ -262,11 +256,16 @@ first job is enqueued.
 
 ---
 
-## 🔌 Mode A — Bring Your Own Connection (recommended with `@bymax-one/nest-cache`)
+## 🔌 Connections
 
-Mode A accepts an existing `ioredis` client injected from your cache or connection layer.
-Worker and QueueEvents connections are duplicated from this client with
-`maxRetriesPerRequest: null` applied automatically; the Queue connection uses ioredis defaults.
+`connection` takes a client (**Mode A**) or a URL or ioredis options (**Mode B**); the arms are mutually
+exclusive. In both modes the Queue connection keeps the ioredis defaults, and the Worker and
+`QueueEvents` connections are `duplicate()`s of it with `maxRetriesPerRequest: null`.
+
+### Mode A — your own client
+
+Recommended when the application already runs `@bymax-one/nest-cache`: one client is shared and
+duplicated per role, and your cache connection is left alone.
 
 ```typescript
 import { BymaxQueueModule } from '@bymax-one/nest-queue'
@@ -277,30 +276,19 @@ BymaxQueueModule.forRootAsync({
   inject: [ConnectionManager],
   useFactory: (cache: ConnectionManager) => ({
     connection: { client: cache.getClient() as Redis },
-    isGlobal: true,
   }),
 })
 ```
 
-`BymaxCacheModule` is global by default and provides `ConnectionManager`; `getClient()` returns the shared
-client. It is typed `Redis | Cluster`, and Mode A takes a standalone `Redis`, so run
-`@bymax-one/nest-cache` in standalone mode.
+`BymaxCacheModule` is global by default and provides `ConnectionManager`. `getClient()` is typed
+`Redis | Cluster` and Mode A takes a standalone `Redis`, so run `@bymax-one/nest-cache` in standalone mode.
 
-Mode A is the recommended setup when you already have `@bymax-one/nest-cache` in the app.
-One client is shared; the lib duplicates it per role and applies the correct retry policy
-without touching your cache connection.
-
----
-
-## 🔌 Mode B — Lib-Owned Connection
-
-Mode B lets the library own the Redis connections. Pass either a URL or raw ioredis options:
+### Mode B — a connection the library owns
 
 ```typescript
 // URL form
 BymaxQueueModule.forRoot({
   connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
-  isGlobal: true,
 })
 
 // Options form
@@ -313,45 +301,373 @@ BymaxQueueModule.forRoot({
       tls: {},
     },
   },
-  isGlobal: true,
 })
 ```
 
-The library opens one connection for all queues and flows, and two for each worker and for each
-queue that has an `@OnQueueEvent` listener ([the budget is below](#-redis-connections)). The worker
-and `QueueEvents` connections carry `maxRetriesPerRequest: null`.
+### Connection budget
+
+The connections held are linear in what you register. Counts were read from `INFO clients` against
+Redis 8 with BullMQ 6 and `ioredis` 6; every connection is released when the application context closes.
+
+| What you register                              | Connections held                                                        |
+| ---------------------------------------------- | ----------------------------------------------------------------------- |
+| The module, Mode B                             | 1, shared by every queue and every flow                                 |
+| The module, Mode A                             | 0 of its own; your client is yours and is never counted                 |
+| Each worker (`@Processor` or `WorkerRegistry`) | 2: a blocking connection that waits for jobs, and a command connection  |
+| Each queue observed with `@OnQueueEvent`       | 2: a blocking connection that reads the event stream, and a command one |
+
+Queues and `FlowService` add none, so the cost comes from consumers: a blocking connection is parked
+inside a blocking command until a job arrives and cannot be shared. **Example:** 20 workers and 5 observed
+queues in Mode B hold 1 + (2 × 20) + (2 × 5) = **51** connections (50 in Mode A, plus whatever your own
+client uses). Each instance opens its own set, so three instances hold 153.
+
+Hosted Redis plans cap concurrent connections: multiply by the instances you run (rolling deploys
+overlap old and new) and compare with your plan's limit; self-managed Redis allows 10 000 (`maxclients`).
+In `CLIENT LIST`, a worker's blocking connection is named `<prefix>:<base64 of the queue name>…`; the
+command connection is unnamed.
 
 ---
 
-## 🔌 Redis connections
+## 🎀 Decorators
 
-How many connections the library holds is linear in what you register, so you can budget it before
-you deploy. Counts were read from `INFO clients` against Redis 8 with BullMQ 6 and `ioredis` 6, and
-every connection is released when the application context closes.
+### `@Processor(queueName)`
 
-| What you register                              | Connections held                                                               |
-| ---------------------------------------------- | ------------------------------------------------------------------------------ |
-| The module (Mode B, library-owned connection)  | 1, shared by every producer and every flow                                     |
-| The module (Mode A, your client)               | 0 of its own; your client is yours and is never counted                        |
-| A queue you enqueue to, with `QueueService`    | 0 more: queues share the module's connection                                   |
-| `FlowService` (flows enabled)                  | 0 more                                                                         |
-| Each worker (`@Processor` or `WorkerRegistry`) | 2: a blocking connection that waits for jobs, and a command connection         |
-| Each queue observed with `@OnQueueEvent`       | 2: a blocking connection that reads the event stream, and a command connection |
+Marks a class as a worker bound to `queueName`. The class must be an `@Injectable()` registered as a NestJS provider.
 
-Producers and flows add nothing, so the cost comes from consumers. The blocking connection of a
-worker cannot be shared: it is parked inside a blocking command until a job arrives.
+### `@Process(jobName?)`
 
-**Worked example.** One application instance in Mode B with 20 workers and 5 queues observed with
-`@OnQueueEvent` holds 1 + (2 × 20) + (2 × 5) = **51** connections; in Mode A the same instance holds
-50, plus whatever your own client uses. Each instance of the application opens its own set, so three
-instances hold 153.
+Method decorator for the handler. If `jobName` is omitted, the method handles all jobs on the queue. If provided, only jobs with that `name` are dispatched here.
 
-**Managed Redis.** Hosted Redis plans cap the number of concurrent connections, and a plan sized for
-a handful of clients is exhausted by one instance with a few dozen workers. Multiply the table by
-the number of instances you run (include rolling deploys, where old and new instances overlap) and
-compare it with the limit of your plan; self-managed Redis allows 10 000 by default (`maxclients`).
-In `CLIENT LIST`, the blocking connection of a worker has a name that starts with
-`<prefix>:<base64 of the queue name>`, which identifies it; the command connection is unnamed.
+```typescript
+@Process()
+async handleAll(job: Job): Promise<void> { /* … */ }
+
+@Process('send-email')
+async handleSendEmail(job: Job<EmailPayload>): Promise<void> { /* … */ }
+```
+
+### `@OnWorkerEvent(eventName)`
+
+Listens to BullMQ worker-local events (`'completed'`, `'failed'`, `'progress'`, `'active'`, `'stalled'`, …).
+
+```typescript
+@OnWorkerEvent('failed')
+onFailed(job: Job | undefined, err: Error): void {
+  console.error(`Job ${job?.id} failed:`, err.message)
+}
+```
+
+A listener that throws, or returns a promise that rejects, is logged with the handler's name and the code `queue.event_handler_failed` and the process carries on; it is never an unhandled rejection. Handle the error inside the listener when the failure matters.
+
+### `@OnQueueEvent(eventName)`
+
+Listens to BullMQ `QueueEvents` (global, cross-process events). The library opens one shared `QueueEvents` connection per queue when it discovers the first listener for it; there is no option to enable.
+
+The handler receives one serialized payload object, not a `Job`: `completed` carries `{ jobId, returnvalue, prev? }`, `failed` carries `{ jobId, failedReason, prev? }`, and `error` carries a real `Error`. Fetch the job with `QueueService.getJob` when you need it.
+
+```typescript
+@OnQueueEvent('completed')
+onCompleted({ jobId, returnvalue }: { jobId: string; returnvalue: string }): void {
+  console.log(`Job ${jobId} completed with ${returnvalue}`)
+}
+```
+
+---
+
+## ⏰ Job Schedulers
+
+Job Schedulers are the current recurring-jobs API in BullMQ (superseding the removed `addRepeatable` API). Use `upsertJobScheduler` to create or update a scheduler:
+
+```typescript
+// Cron-based (every day at 9 AM)
+await this.queue.upsertJobScheduler(
+  'notifications',
+  'daily-digest',
+  { pattern: '0 9 * * *' },
+  { name: 'send-digest', data: { type: 'daily' } },
+)
+
+// Interval-based (every 5 minutes)
+await this.queue.upsertJobScheduler(
+  'health-check',
+  'ping',
+  { every: 5 * 60 * 1000 },
+  { name: 'ping', data: {} },
+)
+
+// Remove
+await this.queue.removeJobScheduler('notifications', 'daily-digest')
+
+// List
+const schedulers = await this.queue.getJobSchedulers('notifications')
+```
+
+Cron-with-seconds (6-field patterns) is supported. Patterns are validated by BullMQ's
+own `cron-parser`, not a hand-rolled regex.
+A pattern the parser rejects is `INVALID_REPEAT_OPTIONS` (400) before Redis is asked. Every other failure of the upsert, such as a read-only replica or a lost connection, reaches you as it is.
+
+---
+
+## 🔁 Deduplication & Telemetry
+
+### Deduplication
+
+Pass the `deduplication` option directly on `enqueue` — the library delegates the behavior entirely to BullMQ:
+
+```typescript
+const id = `welcome:${userId}`
+
+// Simple: collapse duplicates until the first in-flight job completes
+await this.queue.enqueue('email', 'welcome', { userId }, { deduplication: { id } })
+
+// Throttle: ignore duplicates for 30 seconds
+await this.queue.enqueue('email', 'welcome', { userId }, { deduplication: { id, ttl: 30_000 } })
+
+// Debounce: keep only the latest; each duplicate resets the TTL
+await this.queue.enqueue(
+  'email',
+  'welcome',
+  { userId },
+  { deduplication: { id, ttl: 5_000, extend: true, replace: true } },
+)
+```
+
+### A duplicate does not add a job
+
+When a custom `jobId` already exists, or a `deduplication` rule keeps the job that is already there (a rule with `replace` swaps it for the new one instead), `enqueue`, `enqueueBulk` and the flow methods add nothing: BullMQ answers with the id of the **existing** job together with the data and options of **this** call, so the returned object does not describe what is stored. Call `QueueService.getJob` when you need the stored job.
+
+### OpenTelemetry
+
+Pass a `bullmq-otel` telemetry instance (optional peer dep) to trace spans from `enqueue` through the handler:
+
+```typescript
+import { BullMQOtel } from 'bullmq-otel'
+
+BymaxQueueModule.forRoot({
+  connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
+  telemetry: new BullMQOtel({ tracerName: 'my-service' }),
+})
+```
+
+---
+
+## 🛑 Graceful Shutdown
+
+`QueueLifecycle` runs automatically when NestJS closes the application context, through its `onModuleDestroy` and `onApplicationShutdown` hooks (call `app.enableShutdownHooks()` so that a termination signal closes the context).
+It implements a **bounded drain protocol** with at-least-once semantics:
+
+1. All workers are closed with a grace period (`drainTimeoutMs`, default 30 s).
+2. A `Promise.race` resolves either when the worker drains normally or when the
+   timeout fires — whichever comes first.
+3. On timeout, the worker is force-closed (`worker.close(true)`), preserving stalled
+   jobs for reprocessing by the next instance.
+4. Queue-events and the connections the library opened for workers and queue-events are closed.
+5. Once NestJS has stopped the HTTP server (`onApplicationShutdown`), the flow producer, the
+   cached queues and, in Mode B, the library's own Redis connection are closed. NestJS runs
+   `onModuleDestroy` before it stops the HTTP server, so a request that is still being served can
+   enqueue a job after step 4; those resources stay open until the server is down.
+
+**Handlers must be idempotent.** Use `jobId`, `deduplication`, or application-level
+idempotency keys to guard against reprocessing a job that was partially handled before
+a crash or force-close.
+
+**DLQ pattern.** When a job exhausts its `attempts`, move it to a dead-letter queue:
+
+```typescript
+@OnWorkerEvent('failed')
+async onFailed(job: Job | undefined, err: Error): Promise<void> {
+  if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+    await this.queue.enqueue(`${job.queueName}-dlq`, job.name, job.data, {
+      jobId: `dlq:${job.id}`,
+    })
+  }
+}
+```
+
+Tune `drainTimeoutMs` when jobs may run longer than 30 s:
+
+```typescript
+BymaxQueueModule.forRoot({
+  connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
+  shutdown: { drainTimeoutMs: 60_000 },
+})
+```
+
+---
+
+## 🤔 Why over `@nestjs/bullmq`
+
+| Concern       | `@nestjs/bullmq` (official)                          | `@bymax-one/nest-queue`                                                          |
+| ------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Module setup  | `BullModule.forRoot()` + `registerQueue()` per queue | Single `forRoot`/`forRootAsync`; queues created on demand by name                |
+| Connection    | Manual ioredis + `maxRetriesPerRequest` wiring       | Dual mode (BYO / lib-owned); correct per-role retry policy applied automatically |
+| Job defaults  | Per `registerQueue`                                  | Centralized opinionated defaults with per-queue/per-job overrides                |
+| Producer API  | `@InjectQueue` + raw `queue.add`                     | Typed `enqueue<TData, TResult>()`, `enqueueBulk`, `upsertJobScheduler`           |
+| Shutdown      | Framework closes workers                             | Explicit bounded-drain protocol; force-close + stalled accounting                |
+| Observability | Manual                                               | `telemetry` passthrough (OpenTelemetry) + `MetricsService`                       |
+
+**Choose this library** when you want a single opinionated setup, the `@bymax-one/nest-cache`
+connection-sharing story, enforced defaults, and a tested bounded-shutdown protocol.
+
+**Choose `@nestjs/bullmq`** when you want the thinnest official binding and prefer to
+wire connection and defaults yourself.
+
+---
+
+## 🏗️ Architecture
+
+```
+                        BymaxQueueModule.forRoot / forRootAsync
+                                        │
+                              validateOptions (fail fast)
+                                        │
+                               applyDefaults (frozen)
+                                        │
+                          ┌─────────────┴─────────────┐
+                          │     ConnectionResolver    │
+                          │  Mode A: your ioredis     │
+                          │  Mode B: lib-owned        │
+                          └─────────────┬─────────────┘
+                                        │
+       ┌──────────────┬─────────────────┼─────────────────┬──────────────┐
+       │              │                 │                 │              │
+   QueueService  WorkerRegistry  QueueEventsRegistry  FlowService   MetricsService
+    (Queue)        (Worker)         (QueueEvents)    (FlowProducer)   (opt-in)
+       │              │                 │                 │
+   default        duplicate()      duplicate()         default
+   retries      maxRetries: null  maxRetries: null      retries
+       │              │                 │                 │
+       └──────────────┴────── same `prefix` ──────────────┘
+                                        │
+                            ProcessorDiscoveryService
+                        (@Processor / @Process / @OnWorkerEvent)
+                                        │
+                                 QueueLifecycle
+                     (bounded drain → force close → disconnect)
+```
+
+### Design Principles
+
+The role-shaped connections, the shared `prefix` and the Job Scheduler API are described under
+[Features](#-features) and [Connections](#-connections). Two principles are not:
+
+| Principle                           | Description                                                                                                                                                                                                                         |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 💥 **Fail at boot, not at runtime** | Options are validated before any connection is opened, and every rejection carries a distinct reason.                                                                                                                               |
+| 🧬 **Explicit DI tokens**           | Tokens are `Symbol()` and every injectable constructor parameter carries an explicit `@Inject`. The package ships bundled, where design-time metadata is not emitted — implicit resolution would break inside your build, not ours. |
+
+---
+
+## 🔐 Security Model
+
+This library moves your application's data through Redis and runs your code against it.
+Its security contract is about what it does with credentials, what it puts in a payload,
+and which keyspace a job lands in.
+
+### Credentials never leave the configuration
+
+Connection details arrive through injected options — the library never reads
+`process.env` itself, so credentials live wherever your configuration layer keeps them.
+No connection string, password, or TLS material is written to a log line, an exception
+message, or an exception payload. `QueueException.details` carries only scalar
+values — a reason, a limit, a queue or scheduler name, a status — never a
+connection object and never `job.data`.
+
+They are also not reachable by serializing the objects that hold them. The connection is
+attached to the resolved options as a non-enumerable accessor, and the resolver keeps the
+ioredis client — which carries `options.password` as a plain field — in a private field,
+as do the registries that hold the `Queue`, `Worker` and `QueueEvents` instances. So
+`JSON.stringify`, object spread, `util.inspect` and `util.inspect` with `showHidden` all
+come back without credentials, which is what matters when a structured logger renders a
+provider it was handed or an error reporter captures the scope of a throw.
+
+### Job data is opaque
+
+The library treats `job.data` as a payload to transport, never to inspect. It is never
+deep-merged (which would expose a prototype-pollution path from a queued payload), never
+logged, and never copied into an error. Whatever you enqueue is what your handler
+receives — so a payload holding a secret is a decision you make, and Redis is where it
+will sit until the job is removed.
+
+### The prefix is a namespace, not a security boundary
+
+`prefix` isolates one tenant's or one environment's keys from another's inside a single
+Redis database. It is enforced consistently — `Queue`, `Worker`, `QueueEvents` and
+`FlowProducer` all receive it — so jobs cannot be produced into one namespace and
+consumed from another. It is **not** an access control: anything that can reach the Redis
+instance can read every namespace on it. Cross-tenant isolation that must survive a
+compromised client belongs in Redis ACLs or separate instances.
+
+### Shutdown is bounded and at-least-once
+
+A job still running when the drain deadline expires is **not** acknowledged, so BullMQ's stalled-job
+check re-queues it and it runs again. **Every handler must be idempotent** — see
+[Graceful Shutdown](#-graceful-shutdown).
+
+### Security Checklist
+
+- [ ] Redis reachable only from the application network — never exposed publicly.
+- [ ] Redis requires authentication (`requirepass` or ACL user) and TLS in transit.
+- [ ] A distinct `prefix` per tenant or environment, and a distinct Redis ACL user or
+      instance where the isolation must hold against a compromised client.
+- [ ] Every `@Process` handler is idempotent — retries and stalled-job recovery both
+      replay work.
+- [ ] Job payloads carry identifiers, not secrets. If a payload must reference a secret,
+      store a reference and resolve it inside the handler.
+- [ ] `removeOnComplete` / `removeOnFail` are bounded, so payloads do not accumulate in
+      Redis indefinitely.
+- [ ] `shutdown.drainTimeoutMs` exceeds your worst-case job runtime, so a normal deploy
+      does not force-close work that was about to finish.
+
+---
+
+## 🛡️ Security Table
+
+| Layer             | Implementation                                                                                                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Credentials       | Injected options only; never read from `process.env`, never logged, never placed in an exception; held in a non-enumerable accessor and private fields, so serializing a service omits them |
+| Error payloads    | `QueueException.details` restricted to scalar values — no `job.data`, no connection object                                                                                                  |
+| Job payloads      | Treated as opaque; never deep-merged (prototype-pollution guard), never logged                                                                                                              |
+| Namespacing       | `prefix` applied uniformly to `Queue`, `Worker`, `QueueEvents` and `FlowProducer`                                                                                                           |
+| Connection policy | `maxRetriesPerRequest: null` confined to duplicated consumer connections; producers keep fail-fast retries                                                                                  |
+| Delivery          | At-least-once with a bounded drain; unacknowledged work is re-queued by BullMQ's stalled check                                                                                              |
+| Supply chain      | SHA-pinned third-party Actions, OSV-Scanner, TruffleHog, OpenSSF Scorecard; npm publish over OIDC                                                                                           |
+| Input validation  | Options validated at bootstrap; cron patterns validated by BullMQ's own parser, never a hand-rolled regex                                                                                   |
+
+---
+
+## 🧱 Tech Stack
+
+[![Node.js](https://img.shields.io/badge/Node.js-24%2B-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
+[![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?style=flat-square&logo=nestjs&logoColor=white)](https://nestjs.com)
+[![BullMQ](https://img.shields.io/badge/BullMQ-6-DC382D?style=flat-square)](https://bullmq.io)
+[![ioredis](https://img.shields.io/badge/ioredis-6-DC382D?style=flat-square&logo=redis&logoColor=white)](https://github.com/redis/ioredis)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Jest](https://img.shields.io/badge/Jest-30-C21325?style=flat-square&logo=jest)](https://jestjs.io)
+[![Testcontainers](https://img.shields.io/badge/Testcontainers-E2E-2496ED?style=flat-square&logo=docker&logoColor=white)](https://testcontainers.com)
+[![Stryker](https://img.shields.io/badge/Stryker-Mutation_Testing-red?style=flat-square)](https://stryker-mutator.io)
+[![pnpm](https://img.shields.io/badge/pnpm-11-F69220?style=flat-square&logo=pnpm&logoColor=white)](https://pnpm.io)
+[![tsup](https://img.shields.io/badge/tsup-8-orange?style=flat-square)](https://tsup.egoist.dev)
+
+---
+
+## 🧪 Testing & Quality
+
+- **100% line/branch coverage** on every implemented file (hard CI gate).
+- **Mutation score 100.00%** (Stryker `break 100`) — see [`docs/mutation_testing_results.md`](docs/mutation_testing_results.md).
+- **Real-Redis E2E** via Testcontainers (workers, flows, schedulers, deduplication, retries,
+  DLQ, graceful shutdown).
+- **Type-level API tests** (`pnpm test:types`) pin the published signatures, so a refactor
+  that widens or loosens one fails the build instead of reaching consumers.
+- **Published-shape gates**: `pnpm check:exports` resolves every entrypoint the way each
+  module-resolution mode would (all four `attw` quadrants green, `node10` included), and
+  `pnpm smoke` resolves the packed tarball from a real consumer in ESM _and_ CommonJS.
+- **Bundle budgets** enforced (`pnpm size`): server ≤ 9 200 B brotli, shared ≤ 440 B.
+
+```bash
+pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && \
+  pnpm build && pnpm size && pnpm check:exports && pnpm check:published && pnpm smoke
+```
 
 ---
 
@@ -532,404 +848,19 @@ so a frontend can map codes to messages without importing the server surface.
 
 ---
 
-## 🎀 Decorators
-
-### `@Processor(queueName)`
-
-Marks a class as a worker bound to `queueName`. The class must be an `@Injectable()` registered as a NestJS provider.
-
-### `@Process(jobName?)`
-
-Method decorator for the handler. If `jobName` is omitted, the method handles all jobs on the queue. If provided, only jobs with that `name` are dispatched here.
-
-```typescript
-@Process()
-async handleAll(job: Job): Promise<void> { /* … */ }
-
-@Process('send-email')
-async handleSendEmail(job: Job<EmailPayload>): Promise<void> { /* … */ }
-```
-
-### `@OnWorkerEvent(eventName)`
-
-Listens to BullMQ worker-local events (`'completed'`, `'failed'`, `'progress'`, `'active'`, `'stalled'`, …).
-
-```typescript
-@OnWorkerEvent('failed')
-onFailed(job: Job | undefined, err: Error): void {
-  console.error(`Job ${job?.id} failed:`, err.message)
-}
-```
-
-A listener that throws, or returns a promise that rejects, is logged with the handler's name and the code `queue.event_handler_failed` and the process carries on; it is never an unhandled rejection. Handle the error inside the listener when the failure matters.
-
-### `@OnQueueEvent(eventName)`
-
-Listens to BullMQ `QueueEvents` (global, cross-process events). The library opens one shared `QueueEvents` connection per queue when it discovers the first listener for it; there is no option to enable.
-
-The handler receives one serialized payload object, not a `Job`: `completed` carries `{ jobId, returnvalue, prev? }`, `failed` carries `{ jobId, failedReason, prev? }`, and `error` carries a real `Error`. Fetch the job with `QueueService.getJob` when you need it.
-
-```typescript
-@OnQueueEvent('completed')
-onCompleted({ jobId, returnvalue }: { jobId: string; returnvalue: string }): void {
-  console.log(`Job ${jobId} completed with ${returnvalue}`)
-}
-```
-
----
-
-## ⏰ Job Schedulers
-
-Job Schedulers are the current recurring-jobs API in BullMQ (superseding the removed `addRepeatable` API). Use `upsertJobScheduler` to create or update a scheduler:
-
-```typescript
-// Cron-based (every day at 9 AM)
-await this.queue.upsertJobScheduler(
-  'notifications',
-  'daily-digest',
-  { pattern: '0 9 * * *' },
-  { name: 'send-digest', data: { type: 'daily' } },
-)
-
-// Interval-based (every 5 minutes)
-await this.queue.upsertJobScheduler(
-  'health-check',
-  'ping',
-  { every: 5 * 60 * 1000 },
-  { name: 'ping', data: {} },
-)
-
-// Remove
-await this.queue.removeJobScheduler('notifications', 'daily-digest')
-
-// List
-const schedulers = await this.queue.getJobSchedulers('notifications')
-```
-
-Cron-with-seconds (6-field patterns) is supported. Patterns are validated by BullMQ's
-own `cron-parser`, not a hand-rolled regex.
-A pattern the parser rejects is `INVALID_REPEAT_OPTIONS` (400) before Redis is asked. Every other failure of the upsert, such as a read-only replica or a lost connection, reaches you as it is.
-
----
-
-## 🔁 Deduplication & Telemetry
-
-### Deduplication
-
-Pass the `deduplication` option directly on `enqueue` — the library delegates the behavior entirely to BullMQ:
-
-```typescript
-// Simple: collapse duplicates until the first in-flight job completes
-await this.queue.enqueue(
-  'email',
-  'welcome',
-  { userId },
-  {
-    deduplication: { id: `welcome:${userId}` },
-  },
-)
-
-// Throttle: ignore duplicates for 30 seconds
-await this.queue.enqueue(
-  'email',
-  'welcome',
-  { userId },
-  {
-    deduplication: { id: `welcome:${userId}`, ttl: 30_000 },
-  },
-)
-
-// Debounce: keep only the latest; each duplicate resets the TTL
-await this.queue.enqueue(
-  'email',
-  'welcome',
-  { userId },
-  {
-    deduplication: { id: `welcome:${userId}`, ttl: 5_000, extend: true, replace: true },
-  },
-)
-```
-
-### A duplicate does not add a job
-
-When a custom `jobId` already exists, or a `deduplication` rule keeps the job that is already there (a rule with `replace` swaps it for the new one instead), `enqueue`, `enqueueBulk` and the flow methods add nothing: BullMQ answers with the id of the **existing** job together with the data and options of **this** call, so the returned object does not describe what is stored. Call `QueueService.getJob` when you need the stored job.
-
-### OpenTelemetry
-
-Pass a `bullmq-otel` telemetry instance (optional peer dep) to trace spans from `enqueue` through the handler:
-
-```typescript
-import { BullMQOtel } from 'bullmq-otel'
-
-BymaxQueueModule.forRoot({
-  connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
-  telemetry: new BullMQOtel({ tracerName: 'my-service' }),
-})
-```
-
----
-
-## 🛑 Graceful Shutdown
-
-`QueueLifecycle` runs automatically when NestJS closes the application context, through its `onModuleDestroy` and `onApplicationShutdown` hooks (call `app.enableShutdownHooks()` so that a termination signal closes the context).
-It implements a **bounded drain protocol** with at-least-once semantics:
-
-1. All workers are closed with a grace period (`drainTimeoutMs`, default 30 s).
-2. A `Promise.race` resolves either when the worker drains normally or when the
-   timeout fires — whichever comes first.
-3. On timeout, the worker is force-closed (`worker.close(true)`), preserving stalled
-   jobs for reprocessing by the next instance.
-4. Queue-events and the connections the library opened for workers and queue-events are closed.
-5. Once NestJS has stopped the HTTP server (`onApplicationShutdown`), the flow producer, the
-   cached queues and, in Mode B, the library's own Redis connection are closed. NestJS runs
-   `onModuleDestroy` before it stops the HTTP server, so a request that is still being served can
-   enqueue a job after step 4; those resources stay open until the server is down.
-
-**Handlers must be idempotent.** Use `jobId`, `deduplication`, or application-level
-idempotency keys to guard against reprocessing a job that was partially handled before
-a crash or force-close.
-
-**DLQ pattern.** When a job exhausts its `attempts`, move it to a dead-letter queue:
-
-```typescript
-@OnWorkerEvent('failed')
-async onFailed(job: Job | undefined, err: Error): Promise<void> {
-  if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
-    await this.queue.enqueue(`${job.queueName}-dlq`, job.name, job.data, {
-      jobId: `dlq:${job.id}`,
-    })
-  }
-}
-```
-
-Tune `drainTimeoutMs` when jobs may run longer than 30 s:
-
-```typescript
-BymaxQueueModule.forRoot({
-  connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
-  shutdown: { drainTimeoutMs: 60_000 },
-})
-```
-
----
-
-## 🤔 Why over `@nestjs/bullmq`
-
-| Concern       | `@nestjs/bullmq` (official)                          | `@bymax-one/nest-queue`                                                          |
-| ------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Module setup  | `BullModule.forRoot()` + `registerQueue()` per queue | Single `forRoot`/`forRootAsync`; queues created on demand by name                |
-| Connection    | Manual ioredis + `maxRetriesPerRequest` wiring       | Dual mode (BYO / lib-owned); correct per-role retry policy applied automatically |
-| Job defaults  | Per `registerQueue`                                  | Centralized opinionated defaults with per-queue/per-job overrides                |
-| Producer API  | `@InjectQueue` + raw `queue.add`                     | Typed `enqueue<TData, TResult>()`, `enqueueBulk`, `upsertJobScheduler`           |
-| Shutdown      | Framework closes workers                             | Explicit bounded-drain protocol; force-close + stalled accounting                |
-| Observability | Manual                                               | `telemetry` passthrough (OpenTelemetry) + `MetricsService`                       |
-
-**Choose this library** when you want a single opinionated setup, the `@bymax-one/nest-cache`
-connection-sharing story, enforced defaults, and a tested bounded-shutdown protocol.
-
-**Choose `@nestjs/bullmq`** when you want the thinnest official binding and prefer to
-wire connection and defaults yourself.
-
----
-
-## 🏗️ Architecture
-
-```
-                        BymaxQueueModule.forRoot / forRootAsync
-                                        │
-                              validateOptions (fail fast)
-                                        │
-                               applyDefaults (frozen)
-                                        │
-                          ┌─────────────┴─────────────┐
-                          │     ConnectionResolver    │
-                          │  Mode A: your ioredis     │
-                          │  Mode B: lib-owned        │
-                          └─────────────┬─────────────┘
-                                        │
-       ┌──────────────┬─────────────────┼─────────────────┬──────────────┐
-       │              │                 │                 │              │
-   QueueService  WorkerRegistry  QueueEventsRegistry  FlowService   MetricsService
-    (Queue)        (Worker)         (QueueEvents)    (FlowProducer)   (opt-in)
-       │              │                 │                 │
-   default        duplicate()      duplicate()         default
-   retries      maxRetries: null  maxRetries: null      retries
-       │              │                 │                 │
-       └──────────────┴────── same `prefix` ──────────────┘
-                                        │
-                            ProcessorDiscoveryService
-                        (@Processor / @Process / @OnWorkerEvent)
-                                        │
-                                 QueueLifecycle
-                     (bounded drain → force close → disconnect)
-```
-
-### Design Principles
-
-| Principle                           | Description                                                                                                                                                                                                                                                                               |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🔌 **Connections are role-shaped**  | BullMQ blocks a connection for consumers. Only the duplicated `Worker`/`QueueEvents` connections get `maxRetriesPerRequest: null`; the `Queue` and `FlowProducer` connection keeps ioredis' default retries, so a producer fails fast during a Redis outage instead of hanging a request. |
-| 🏷️ **One namespace, four objects**  | The configured `prefix` reaches `Queue`, `Worker`, `QueueEvents` and `FlowProducer`. BullMQ defaults an omitted prefix to `bull`, so a partial application splits producers from consumers silently.                                                                                      |
-| 💥 **Fail at boot, not at runtime** | Options are validated before any connection is opened, and every rejection carries a distinct reason.                                                                                                                                                                                     |
-| 🧬 **Explicit DI tokens**           | Tokens are `Symbol()` and every injectable constructor parameter carries an explicit `@Inject`. The package ships bundled, where design-time metadata is not emitted — implicit resolution would break inside your build, not ours.                                                       |
-| 📅 **Current BullMQ API only**      | Recurring jobs use Job Schedulers; the `addRepeatable` API removed in BullMQ v6 is never called. Cron is validated by BullMQ's own parser.                                                                                                                                                |
-| 🧊 **Zero runtime dependencies**    | `dependencies` is `{}`. You choose the exact `bullmq` and `ioredis` versions, and the supply-chain surface stays yours.                                                                                                                                                                   |
-
----
-
-## 🔐 Security Model
-
-This library moves your application's data through Redis and runs your code against it.
-Its security contract is about what it does with credentials, what it puts in a payload,
-and which keyspace a job lands in.
-
-### Credentials never leave the configuration
-
-Connection details arrive through injected options — the library never reads
-`process.env` itself, so credentials live wherever your configuration layer keeps them.
-No connection string, password, or TLS material is written to a log line, an exception
-message, or an exception payload. `QueueException.details` carries only scalar
-values — a reason, a limit, a queue or scheduler name, a status — never a
-connection object and never `job.data`.
-
-They are also not reachable by serializing the objects that hold them. The connection is
-attached to the resolved options as a non-enumerable accessor, and the resolver keeps the
-ioredis client — which carries `options.password` as a plain field — in a private field,
-as do the registries that hold the `Queue`, `Worker` and `QueueEvents` instances. So
-`JSON.stringify`, object spread, `util.inspect` and `util.inspect` with `showHidden` all
-come back without credentials, which is what matters when a structured logger renders a
-provider it was handed or an error reporter captures the scope of a throw.
-
-### Job data is opaque
-
-The library treats `job.data` as a payload to transport, never to inspect. It is never
-deep-merged (which would expose a prototype-pollution path from a queued payload), never
-logged, and never copied into an error. Whatever you enqueue is what your handler
-receives — so a payload holding a secret is a decision you make, and Redis is where it
-will sit until the job is removed.
-
-### The prefix is a namespace, not a security boundary
-
-`prefix` isolates one tenant's or one environment's keys from another's inside a single
-Redis database. It is enforced consistently — `Queue`, `Worker`, `QueueEvents` and
-`FlowProducer` all receive it — so jobs cannot be produced into one namespace and
-consumed from another. It is **not** an access control: anything that can reach the Redis
-instance can read every namespace on it. Cross-tenant isolation that must survive a
-compromised client belongs in Redis ACLs or separate instances.
-
-### Shutdown is bounded and at-least-once
-
-`QueueLifecycle` drains in-flight work under a deadline and then force-closes. A job still
-running when the deadline expires is **not** acknowledged, so BullMQ's stalled-job check
-re-queues it and it runs again. Delivery is at-least-once by design: **every handler must
-be idempotent.** A handler that charges a card or sends an email without an idempotency
-key will do it twice at some point.
-
-### Security Checklist
-
-- [ ] Redis reachable only from the application network — never exposed publicly.
-- [ ] Redis requires authentication (`requirepass` or ACL user) and TLS in transit.
-- [ ] A distinct `prefix` per tenant or environment, and a distinct Redis ACL user or
-      instance where the isolation must hold against a compromised client.
-- [ ] Every `@Process` handler is idempotent — retries and stalled-job recovery both
-      replay work.
-- [ ] Job payloads carry identifiers, not secrets. If a payload must reference a secret,
-      store a reference and resolve it inside the handler.
-- [ ] `removeOnComplete` / `removeOnFail` are bounded, so payloads do not accumulate in
-      Redis indefinitely.
-- [ ] `shutdown.drainTimeoutMs` exceeds your worst-case job runtime, so a normal deploy
-      does not force-close work that was about to finish.
-
----
-
-## 🛡️ Security Table
-
-| Layer             | Implementation                                                                                                                                                                              |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Credentials       | Injected options only; never read from `process.env`, never logged, never placed in an exception; held in a non-enumerable accessor and private fields, so serializing a service omits them |
-| Error payloads    | `QueueException.details` restricted to scalar values — no `job.data`, no connection object                                                                                                  |
-| Job payloads      | Treated as opaque; never deep-merged (prototype-pollution guard), never logged                                                                                                              |
-| Namespacing       | `prefix` applied uniformly to `Queue`, `Worker`, `QueueEvents` and `FlowProducer`                                                                                                           |
-| Connection policy | `maxRetriesPerRequest: null` confined to duplicated consumer connections; producers keep fail-fast retries                                                                                  |
-| Delivery          | At-least-once with a bounded drain; unacknowledged work is re-queued by BullMQ's stalled check                                                                                              |
-| Supply chain      | `dependencies: {}`; SHA-pinned third-party Actions, OSV-Scanner, TruffleHog, OpenSSF Scorecard; npm publish over OIDC                                                                       |
-| Input validation  | Options validated at bootstrap; cron patterns validated by BullMQ's own parser, never a hand-rolled regex                                                                                   |
-
-> [!IMPORTANT]
-> **Delivery is at-least-once, and `prefix` is not an access boundary.** Handlers must be
-> idempotent, and anything with credentials for the Redis instance can read every
-> namespace on it.
-
----
-
-## 🧱 Tech Stack
-
-- **Runtime:** Node.js 24+
-- **Framework:** NestJS 11 (`ConfigurableModuleBuilder` + `setExtras`)
-- **Queue engine:** BullMQ `^6.0` (peer) over `ioredis ^6.0` (peer)
-- **Telemetry:** `bullmq-otel ^2` (optional peer)
-- **Build:** tsup — ESM + CJS per subpath, with `.d.ts` _and_ `.d.cts` declarations
-- **Tests:** Jest + `@testcontainers/redis` (E2E) + Stryker (mutation)
-- **TypeScript:** 6.x strict (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), zero `any`
-
----
-
-## 🧪 Testing & Quality
-
-- **100% line/branch coverage** on every implemented file (hard CI gate).
-- **Mutation score 100.00%** (Stryker `break 100`) — see [`docs/mutation_testing_results.md`](docs/mutation_testing_results.md).
-- **Real-Redis E2E** via Testcontainers (workers, flows, schedulers, deduplication, retries,
-  DLQ, graceful shutdown).
-- **Type-level API tests** (`pnpm test:types`) pin the published signatures, so a refactor
-  that widens or loosens one fails the build instead of reaching consumers.
-- **Published-shape gates**: `pnpm check:exports` resolves every entrypoint the way each
-  module-resolution mode would (all four `attw` quadrants green, `node10` included), and
-  `pnpm smoke` resolves the packed tarball from a real consumer in ESM _and_ CommonJS.
-- **Bundle budgets** enforced (`pnpm size`): server ≤ 18 KiB brotli, shared ≤ 2 500 B.
-- **Supply chain:** SHA-pinned third-party GitHub Actions, OSV-Scanner, TruffleHog, OpenSSF Scorecard,
-  npm publish with provenance (OIDC).
-
-```bash
-pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && \
-  pnpm build && pnpm size && pnpm check:exports && pnpm check:published && pnpm smoke
-```
-
----
-
 ## 🩺 Troubleshooting
 
 ### `ERR_PNPM_IGNORED_BUILDS: msgpackr-extract` on install (pnpm 11)
 
-Installing this library with **pnpm 11** can stop with:
-
-```
-ERR_PNPM_IGNORED_BUILDS  Ignored build scripts: msgpackr-extract@3.0.4
-Run "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.
-```
-
-Nothing is wrong with your setup. `msgpackr-extract` is a native optional dependency
-of BullMQ, and pnpm blocks build scripts by default. **pnpm 10 warns and installs
-anyway; pnpm 11 turns the same block into an error**, which is why this appears on
-an upgrade with no change on your side. It is BullMQ's dependency, not this
-package's: this package ships zero runtime dependencies.
-
-Approve it once, either interactively:
-
-```bash
-pnpm approve-builds
-```
-
-or declaratively in your `pnpm-workspace.yaml`:
+pnpm 11 blocks the build script of `msgpackr-extract`, a native optional dependency of BullMQ, and fails the
+install. Approve it once with `pnpm approve-builds`, or in `pnpm-workspace.yaml`:
 
 ```yaml
 onlyBuiltDependencies:
   - msgpackr-extract
 ```
 
-Skipping the build is also fine — `msgpackr` falls back to a pure-JavaScript
-implementation, so BullMQ still works, just without the native accelerator.
-
----
+Skipping the build is also fine: `msgpackr` falls back to pure JavaScript, only without the native accelerator.
 
 ### `CONNECTION_REQUIRES_NULL_RETRIES`
 
@@ -964,15 +895,11 @@ do not pick them up:
 - **NestJS only** — does not work with plain Express, standalone Fastify, or other frameworks.
 - **Node.js only** — Deno and Bun are not supported.
 - **BullMQ `^6.0` only** — the library targets BullMQ 6 (with `bullmq-otel ^2` for telemetry)
-  and does not support BullMQ 5; the `'paused'` job state that v6 removed is no longer exposed.
-  See the BullMQ version policy in [`CHANGELOG.md`](CHANGELOG.md).
+  and does not support BullMQ 5. See the BullMQ version policy in [`CHANGELOG.md`](CHANGELOG.md).
 - **No Redis Cluster sharding** — BullMQ's cluster support is not exercised by this library.
 - **No built-in DLQ helper** — use the `@OnWorkerEvent('failed')` pattern above.
 - **No Prometheus metrics export** — `getMetrics()` returns snapshots; publish them
   via `prom-client` in your own health endpoint.
-
-For the full list of limitations and their alternatives, see
-[`docs/technical_specification.md § 16`](docs/technical_specification.md).
 
 ---
 
@@ -980,7 +907,6 @@ For the full list of limitations and their alternatives, see
 
 Pull requests are welcome. Please open an issue first for significant changes.
 
-- Read [`docs/technical_specification.md`](docs/technical_specification.md) for architecture decisions.
 - Run the full gate listed in [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a PR.
 - Conventional Commits are enforced by `commitlint.config.cjs`.
 
