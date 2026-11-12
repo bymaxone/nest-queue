@@ -11,6 +11,33 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.13] — 2026-11-12
+
+No action required. Measured with `diff -r` of the unpacked 1.2.12 tarball against a fresh
+`npm pack`, the files that differ are `README.md`, `CHANGELOG.md` and the `version` field of
+`package.json`; `dist/` is byte-identical, so the public API, the declaration files and the peer
+ranges are those of 1.2.12.
+
+### Documentation
+
+- **The bundle budgets are no longer misquoted.** The Testing section gave "server ≤ 18 KiB brotli,
+  shared ≤ 2 500 B"; the gate sets 9 200 B and 440 B. The README now points at `pnpm size` instead of
+  restating the numbers.
+- **The tech stack names the real end-to-end dependency.** It listed `@testcontainers/redis`, which
+  is not a dependency; the suite uses `testcontainers`.
+- **The Quick Start no longer implies `isGlobal: true` is needed.** It is the default, so the option is
+  gone from the snippet and the step says `QueueService` is injectable without it.
+- **The connection-release claim covers only what the library opens.** In Mode A the shared client is
+  yours and the library never closes it.
+- **Mode A, Mode B and the connection budget are one Connections section**, the deduplication examples
+  are one block, and the msgpackr entry is a short paragraph. API Reference and the error catalog now
+  follow Testing, the tech stack is a badge row, and the Quick Start is numbered.
+- **Removed what a reader of the package does not need:** a note about an internal test fixture, a
+  history line about a BullMQ state, the pnpm 10 versus 11 narration, and the pointers to the technical
+  specification.
+
+---
+
 ## [1.2.12] — 2026-11-09
 
 No action required. The public API, the declaration files and the peer ranges are unchanged
@@ -895,7 +922,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.12...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.13...HEAD
+[1.2.13]: https://github.com/bymaxone/nest-queue/compare/v1.2.12...v1.2.13
 [1.2.12]: https://github.com/bymaxone/nest-queue/compare/v1.2.11...v1.2.12
 [1.2.11]: https://github.com/bymaxone/nest-queue/compare/v1.2.10...v1.2.11
 [1.2.10]: https://github.com/bymaxone/nest-queue/compare/v1.2.9...v1.2.10

@@ -105,7 +105,6 @@ class EmailModule {}
   imports: [
     BymaxQueueModule.forRoot({
       connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
-      isGlobal: true,
     }),
     EmailModule,
   ],
