@@ -662,7 +662,7 @@ check re-queues it and it runs again. **Every handler must be idempotent** — s
 - **Published-shape gates**: `pnpm check:exports` resolves every entrypoint the way each
   module-resolution mode would (all four `attw` quadrants green, `node10` included), and
   `pnpm smoke` resolves the packed tarball from a real consumer in ESM _and_ CommonJS.
-- **Bundle budgets** enforced (`pnpm size`): server ≤ 9 200 B brotli, shared ≤ 440 B.
+- **Bundle budgets** enforced by `pnpm size`.
 
 ```bash
 pnpm typecheck && pnpm test:types && pnpm lint && pnpm test:cov:all && \
