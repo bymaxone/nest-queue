@@ -32,8 +32,8 @@ API, the declaration files and the peer ranges are unchanged.
   are one block, and the msgpackr entry is a short paragraph. API Reference and the error catalog now
   follow Testing, the tech stack is a badge row, and the Quick Start is numbered.
 - **Removed what a reader of the package does not need:** a note about an internal test fixture, a
-  history line about a BullMQ state, the pnpm 10 versus 11 narration, the pointers to the technical
-  specification, and every statement of "zero runtime dependencies" but one.
+  history line about a BullMQ state, the pnpm 10 versus 11 narration, and the pointers to the technical
+  specification.
 
 ---
 
