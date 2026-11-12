@@ -13,8 +13,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.2.13] — 2026-11-12
 
-No action required. The published package changes only in its README: `dist/` is byte-identical to
-1.2.12, measured with `diff -r` of a fresh build against the unpacked 1.2.12 tarball, and the public
+No action required. Nothing the package runs changes: `dist/` is byte-identical to 1.2.12, measured with `diff -r` of a fresh build against the unpacked 1.2.12 tarball, and the public
 API, the declaration files and the peer ranges are unchanged.
 
 ### Documentation
