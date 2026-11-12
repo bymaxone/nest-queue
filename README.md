@@ -307,7 +307,7 @@ BymaxQueueModule.forRoot({
 ### Connection budget
 
 The connections held are linear in what you register. Counts were read from `INFO clients` against
-Redis 8 with BullMQ 6 and `ioredis` 6; every connection is released when the application context closes.
+Redis 8 with BullMQ 6 and `ioredis` 6; every connection the library opens is released when the application context closes.
 
 | What you register                              | Connections held                                                        |
 | ---------------------------------------------- | ----------------------------------------------------------------------- |
