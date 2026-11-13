@@ -3,7 +3,7 @@
  * @layer server/utils
  */
 
-import type { Redis, RedisOptions } from 'ioredis'
+import type { Redis } from 'ioredis'
 
 /**
  * Duplicate an ioredis client for use by a Worker or QueueEvents instance. The
@@ -16,13 +16,14 @@ import type { Redis, RedisOptions } from 'ioredis'
  * @returns A duplicated client suitable for blocking commands.
  */
 export function duplicateConnection(client: Redis): Redis {
-  // ioredis only skips the deadline when the key is not a number, and merges overrides with a
-  // spread, so an explicit `undefined` clears it; its type does not admit that under
-  // `exactOptionalPropertyTypes`, hence the cast.
-  const override = {
+  // ioredis arms a command deadline only when `commandTimeout` is a number and merges the override
+  // over the parent's options with a spread, so an explicit `undefined` clears it. `RedisOptions`
+  // does not admit `undefined` under `exactOptionalPropertyTypes`, so the override is built as a
+  // plain record, which the parameter accepts without any assertion.
+  const override: Record<string, unknown> = {
     maxRetriesPerRequest: null,
     enableOfflineQueue: true,
     commandTimeout: undefined,
-  } as unknown as RedisOptions
+  }
   return client.duplicate(override)
 }
