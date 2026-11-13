@@ -81,9 +81,16 @@ export class ConnectionResolver {
     // Before the first await, and for good: the startup race below removes its own listener once
     // the client is ready, and a client with none prints every later outage to raw stderr.
     attachClientErrorListener(this.#client, this.#logger, 'owned')
-    await this.waitReady(
-      this.#options.connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS,
-    )
+    try {
+      await this.waitReady(
+        this.#options.connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS,
+      )
+    } catch (cause) {
+      // The client keeps reconnecting on its own until it is closed, and nothing else holds a
+      // reference to it once startup has failed: close it here, or it outlives the failed boot.
+      this.#client.disconnect()
+      throw cause
+    }
   }
 
   /**
@@ -161,36 +168,67 @@ export class ConnectionResolver {
     }
   }
 
-  /** Resolve when the owned client reaches `ready`, or reject on timeout/error. */
+  /**
+   * Resolve when the owned client reaches `ready`. A connection error while the client is still
+   * reconnecting does not end the wait — a Redis that restarts during a deploy refuses connections
+   * for a moment first — so the budget does. The two exceptions are an answer from the server that
+   * waiting cannot change (a refused credential) and a client that has stopped reconnecting; both
+   * reject at once. The rejection carries the last error's code and never its message, which can
+   * name the host.
+   */
   private async waitReady(timeoutMs: number): Promise<void> {
     const client = this.getClient()
     if (client.status === 'ready') return
     await new Promise<void>((resolve, reject) => {
+      let lastErrorCode: string | undefined
+      const details = (extra: Record<string, unknown>): Record<string, unknown> =>
+        lastErrorCode === undefined ? extra : { ...extra, lastErrorCode }
       const cleanup = (): void => {
         clearTimeout(timer)
         client.off('ready', onReady)
         client.off('error', onError)
+        client.off('end', onEnd)
+      }
+      const fail = (code: string, extra: Record<string, unknown>): void => {
+        cleanup()
+        reject(new QueueException(code, HttpStatus.INTERNAL_SERVER_ERROR, details(extra)))
       }
       const onReady = (): void => {
         cleanup()
         resolve()
       }
-      const onError = (err: Error): void => {
-        cleanup()
-        reject(err)
+      const onError = (err: unknown): void => {
+        lastErrorCode = startupErrorCode(err)
+        if (isReplyError(err)) fail(QUEUE_ERROR_CODES.CONNECTION_INVALID, {})
+      }
+      const onEnd = (): void => {
+        fail(QUEUE_ERROR_CODES.CONNECTION_INVALID, {})
       }
       const timer = setTimeout(() => {
-        cleanup()
-        reject(
-          new QueueException(
-            QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
-            HttpStatus.INTERNAL_SERVER_ERROR,
-            { timeoutMs },
-          ),
-        )
+        fail(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT, { timeoutMs })
       }, timeoutMs)
       client.once('ready', onReady)
-      client.once('error', onError)
+      client.on('error', onError)
+      client.once('end', onEnd)
     })
   }
+}
+
+/** True for an error the server answered with (`WRONGPASS`, `NOAUTH`, ...), as opposed to a socket fault. */
+function isReplyError(err: unknown): boolean {
+  return (
+    typeof err === 'object' && err !== null && (err as { name?: unknown }).name === 'ReplyError'
+  )
+}
+
+/**
+ * The value-free code of a startup error: a socket error's `code` (`ECONNREFUSED`), or the leading
+ * token of a server reply (`WRONGPASS`). Never the message, which can name the host or the user.
+ */
+function startupErrorCode(err: unknown): string | undefined {
+  if (typeof err !== 'object' || err === null) return undefined
+  const { code, message } = err as { code?: unknown; message?: unknown }
+  if (typeof code === 'string') return code
+  if (isReplyError(err) && typeof message === 'string') return /^[A-Z][A-Z0-9_]*/.exec(message)?.[0]
+  return undefined
 }

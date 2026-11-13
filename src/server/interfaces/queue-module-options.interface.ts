@@ -39,7 +39,11 @@ export interface BymaxQueueModuleOptions {
    * Default: true.
    */
   isGlobal?: boolean
-  /** Mode B only: milliseconds to wait for Redis `ready` before throwing. Default: 10_000. */
+  /**
+   * Mode B only: the startup budget, in milliseconds, for Redis to reach `ready`. Connection errors
+   * while the client is still reconnecting do not end the wait; the budget does, with
+   * `CONNECTION_TIMEOUT`, and the client the library opened is closed. Default: 10_000.
+   */
   connectionReadyTimeoutMs?: number
 }
 

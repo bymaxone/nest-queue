@@ -11,6 +11,31 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.14] — 2026-11-13
+
+No action required. Against 1.2.13 the built declarations differ only in the documentation comment
+of `connectionReadyTimeoutMs` (`scripts/check-api-surface.mjs` reports no difference), so the public
+API is unchanged; the connection resolver in `dist/` differs, and a boot that succeeds behaves as
+before.
+
+### Fixed
+
+- **A failed Mode B startup no longer leaves a client reconnecting.** When Redis was not ready in
+  time the library rejected the boot but kept the `ioredis` client it had opened, which kept
+  reconnecting and held the process open. The
+  client is now closed on every startup failure.
+- **`connectionReadyTimeoutMs` is a budget, not a first-error limit.** The first connection error
+  used to reject the boot at once with the raw `ioredis` error, so a
+  Redis restarting during a deploy failed the application. Errors while the client is
+  reconnecting are now waited through until the budget ends; the boot then rejects with
+  `queue.connection_timeout` whose `details` carry `timeoutMs` and `lastErrorCode` (for example
+  `ECONNREFUSED`), never the message, which can name the host. A refused credential
+  (`WRONGPASS`, `NOAUTH`) or a client that stopped reconnecting rejects at once with
+  `queue.connection_invalid`. Code that matched the raw `ioredis` error of a failed boot should
+  match the `QueueException` code instead.
+
+---
+
 ## [1.2.13] — 2026-11-12
 
 No action required. Measured with `diff -r` of the unpacked 1.2.12 tarball against a fresh
@@ -922,7 +947,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.13...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.14...HEAD
+[1.2.14]: https://github.com/bymaxone/nest-queue/compare/v1.2.13...v1.2.14
 [1.2.13]: https://github.com/bymaxone/nest-queue/compare/v1.2.12...v1.2.13
 [1.2.12]: https://github.com/bymaxone/nest-queue/compare/v1.2.11...v1.2.12
 [1.2.11]: https://github.com/bymaxone/nest-queue/compare/v1.2.10...v1.2.11
