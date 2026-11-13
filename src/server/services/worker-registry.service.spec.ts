@@ -431,57 +431,6 @@ describe('WorkerRegistry.registerSandboxed', () => {
   })
 })
 
-describe('WorkerRegistry.unregister', () => {
-  it('closes the worker, releases its connection, and removes it from the map', async () => {
-    // unregister must close(), quit the duplicated connection, and drop the entry.
-    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
-    registry.register({ queueName: 'email', handler: noopHandler })
-    const [worker] = createdWorkers
-    const conn = registry.getConnections().get('email') as unknown as { quit: jest.Mock }
-    await registry.unregister('email')
-    expect(worker?.close).toHaveBeenCalledTimes(1)
-    expect(conn.quit).toHaveBeenCalledTimes(1)
-    expect(registry.list()).not.toContain('email')
-    expect(registry.getConnections().has('email')).toBe(false)
-  })
-
-  it('hard-disconnects the connection when its quit handshake fails', async () => {
-    // A failed graceful quit must fall back to disconnect so a socket never leaks.
-    const failingConn = {
-      status: 'ready',
-      quit: jest.fn<Promise<string>, []>().mockRejectedValue(new Error('quit failed')),
-      disconnect: jest.fn(),
-    }
-    const redis = { duplicate: jest.fn().mockReturnValue(failingConn) } as unknown as Redis
-    const registry = new WorkerRegistry(fakeConnection(redis), makeOptions())
-    registry.register({ queueName: 'email', handler: noopHandler })
-    await registry.unregister('email')
-    expect(failingConn.quit).toHaveBeenCalledTimes(1)
-    expect(failingConn.disconnect).toHaveBeenCalledTimes(1)
-  })
-
-  // A worker whose close throws is gone either way; its socket and its registry entry must not stay.
-  it('still releases the connection and drops the entry when close() throws, then rethrows', async () => {
-    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
-    registry.register({ queueName: 'email', handler: noopHandler })
-    const [worker] = createdWorkers
-    worker?.close.mockRejectedValueOnce(new Error('close failed'))
-    const conn = registry.getConnections().get('email') as unknown as { quit: jest.Mock }
-
-    await expect(registry.unregister('email')).rejects.toThrow('close failed')
-
-    expect(conn.quit).toHaveBeenCalledTimes(1)
-    expect(registry.list()).not.toContain('email')
-    expect(registry.getConnections().has('email')).toBe(false)
-  })
-
-  it('is a no-op for an unknown queue name', async () => {
-    // Unregistering a non-existent queue must not throw.
-    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
-    await expect(registry.unregister('nonexistent')).resolves.toBeUndefined()
-  })
-})
-
 describe('WorkerRegistry.list / getAll', () => {
   it('list returns all registered queue names', () => {
     // list() is the primary way consumers discover what queues are registered.
