@@ -28,4 +28,12 @@ export interface WorkerOptions {
   lockDuration?: number
   /** Interval between stalled-job checks, in milliseconds. Default: 30_000. */
   stalledInterval?: number
+  /**
+   * Fail a job whose handler has not settled after this many milliseconds, so it retries under the
+   * job's `attempts` and `backoff` and its concurrency slot is freed. The handler's `signal` aborts
+   * at that moment; a handler that ignores it keeps running in the background. There is no default:
+   * without it a handler that never settles holds its slot indefinitely. Not available for
+   * sandboxed workers. Range: 1 to 2_147_483_647.
+   */
+  jobTimeoutMs?: number
 }

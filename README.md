@@ -886,6 +886,20 @@ library open its own connection with Mode B. The producer keeps the client's own
 policy; with a finite `maxRetriesPerRequest` that is what lets it fail fast during an outage, and
 `enqueue` is bounded by `enqueueTimeoutMs` whatever the client does.
 
+### A handler never settles (the queue stops moving)
+
+A handler whose promise never settles holds its concurrency slot for as long as the process lives, and BullMQ keeps renewing its lock, so the stalled-job check never reclaims it: with every slot held, the rest of the queue waits. Set `jobTimeoutMs` in the worker `options` to bound it. When the time passes, the job fails with a `queue.job_timeout` error and retries under its `attempts` and `backoff`, and the slot is free again. The handler receives an `AbortSignal` as its second argument that aborts at that moment; pass it to whatever the handler awaits so the work stops with the job. A handler that ignores the signal keeps running in the background, and its retry can overlap it, so it must stay idempotent. There is no default, and sandboxed workers do not accept the option.
+
+```typescript
+@Processor('reports', { jobTimeoutMs: 60_000 })
+export class ReportsProcessor {
+  @Process()
+  async build(job: Job, signal?: AbortSignal): Promise<void> {
+    await fetch('https://reports.internal/build', { method: 'POST', signal: signal ?? null })
+  }
+}
+```
+
 ### Jobs get stuck (not processed after restart)
 
 Stalled jobs are re-queued automatically by BullMQ's stalled-job check. If workers

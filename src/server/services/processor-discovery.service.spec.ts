@@ -331,7 +331,25 @@ describe('ProcessorDiscoveryService.buildDispatcher', () => {
     const dispatcher = bareService().buildDispatcher(instance, handlers)
     const job = { name: 'send-email' } as unknown as Job
     await dispatcher(job)
-    expect(sendSpy).toHaveBeenCalledWith(job)
+    expect(sendSpy).toHaveBeenCalledWith(job, undefined)
+  })
+
+  it('hands the abort signal to the named and the catch-all handler', async () => {
+    // The worker's signal (timeout or shutdown) must reach the consumer's method.
+    const namedSpy = jest.fn<Promise<void>, [Job, AbortSignal?]>().mockResolvedValue(undefined)
+    const defaultSpy = jest.fn<Promise<void>, [Job, AbortSignal?]>().mockResolvedValue(undefined)
+    const instance: Record<string | symbol, unknown> = { named: namedSpy, fallback: defaultSpy }
+    const dispatcher = bareService().buildDispatcher(instance, [
+      { jobName: 'a', methodKey: 'named' },
+      { methodKey: 'fallback' },
+    ])
+    const signal = new AbortController().signal
+
+    await dispatcher({ name: 'a' } as unknown as Job, signal)
+    await dispatcher({ name: 'other' } as unknown as Job, signal)
+
+    expect(namedSpy.mock.calls[0]?.[1]).toBe(signal)
+    expect(defaultSpy.mock.calls[0]?.[1]).toBe(signal)
   })
 
   it('falls back to the catch-all when job.name has no named handler', async () => {
@@ -349,7 +367,7 @@ describe('ProcessorDiscoveryService.buildDispatcher', () => {
     const dispatcher = bareService().buildDispatcher(instance, handlers)
     const job = { name: 'unknown-type' } as unknown as Job
     await dispatcher(job)
-    expect(defaultSpy).toHaveBeenCalledWith(job)
+    expect(defaultSpy).toHaveBeenCalledWith(job, undefined)
     expect(sendSpy).not.toHaveBeenCalled()
   })
 
@@ -386,7 +404,7 @@ describe('ProcessorDiscoveryService.buildDispatcher', () => {
     const dispatcher = bareService().buildDispatcher(instance, handlers)
     const job = { name: 'ok' } as unknown as Job
     await dispatcher(job)
-    expect(realSpy).toHaveBeenCalledWith(job)
+    expect(realSpy).toHaveBeenCalledWith(job, undefined)
   })
 })
 
