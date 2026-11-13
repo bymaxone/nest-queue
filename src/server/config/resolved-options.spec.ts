@@ -50,6 +50,8 @@ describe('applyDefaults', () => {
       drainOnShutdown: false,
     })
     expect(resolved.connectionReadyTimeoutMs).toBe(DEFAULT_CONNECTION_READY_TIMEOUT_MS)
+    expect(resolved.commandTimeoutMs).toBe(5000)
+    expect(resolved.enqueueTimeoutMs).toBe(10_000)
     expect(resolved.defaultJobOptions).toEqual(DEFAULT_JOB_OPTIONS)
   })
 

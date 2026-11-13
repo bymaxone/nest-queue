@@ -184,6 +184,69 @@ describe('ConnectionResolver Mode B startup, with real ioredis', () => {
     expect(connections).toBe(0)
   })
 
+  // A server that accepts the socket and never answers is what a frozen Redis looks like to the
+  // client; before the command deadline such a call stayed pending for as long as the freeze did.
+  it('rejects a command on a Redis that never replies, within the command deadline', async () => {
+    const server = createServer((socket) => socket.on('error', () => undefined))
+    servers.push(server)
+    const port = await new Promise<number>((resolve) => {
+      server.listen(0, '127.0.0.1', () => {
+        resolve((server.address() as { port: number }).port)
+      })
+    })
+    const resolver = new ConnectionResolver({
+      connection: { url: `redis://127.0.0.1:${String(port)}`, options: ownedOptions },
+      commandTimeoutMs: 300,
+    })
+    await resolver.init()
+
+    const started = Date.now()
+    const failure = await resolver
+      .getClient()
+      .get('k')
+      .then(
+        () => undefined,
+        (err: unknown) => err,
+      )
+
+    expect((failure as Error).message).toContain('timed out')
+    expect(Date.now() - started).toBeLessThan(2000)
+    await resolver.teardown()
+  })
+
+  // With the offline queue off, a call made while the socket is down fails at once instead of
+  // being buffered until the reconnect.
+  it('rejects at once, without buffering, while the connection is down', async () => {
+    const server = createServer((socket) => socket.on('error', () => undefined))
+    servers.push(server)
+    const port = await new Promise<number>((resolve) => {
+      server.listen(0, '127.0.0.1', () => {
+        resolve((server.address() as { port: number }).port)
+      })
+    })
+    const resolver = new ConnectionResolver({
+      connection: {
+        url: `redis://127.0.0.1:${String(port)}`,
+        options: { ...ownedOptions, retryStrategy: () => 5000 },
+      },
+    })
+    await resolver.init()
+    server.close()
+    const client = resolver.getClient()
+    client.stream.destroy()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    const started = Date.now()
+    const failure = await client.get('k').then(
+      () => undefined,
+      (err: unknown) => err,
+    )
+
+    expect((failure as Error).message).toContain('enableOfflineQueue')
+    expect(Date.now() - started).toBeLessThan(500)
+    await resolver.teardown()
+  })
+
   it('boots when Redis comes up inside the budget', async () => {
     const port = await freePort()
     const resolver = new ConnectionResolver({

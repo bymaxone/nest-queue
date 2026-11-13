@@ -90,4 +90,11 @@ export function validateOptions(opts: BymaxQueueModuleOptions): void {
   if (cacheTtlMs !== undefined && cacheTtlMs < 0) {
     invalid('metrics.cacheTtlMs must be >= 0')
   }
+
+  for (const key of ['commandTimeoutMs', 'enqueueTimeoutMs'] as const) {
+    const value = opts[key]
+    if (value !== undefined && !(Number.isFinite(value) && value > 0)) {
+      invalid(`${key} must be a positive finite number`)
+    }
+  }
 }

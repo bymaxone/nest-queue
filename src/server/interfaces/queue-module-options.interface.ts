@@ -45,6 +45,20 @@ export interface BymaxQueueModuleOptions {
    * `CONNECTION_TIMEOUT`, and the client the library opened is closed. Default: 10_000.
    */
   connectionReadyTimeoutMs?: number
+  /**
+   * Mode B only: the deadline, in milliseconds, for one Redis command on the connection the library
+   * opened (ioredis `commandTimeout`). A command that gets no reply in time rejects instead of
+   * waiting out ioredis' own retry window. An `options.commandTimeout` in the connection config
+   * wins. Worker and QueueEvents connections never inherit it, because they block by design.
+   * Default: 5_000.
+   */
+  commandTimeoutMs?: number
+  /**
+   * The deadline, in milliseconds, for one `enqueue` or `enqueueBulk` call in either connection mode.
+   * When it passes, the call rejects with `CONNECTION_TIMEOUT`; the add may still complete in Redis
+   * afterwards, so retry with a stable `jobId` or `deduplication`. Default: 10_000.
+   */
+  enqueueTimeoutMs?: number
 }
 
 /** A factory that produces module options, for async configuration. */

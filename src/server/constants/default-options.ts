@@ -29,6 +29,19 @@ export const DEFAULT_JOB_OPTIONS = {
 /** Default Mode B timeout (ms) to wait for Redis `ready` before throwing. */
 export const DEFAULT_CONNECTION_READY_TIMEOUT_MS = 10_000 as const
 
+/**
+ * Default deadline (ms) for one Redis command on a connection the library opened. Well below the
+ * ~73 s ioredis spends retrying a command before it gives up, so a frozen Redis fails a producer
+ * call in seconds rather than holding the request for over a minute.
+ */
+export const DEFAULT_COMMAND_TIMEOUT_MS = 5_000 as const
+
+/**
+ * Default deadline (ms) for one `enqueue` or `enqueueBulk` call, whatever the connection mode. It
+ * covers a shared client whose retries are unbounded, which the command timeout cannot reach.
+ */
+export const DEFAULT_ENQUEUE_TIMEOUT_MS = 10_000 as const
+
 /** Default TTL (ms) for the metrics cache. */
 export const DEFAULT_METRICS_CACHE_TTL_MS = 5_000 as const
 

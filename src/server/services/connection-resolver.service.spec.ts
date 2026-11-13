@@ -59,6 +59,32 @@ describe('ConnectionResolver — Mode A (bring your own client)', () => {
     expect(probe.disconnect).toHaveBeenCalledTimes(1)
   })
 
+  // A shared client with `maxRetriesPerRequest: null` makes every producer call wait for as long as
+  // the outage lasts. The library cannot change a client it does not own, so it says so at boot.
+  it('warns once at boot when the shared client retries forever, without a value', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+    const probe = new FakeRedis('ready', null)
+    const client = new FakeRedis('ready', null)
+    client.duplicate.mockReturnValue(asRedis(probe))
+
+    await new ConnectionResolver(optionsWith({ client: asRedis(client) })).init()
+
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(String(warn.mock.calls[0]?.[0])).toContain('maxRetriesPerRequest')
+    warn.mockRestore()
+  })
+
+  it('does not warn when the shared client has a finite retry limit', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+    const probe = new FakeRedis('ready', null)
+    const client = new FakeRedis('ready', 20)
+    client.duplicate.mockReturnValue(asRedis(probe))
+
+    await new ConnectionResolver(optionsWith({ client: asRedis(client) })).init()
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
   it('rejects an ended client with CONNECTION_INVALID', async () => {
     // An unusable client must fail fast before any work is attempted.
     const client = new FakeRedis('end', null)
@@ -116,6 +142,8 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     expect(redisConstructor).toHaveBeenCalledWith('redis://localhost:6379', {
       db: 1,
       lazyConnect: false,
+      commandTimeout: 5000,
+      enableOfflineQueue: false,
     })
     expect(resolver.getMode()).toBe('mode-b-owned')
     expect(resolver.isOwned()).toBe(true)
@@ -140,7 +168,44 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
       host: 'localhost',
       port: 6379,
       lazyConnect: false,
+      commandTimeout: 5000,
+      enableOfflineQueue: false,
     })
+  })
+
+  // The producer connection must neither hang on a frozen Redis nor buffer without bound while
+  // Redis is down; both are policies of the connection the library opens, never of a BYO client.
+  it.each([
+    ['the module option', { commandTimeoutMs: 2000 }, undefined, 2000],
+    ['the ioredis option, which wins over the module option', { commandTimeoutMs: 2000 }, 777, 777],
+  ])('sets the owned command timeout from %s', async (_label, moduleOpts, ioOpt, expected) => {
+    const client = new FakeRedis('ready', null)
+    redisConstructor.mockReturnValue(asRedis(client))
+
+    const resolver = new ConnectionResolver({
+      connection: {
+        url: 'redis://localhost:6379',
+        ...(ioOpt === undefined ? {} : { options: { commandTimeout: ioOpt } }),
+      },
+      ...moduleOpts,
+    })
+    await resolver.init()
+
+    const passed = redisConstructor.mock.calls[0]?.[1] as Record<string, unknown>
+    expect(passed.commandTimeout).toBe(expected)
+  })
+
+  it('keeps an offline queue the consumer asked for explicitly', async () => {
+    const client = new FakeRedis('ready', null)
+    redisConstructor.mockReturnValue(asRedis(client))
+
+    const resolver = new ConnectionResolver(
+      optionsWith({ url: 'redis://localhost:6379', options: { enableOfflineQueue: true } }),
+    )
+    await resolver.init()
+
+    const passed = redisConstructor.mock.calls[0]?.[1] as Record<string, unknown>
+    expect(passed.enableOfflineQueue).toBe(true)
   })
 
   it('resolves immediately when the client is already ready', async () => {
@@ -150,7 +215,11 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
 
     const resolver = new ConnectionResolver(optionsWith({ url: 'redis://localhost:6379' }))
     await expect(resolver.init()).resolves.toBeUndefined()
-    expect(redisConstructor).toHaveBeenCalledWith('redis://localhost:6379', { lazyConnect: false })
+    expect(redisConstructor).toHaveBeenCalledWith('redis://localhost:6379', {
+      lazyConnect: false,
+      commandTimeout: 5000,
+      enableOfflineQueue: false,
+    })
   })
 
   it('rejects with CONNECTION_TIMEOUT when ready never arrives', async () => {

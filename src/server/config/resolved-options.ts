@@ -11,6 +11,8 @@ import {
   DEFAULT_METRICS_CACHE_TTL_MS,
   DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS,
   DEFAULT_CONNECTION_READY_TIMEOUT_MS,
+  DEFAULT_COMMAND_TIMEOUT_MS,
+  DEFAULT_ENQUEUE_TIMEOUT_MS,
 } from '../constants/default-options'
 
 /** Fully-resolved options — every optional field of the input is filled. */
@@ -33,6 +35,10 @@ export interface ResolvedQueueOptions {
   telemetry?: Telemetry
   /** Mode B ready timeout in milliseconds. */
   connectionReadyTimeoutMs: number
+  /** Mode B per-command deadline in milliseconds. */
+  commandTimeoutMs: number
+  /** Deadline in milliseconds for one enqueue call. */
+  enqueueTimeoutMs: number
 }
 
 /**
@@ -61,6 +67,8 @@ export function applyDefaults(opts: BymaxQueueModuleOptions): Readonly<ResolvedQ
       drainOnShutdown: opts.shutdown?.drainOnShutdown ?? false,
     },
     connectionReadyTimeoutMs: opts.connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS,
+    commandTimeoutMs: opts.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS,
+    enqueueTimeoutMs: opts.enqueueTimeoutMs ?? DEFAULT_ENQUEUE_TIMEOUT_MS,
   }
   if (opts.telemetry !== undefined) base.telemetry = opts.telemetry
 

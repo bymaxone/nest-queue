@@ -227,4 +227,21 @@ describe('validateOptions', () => {
       })
     }).not.toThrow()
   })
+
+  it.each(['commandTimeoutMs', 'enqueueTimeoutMs'] as const)(
+    'refuses a %s that is not a positive finite number',
+    (key) => {
+      for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+        const opts: BymaxQueueModuleOptions = { connection: { url: 'redis://x' }, [key]: bad }
+        expect(
+          reasonOf(() => {
+            validateOptions(opts)
+          }),
+        ).toBe(`${key} must be a positive finite number`)
+      }
+      expect(() => {
+        validateOptions({ connection: { url: 'redis://x' }, [key]: 1500 })
+      }).not.toThrow()
+    },
+  )
 })

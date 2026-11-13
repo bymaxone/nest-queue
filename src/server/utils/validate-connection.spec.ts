@@ -87,7 +87,9 @@ describe('duplicateConnection', () => {
 
     const result = duplicateConnection(source)
 
-    expect(duplicateSpy).toHaveBeenCalledWith({ maxRetriesPerRequest: null })
+    expect(duplicateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ maxRetriesPerRequest: null }),
+    )
     expect(result).toBe(duplicate)
   })
 })
