@@ -480,11 +480,17 @@ function toProcessor<TData, TResult>(
     }
     if (signal?.aborted === true) relay()
     signal?.addEventListener('abort', relay, { once: true })
-    return withDeadline(handler(job, own.signal), timeoutMs, () => {
-      const error = new JobTimeoutError(timeoutMs)
-      own.abort(error)
-      return error
-    }).finally(() => {
+    // Calling the handler inside a promise turns a throw before it returns one into a rejection,
+    // so the cleanup below runs for it too.
+    return withDeadline(
+      Promise.resolve().then(() => handler(job, own.signal)),
+      timeoutMs,
+      () => {
+        const error = new JobTimeoutError(timeoutMs)
+        own.abort(error)
+        return error
+      },
+    ).finally(() => {
       signal?.removeEventListener('abort', relay)
     })
   }

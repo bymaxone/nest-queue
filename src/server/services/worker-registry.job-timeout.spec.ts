@@ -146,6 +146,7 @@ describe('WorkerRegistry — jobTimeoutMs', () => {
     }, 3000)
 
     const running = processor(job, 'token', outer.signal)
+    await Promise.resolve()
     expect(seen?.aborted).toBe(false)
     outer.abort(new Error('shutdown'))
     expect(seen?.aborted).toBe(true)
@@ -170,6 +171,19 @@ describe('WorkerRegistry — the worker signal outlives the job', () => {
     expect(getEventListeners(outer.signal, 'abort')).toHaveLength(1)
     await jest.advanceTimersByTimeAsync(3000)
     await timedOut
+
+    expect(getEventListeners(outer.signal, 'abort')).toHaveLength(0)
+  })
+
+  // A handler typed to return a promise can still throw before it returns one.
+  it('leaves no listener on the worker signal when a handler throws synchronously', async () => {
+    const outer = new AbortController()
+    const boom = new Error('sync boom')
+    const processor = registered(() => {
+      throw boom
+    }, 3000)
+
+    await expect(processor(job, 't', outer.signal)).rejects.toBe(boom)
 
     expect(getEventListeners(outer.signal, 'abort')).toHaveLength(0)
   })
