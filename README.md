@@ -463,7 +463,7 @@ BymaxQueueModule.forRoot({
 It implements a **bounded drain protocol** with at-least-once semantics:
 
 1. All workers are closed **in parallel**, within one budget (`drainTimeoutMs`, default 30 s) that
-   covers steps 1 to 3 together: however many workers are stuck, consumption stops after one budget,
+   covers steps 1 to 4 together: however many workers are stuck, consumption stops after one budget,
    not one per worker.
 2. A worker resolves either when it drains normally or when the budget runs out — whichever comes
    first.
