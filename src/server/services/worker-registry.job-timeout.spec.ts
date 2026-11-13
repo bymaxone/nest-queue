@@ -81,8 +81,8 @@ afterEach(() => {
 })
 
 describe('WorkerRegistry — jobTimeoutMs', () => {
-  // A handler that never settles used to hold its slot for as long as the process lived.
-  it('fails a job that outlives the timeout, aborts its signal and frees the slot', async () => {
+  // A handler that never settles must not keep its job alive beyond the configured deadline.
+  it('rejects a job that outlives the timeout and aborts its signal', async () => {
     jest.useFakeTimers()
     let seen: AbortSignal | undefined
     const processor = registered((_job, signal) => {
