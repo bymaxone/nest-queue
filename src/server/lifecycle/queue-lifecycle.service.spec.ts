@@ -280,6 +280,101 @@ describe('QueueLifecycle shutdown — bounded drain', () => {
   })
 })
 
+describe('QueueLifecycle shutdown — one overall budget', () => {
+  afterEach(() => {
+    jest.useRealTimers()
+  })
+
+  /** A worker whose graceful close never settles; a force close succeeds. */
+  function stuckWorker(): Worker {
+    return makeWorker(
+      jest
+        .fn()
+        .mockImplementation((force?: boolean) =>
+          force === true ? Promise.resolve() : new Promise<void>(() => undefined),
+        ),
+    )
+  }
+
+  // Four stuck workers used to cost four budgets, because each was drained after the last.
+  it('finishes within one drain budget however many workers are stuck, with every connection released', async () => {
+    jest.useFakeTimers()
+    const names = ['a', 'b', 'c', 'd']
+    const quit = jest.fn().mockResolvedValue('OK')
+    const { lifecycle } = makeLifecycle({
+      workers: new Map(names.map((name) => [name, stuckWorker()])),
+      workerConnections: new Map(names.map((name) => [name, makeConnection(quit, jest.fn())])),
+      resolved: makeResolved({ drainTimeoutMs: 2000 }),
+    })
+
+    let done = false
+    const pending = lifecycle.onModuleDestroy().then(() => {
+      done = true
+    })
+    await jest.advanceTimersByTimeAsync(2000)
+    await pending
+
+    expect(done).toBe(true)
+    expect(warnSpy).toHaveBeenCalledTimes(4)
+    expect(quit).toHaveBeenCalledTimes(4)
+  })
+
+  it('does not let a worker that closes in time wait on one that does not', async () => {
+    jest.useFakeTimers()
+    const fast = jest.fn<Promise<void>, []>().mockResolvedValue(undefined)
+    const { lifecycle } = makeLifecycle({
+      workers: new Map([
+        ['stuck', stuckWorker()],
+        ['fast', makeWorker(fast)],
+      ]),
+      resolved: makeResolved({ drainTimeoutMs: 5000 }),
+    })
+
+    const pending = lifecycle.onModuleDestroy()
+    await jest.advanceTimersByTimeAsync(0)
+
+    expect(fast).toHaveBeenCalledTimes(1)
+    await jest.advanceTimersByTimeAsync(5000)
+    await pending
+  })
+
+  // Once the workers used the budget, a connection whose QUIT never answers must not add a wait.
+  it('disconnects a connection that does not quit within what is left of the budget', async () => {
+    jest.useFakeTimers()
+    const quit = jest.fn().mockReturnValue(new Promise(() => undefined))
+    const disconnect = jest.fn()
+    const { lifecycle } = makeLifecycle({
+      workers: new Map([['stuck', stuckWorker()]]),
+      workerConnections: new Map([['stuck', makeConnection(quit, disconnect)]]),
+      resolved: makeResolved({ drainTimeoutMs: 3000 }),
+    })
+
+    const pending = lifecycle.onModuleDestroy()
+    await jest.advanceTimersByTimeAsync(3000)
+    // What is left of the budget is zero, so the connection step gives up after one timer tick.
+    await jest.advanceTimersByTimeAsync(1)
+    await pending
+
+    expect(disconnect).toHaveBeenCalledTimes(1)
+  })
+
+  it('abandons a queue-events close that never settles once the budget is spent', async () => {
+    jest.useFakeTimers()
+    const close = jest.fn().mockReturnValue(new Promise(() => undefined))
+    const { lifecycle } = makeLifecycle({
+      events: new Map([['q', makeQueueEvents(close)]]),
+      resolved: makeResolved({ drainTimeoutMs: 1000 }),
+    })
+
+    const pending = lifecycle.onModuleDestroy()
+    await jest.advanceTimersByTimeAsync(1000)
+    await jest.advanceTimersByTimeAsync(1)
+    await pending
+
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('QueueLifecycle shutdown — why a worker was forced', () => {
   it('tells a close that failed apart from a drain that timed out', async () => {
     // A close() that rejects with a real error (Redis went away during shutdown) is not a drain

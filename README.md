@@ -438,6 +438,10 @@ await this.queue.enqueue(
 
 When a custom `jobId` already exists, or a `deduplication` rule keeps the job that is already there (a rule with `replace` swaps it for the new one instead), `enqueue`, `enqueueBulk` and the flow methods add nothing: BullMQ answers with the id of the **existing** job together with the data and options of **this** call, so the returned object does not describe what is stored. Call `QueueService.getJob` when you need the stored job.
 
+### A timed-out `enqueue` may still have been added
+
+When Redis does not answer within `enqueueTimeoutMs`, `enqueue` and `enqueueBulk` reject with `CONNECTION_TIMEOUT`, but the library cannot cancel the command: if Redis applies it late, the job exists anyway. Retrying a call that timed out can therefore add the job twice. For anything that must not run twice, pass a deterministic `jobId` (for example one derived from the business key): BullMQ ignores a second add with the same `jobId` for as long as the first job is still stored, so a retry inside that window is safe. A completed job is removed by `removeOnComplete`, and from then on the same `jobId` adds a new job, so keep the retry inside that window or keep the handler idempotent. A `deduplication` rule gives the same guarantee for work that is allowed to repeat after a window.
+
 ### OpenTelemetry
 
 Pass a `bullmq-otel` telemetry instance (optional peer dep) to trace spans from `enqueue` through the handler:
@@ -458,12 +462,15 @@ BymaxQueueModule.forRoot({
 `QueueLifecycle` runs automatically when NestJS closes the application context, through its `onModuleDestroy` and `onApplicationShutdown` hooks (call `app.enableShutdownHooks()` so that a termination signal closes the context).
 It implements a **bounded drain protocol** with at-least-once semantics:
 
-1. All workers are closed with a grace period (`drainTimeoutMs`, default 30 s).
-2. A `Promise.race` resolves either when the worker drains normally or when the
-   timeout fires — whichever comes first.
+1. All workers are closed **in parallel**, within one budget (`drainTimeoutMs`, default 30 s) that
+   covers steps 1 to 4 together: however many workers are stuck, consumption stops after one budget,
+   not one per worker.
+2. A worker resolves either when it drains normally or when the budget runs out — whichever comes
+   first.
 3. On timeout, the worker is force-closed (`worker.close(true)`), preserving stalled
    jobs for reprocessing by the next instance.
-4. Queue-events and the connections the library opened for workers and queue-events are closed.
+4. Queue-events and the connections the library opened for workers and queue-events are closed,
+   each within what is left of the budget; a connection that has not quit by then is disconnected.
 5. Once NestJS has stopped the HTTP server (`onApplicationShutdown`), the flow producer, the
    cached queues and, in Mode B, the library's own Redis connection are closed. NestJS runs
    `onModuleDestroy` before it stops the HTTP server, so a request that is still being served can
@@ -819,18 +826,18 @@ try {
 }
 ```
 
-| Code                                     | HTTP | When thrown                                                                                                                                                                                                              |
-| ---------------------------------------- | :--: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `queue.invalid_options`                  | 500  | Module options failed bootstrap validation — missing `connection`, mutually exclusive connection arms, non-positive `shutdown.drainTimeoutMs`, or negative `metrics.cacheTtlMs`                                          |
-| `queue.connection_invalid`               | 500  | The resolver has no usable client: not yet initialized, Mode A's injected client is in an unusable `status`, or a Mode B client was refused by the server (`WRONGPASS`, `NOAUTH`) or stopped reconnecting during startup |
-| `queue.connection_requires_null_retries` | 500  | A consumer connection could not be coerced to `maxRetriesPerRequest: null`                                                                                                                                               |
-| `queue.connection_timeout`               | 500  | Mode B: Redis did not reach `ready` within `connectionReadyTimeoutMs`; `details` carries `timeoutMs` and the last error's `lastErrorCode`                                                                                |
-| `queue.invalid_repeat_options`           | 400  | A Job Scheduler schedule was rejected — invalid cron pattern, or neither `pattern` nor `every`                                                                                                                           |
-| `queue.duplicate_processor`              | 500  | Two `@Processor` classes claim the same queue name                                                                                                                                                                       |
-| `queue.flow_disabled`                    | 503  | `FlowService` used without `flows.enabled`                                                                                                                                                                               |
-| `queue.metrics_disabled`                 | 503  | `MetricsService` used without `metrics.enabled`                                                                                                                                                                          |
-| `queue.bulk_enqueue_failed`              | 500  | `enqueueBulk` exceeded the 1 000-job cap, or the underlying `addBulk` failed                                                                                                                                             |
-| `queue.worker_registration_failed`       | 500  | A worker could not be constructed, started, or closed                                                                                                                                                                    |
+| Code                                     | HTTP | When thrown                                                                                                                                                                                                                                                                                       |
+| ---------------------------------------- | :--: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `queue.invalid_options`                  | 500  | Module options failed bootstrap validation — missing `connection`, mutually exclusive connection arms, non-positive `shutdown.drainTimeoutMs`, or negative `metrics.cacheTtlMs`                                                                                                                   |
+| `queue.connection_invalid`               | 500  | The resolver has no usable client: not yet initialized, Mode A's injected client is in an unusable `status`, or a Mode B client was refused by the server (`WRONGPASS`, `NOAUTH`) or stopped reconnecting during startup                                                                          |
+| `queue.connection_requires_null_retries` | 500  | A consumer connection could not be coerced to `maxRetriesPerRequest: null`                                                                                                                                                                                                                        |
+| `queue.connection_timeout`               | 500  | Mode B: Redis did not reach `ready` within `connectionReadyTimeoutMs` (`details` carries `timeoutMs` and the last error's `lastErrorCode`), or `enqueue`/`enqueueBulk` got no answer within `enqueueTimeoutMs` (`details` carries `operation` and `timeoutMs`; the job may still have been added) |
+| `queue.invalid_repeat_options`           | 400  | A Job Scheduler schedule was rejected — invalid cron pattern, or neither `pattern` nor `every`                                                                                                                                                                                                    |
+| `queue.duplicate_processor`              | 500  | Two `@Processor` classes claim the same queue name                                                                                                                                                                                                                                                |
+| `queue.flow_disabled`                    | 503  | `FlowService` used without `flows.enabled`                                                                                                                                                                                                                                                        |
+| `queue.metrics_disabled`                 | 503  | `MetricsService` used without `metrics.enabled`                                                                                                                                                                                                                                                   |
+| `queue.bulk_enqueue_failed`              | 500  | `enqueueBulk` exceeded the 1 000-job cap, or the underlying `addBulk` failed                                                                                                                                                                                                                      |
+| `queue.worker_registration_failed`       | 500  | A worker could not be constructed, started, or closed                                                                                                                                                                                                                                             |
 
 ### Reserved codes
 

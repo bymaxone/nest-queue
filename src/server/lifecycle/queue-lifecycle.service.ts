@@ -22,10 +22,10 @@ import {
   type OnApplicationShutdown,
   type OnModuleDestroy,
 } from '@nestjs/common'
-import type { Worker } from 'bullmq'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import { describeError } from '../utils/describe-error'
+import { withDeadline } from '../utils/with-deadline'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { ConnectionResolver } from '../services/connection-resolver.service'
 import { FlowService } from '../services/flow.service'
@@ -77,9 +77,12 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
    */
   async onModuleDestroy(): Promise<void> {
     this.startedAt = Date.now()
-    this.forcedWorkers = await this.closeWorkers()
-    await this.closeQueueEvents()
-    await this.closeDuplicatedConnections()
+    // One budget for the whole consumption side: every step below gets what is left of it, so the
+    // time a stuck worker costs is the drain budget once, not once per worker and again per step.
+    const deadline = this.startedAt + this.resolved.shutdown.drainTimeoutMs
+    this.forcedWorkers = await this.closeWorkers(deadline)
+    await this.closeQueueEvents(deadline)
+    await this.closeDuplicatedConnections(deadline)
   }
 
   /**
@@ -99,88 +102,65 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
   }
 
   /**
-   * Close every worker with a bounded drain, force-closing any that exceed the
-   * budget. Returns the number of workers that had to be force-closed.
+   * Close every worker in parallel, each bounded by what is left of the shutdown budget, and
+   * force-close any that exceed it. Returns the number of workers that had to be force-closed.
    *
+   * @param deadline - The epoch millisecond at which the shutdown budget ends.
    * @returns The count of force-closed workers.
    */
-  private async closeWorkers(): Promise<number> {
+  private async closeWorkers(deadline: number): Promise<number> {
     let forced = 0
-    const drainTimeoutMs = this.resolved.shutdown.drainTimeoutMs
-    for (const [name, worker] of this.workers.getAll()) {
-      try {
-        await this.closeWorkerWithTimeout(worker, drainTimeoutMs)
-      } catch (cause) {
-        forced++
-        this.logger.warn(
-          cause instanceof DrainTimeoutError
-            ? `Worker "${name}" exceeded the ${String(drainTimeoutMs)}ms drain budget — ` +
-                `forcing close (${QUEUE_ERROR_CODES.SHUTDOWN_TIMEOUT_EXCEEDED}); ` +
-                'the in-flight job becomes stalled and is retried'
-            : `Worker "${name}" failed to close gracefully (${describeError(cause)}) — ` +
-                'forcing close; the in-flight job becomes stalled and is retried',
-        )
-        // Best-effort force-close, never awaited: a genuinely stuck worker must
-        // not block the remaining teardown steps. A rejection is swallowed.
-        void worker.close(true).catch(() => undefined)
-      }
-    }
+    await Promise.all(
+      Array.from(this.workers.getAll(), async ([name, worker]) => {
+        try {
+          await bounded(worker.close(), deadline)
+        } catch (cause) {
+          forced++
+          this.logger.warn(
+            cause instanceof DrainTimeoutError
+              ? `Worker "${name}" exceeded the ${String(this.resolved.shutdown.drainTimeoutMs)}ms drain budget — ` +
+                  `forcing close (${QUEUE_ERROR_CODES.SHUTDOWN_TIMEOUT_EXCEEDED}); ` +
+                  'the in-flight job becomes stalled and is retried'
+              : `Worker "${name}" failed to close gracefully (${describeError(cause)}) — ` +
+                  'forcing close; the in-flight job becomes stalled and is retried',
+          )
+          // Best-effort force-close, never awaited: a genuinely stuck worker must
+          // not block the remaining teardown steps. A rejection is swallowed.
+          void worker.close(true).catch(() => undefined)
+        }
+      }),
+    )
     return forced
   }
 
-  /**
-   * Race a graceful `worker.close()` against a timer. `worker.close()` already
-   * drains active jobs and takes no timeout argument, so the timer is the only
-   * way to bound the wait. Rejects with a timeout error when the budget elapses.
-   *
-   * @param worker - The worker to close.
-   * @param timeoutMs - The drain budget in milliseconds.
-   */
-  private async closeWorkerWithTimeout(worker: Worker, timeoutMs: number): Promise<void> {
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const closed = worker.close()
-    // Keep the abandoned graceful close from surfacing as an unhandled rejection.
-    // Stryker disable next-line CallExpression: equivalent — `Promise.race` below subscribes to `closed` itself, which already marks a late rejection as handled; verified in Node that a close rejecting after the timer wins raises no `unhandledRejection` with this line removed, so no test can observe the difference
-    closed.catch(() => undefined)
-    try {
-      await Promise.race([
-        closed,
-        new Promise<never>((_resolve, reject) => {
-          timer = setTimeout(() => {
-            reject(new DrainTimeoutError())
-          }, timeoutMs)
-        }),
-      ])
-    } finally {
-      clearTimeout(timer)
-    }
-  }
-
-  /** Close every cached `QueueEvents`, swallowing individual failures. */
-  private async closeQueueEvents(): Promise<void> {
-    for (const [, queueEvents] of this.events.getAll()) {
-      await queueEvents.close().catch(() => undefined)
-    }
+  /** Close every cached `QueueEvents` in parallel within the budget, swallowing failures. */
+  private async closeQueueEvents(deadline: number): Promise<void> {
+    await Promise.all(
+      Array.from(this.events.getAll().values(), async (queueEvents) => {
+        await bounded(queueEvents.close(), deadline).catch(() => undefined)
+      }),
+    )
   }
 
   /**
-   * Close the duplicated worker/queue-events connections the library opened.
-   * BullMQ treats a passed-in client as shared and never closes it, so the
-   * library must release these explicitly. In Mode A the consumer's shared
-   * client is never among them.
+   * Close the duplicated worker/queue-events connections the library opened, in parallel. BullMQ
+   * treats a passed-in client as shared and never closes it, so the library must release these
+   * explicitly. A connection that does not quit within the budget is disconnected, which also
+   * releases anything still blocked on it. In Mode A the consumer's shared client is never among
+   * them.
    */
-  private async closeDuplicatedConnections(): Promise<void> {
+  private async closeDuplicatedConnections(deadline: number): Promise<void> {
     const connections = [
       ...this.workers.getConnections().values(),
       ...this.events.getConnections().values(),
     ]
-    for (const connection of connections) {
-      try {
-        await connection.quit()
-      } catch {
-        connection.disconnect()
-      }
-    }
+    await Promise.all(
+      connections.map(async (connection) => {
+        await bounded(connection.quit(), deadline).catch(() => {
+          connection.disconnect()
+        })
+      }),
+    )
   }
 
   /**
@@ -216,4 +196,13 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
   private async teardownConnection(): Promise<void> {
     await this.connection.teardown().catch(() => undefined)
   }
+}
+
+/**
+ * Wait for `work` until the epoch millisecond `deadline`, then give up with a
+ * {@link DrainTimeoutError}. `worker.close()` already drains active jobs and takes no timeout
+ * argument, so a timer is the only way to bound it. The work itself is not cancelled.
+ */
+function bounded<T>(work: Promise<T>, deadline: number): Promise<T> {
+  return withDeadline(work, Math.max(0, deadline - Date.now()), () => new DrainTimeoutError())
 }

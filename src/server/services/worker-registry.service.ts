@@ -208,9 +208,14 @@ export class WorkerRegistry {
   async unregister(queueName: string): Promise<void> {
     const entry = this.#entries.get(queueName)
     if (!entry) return
-    await entry.worker.close()
-    await this.closeConnection(entry.connection)
-    this.#entries.delete(queueName)
+    try {
+      await entry.worker.close()
+    } finally {
+      // A close that throws must still release the connection and drop the entry: the worker is
+      // gone either way, and keeping the entry would leak the socket and block re-registration.
+      await this.closeConnection(entry.connection)
+      this.#entries.delete(queueName)
+    }
   }
 
   /**
