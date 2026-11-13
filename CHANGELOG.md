@@ -9,6 +9,22 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A failed Mode B startup no longer leaves a client reconnecting.** When Redis was not ready in
+  time the library rejected the boot but kept the `ioredis` client it had opened, which kept
+  reconnecting and held the process open (3 sockets stayed active after the boot error). The
+  client is now closed on every startup failure.
+- **`connectionReadyTimeoutMs` is a budget, not a first-error limit.** The first connection error
+  used to reject the boot at once (38 ms against a refused port) with the raw `ioredis` error, so a
+  Redis restarting during a deploy failed the application. Errors while the client is
+  reconnecting are now waited through until the budget ends; the boot then rejects with
+  `queue.connection_timeout` whose `details` carry `timeoutMs` and `lastErrorCode` (for example
+  `ECONNREFUSED`), never the message, which can name the host. A refused credential
+  (`WRONGPASS`, `NOAUTH`) or a client that stopped reconnecting rejects at once with
+  `queue.connection_invalid`. Code that matched the raw `ioredis` error of a failed boot should
+  match the `QueueException` code instead.
+
 ---
 
 ## [1.2.13] — 2026-11-12

@@ -3,6 +3,7 @@
  * @layer server/services
  */
 
+import { createServer, type Server } from 'node:net'
 import { Worker } from 'bullmq'
 import { Redis } from 'ioredis'
 import type { RedisOptions } from 'ioredis'
@@ -120,5 +121,85 @@ describe('ConnectionResolver Mode A probe, with real ioredis', () => {
     expect(
       () => new Worker('probe', () => Promise.resolve(), { connection: rejected, autorun: false }),
     ).toThrow('maxRetriesPerRequest must be null')
+  })
+})
+
+/** A port nothing listens on, found by binding and releasing one. */
+async function freePort(): Promise<number> {
+  const probe = createServer()
+  await new Promise<void>((resolve) => probe.listen(0, '127.0.0.1', resolve))
+  const address = probe.address()
+  await new Promise<void>((resolve) => {
+    probe.close(() => {
+      resolve()
+    })
+  })
+  if (address === null || typeof address === 'string') throw new Error('no port')
+  return address.port
+}
+
+describe('ConnectionResolver Mode B startup, with real ioredis', () => {
+  const servers: Server[] = []
+  afterEach(() => {
+    for (const server of servers.splice(0)) server.close()
+  })
+
+  // Without a ready check ioredis is ready as soon as the socket connects, so a bare TCP listener
+  // stands in for a Redis that has come back; no server protocol is involved.
+  const ownedOptions = {
+    enableReadyCheck: false,
+    protocol: 2 as const,
+    disableClientInfo: true,
+    retryStrategy: () => 100,
+  }
+
+  it('closes the client it opened when the budget ends, so nothing keeps reconnecting', async () => {
+    const port = await freePort()
+    const resolver = new ConnectionResolver({
+      connection: { url: `redis://:s3cr3t@127.0.0.1:${String(port)}`, options: ownedOptions },
+      connectionReadyTimeoutMs: 500,
+    })
+
+    const failure = await resolver.init().then(
+      () => undefined,
+      (err: unknown) => err,
+    )
+
+    expect(failure).toBeInstanceOf(QueueException)
+    const body = (failure as QueueException).getResponse() as {
+      error: { code: string; details: unknown }
+    }
+    expect(body.error.code).toBe(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT)
+    expect(body.error.details).toEqual({ timeoutMs: 500, lastErrorCode: 'ECONNREFUSED' })
+    expect(JSON.stringify(body)).not.toContain('s3cr3t')
+    // A client left reconnecting would connect as soon as something listens; this one must not.
+    let connections = 0
+    const server = createServer((socket) => {
+      connections++
+      socket.on('error', () => undefined)
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve))
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    expect(connections).toBe(0)
+  })
+
+  it('boots when Redis comes up inside the budget', async () => {
+    const port = await freePort()
+    const resolver = new ConnectionResolver({
+      connection: { url: `redis://127.0.0.1:${String(port)}`, options: ownedOptions },
+      connectionReadyTimeoutMs: 3000,
+    })
+    const server = createServer((socket) => socket.on('error', () => undefined))
+    servers.push(server)
+    const listening = new Promise<void>((resolve) =>
+      setTimeout(() => server.listen(port, '127.0.0.1', resolve), 1000),
+    )
+
+    await resolver.init()
+    await listening
+
+    expect(resolver.getClient().status).toBe('ready')
+    open.push(resolver.getClient())
   })
 })
