@@ -9,6 +9,15 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [1.2.14] — 2026-11-13
+
+No action required. Against 1.2.13 the built declarations differ only in the documentation comment
+of `connectionReadyTimeoutMs` (`scripts/check-api-surface.mjs` reports no difference), so the public
+API is unchanged; the connection resolver in `dist/` differs, and a boot that succeeds behaves as
+before.
+
 ### Fixed
 
 - **A failed Mode B startup no longer leaves a client reconnecting.** When Redis was not ready in
@@ -938,7 +947,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.13...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.14...HEAD
+[1.2.14]: https://github.com/bymaxone/nest-queue/compare/v1.2.13...v1.2.14
 [1.2.13]: https://github.com/bymaxone/nest-queue/compare/v1.2.12...v1.2.13
 [1.2.12]: https://github.com/bymaxone/nest-queue/compare/v1.2.11...v1.2.12
 [1.2.11]: https://github.com/bymaxone/nest-queue/compare/v1.2.10...v1.2.11
