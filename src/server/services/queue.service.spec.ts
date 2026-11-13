@@ -187,7 +187,30 @@ describe('QueueService — enqueue deadline', () => {
     expect(JSON.stringify((err as QueueException).getResponse())).toContain('10000')
   })
 
-  it('does not reject before the deadline and clears the timer when add settles', async () => {
+  it('stays pending until the deadline, then rejects', async () => {
+    jest.useFakeTimers()
+    const { service } = makeService()
+    service.getOrCreateQueue('email')
+    queueInstances[0]?.add.mockReturnValue(new Promise(() => undefined))
+    let settled = false
+
+    const outcome = service.enqueue('email', 'send', {}).then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      },
+    )
+    await jest.advanceTimersByTimeAsync(9_999)
+    expect(settled).toBe(false)
+    await jest.advanceTimersByTimeAsync(1)
+    await outcome
+
+    expect(settled).toBe(true)
+  })
+
+  it('does not hold a timer once add has settled', async () => {
     jest.useFakeTimers()
     const { service } = makeService()
     service.getOrCreateQueue('email')

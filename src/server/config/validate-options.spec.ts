@@ -229,19 +229,22 @@ describe('validateOptions', () => {
   })
 
   it.each(['commandTimeoutMs', 'enqueueTimeoutMs'] as const)(
-    'refuses a %s that is not a positive finite number',
+    'refuses a %s that is not a number from 1 to 2147483647',
     (key) => {
-      for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      // Node's timers read a delay above 2^31 - 1 ms as 1 ms, which would end every call at once.
+      for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648]) {
         const opts: BymaxQueueModuleOptions = { connection: { url: 'redis://x' }, [key]: bad }
         expect(
           reasonOf(() => {
             validateOptions(opts)
           }),
-        ).toBe(`${key} must be a positive finite number`)
+        ).toBe(`${key} must be a number from 1 to 2147483647`)
       }
-      expect(() => {
-        validateOptions({ connection: { url: 'redis://x' }, [key]: 1500 })
-      }).not.toThrow()
+      for (const good of [1500, 2_147_483_647]) {
+        expect(() => {
+          validateOptions({ connection: { url: 'redis://x' }, [key]: good })
+        }).not.toThrow()
+      }
     },
   )
 })

@@ -8,6 +8,9 @@ import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 
+/** The largest delay, in milliseconds, a Node timer honours. */
+const MAX_TIMER_DELAY_MS = 2_147_483_647
+
 /** Throw a well-formed INVALID_OPTIONS exception carrying the failing reason. */
 function invalid(reason: string): never {
   throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, HttpStatus.INTERNAL_SERVER_ERROR, {
@@ -93,8 +96,10 @@ export function validateOptions(opts: BymaxQueueModuleOptions): void {
 
   for (const key of ['commandTimeoutMs', 'enqueueTimeoutMs'] as const) {
     const value = opts[key]
-    if (value !== undefined && !(Number.isFinite(value) && value > 0)) {
-      invalid(`${key} must be a positive finite number`)
+    // Node reads a timer delay above 2^31 - 1 ms as 1 ms, so a larger deadline would end every call
+    // at once instead of waiting longer.
+    if (value !== undefined && !(value > 0 && value <= MAX_TIMER_DELAY_MS)) {
+      invalid(`${key} must be a number from 1 to ${String(MAX_TIMER_DELAY_MS)}`)
     }
   }
 }
