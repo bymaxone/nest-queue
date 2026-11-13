@@ -74,6 +74,8 @@ function makeOptions(): ResolvedQueueOptions {
     metrics: { enabled: false, cacheTtlMs: 5000 },
     shutdown: { drainTimeoutMs: 30000, drainOnShutdown: false },
     connectionReadyTimeoutMs: 10000,
+    commandTimeoutMs: 5000,
+    enqueueTimeoutMs: 10000,
   }
 }
 
@@ -154,6 +156,101 @@ describe('QueueService — enqueue', () => {
 
     expect(queueInstances[0]?.add).toHaveBeenCalledWith('send', { to: 'a@b.com' }, { priority: 5 })
     expect(result).toBe(job)
+  })
+})
+
+/** The stable code of a QueueException. */
+function codeOf(err: unknown): string {
+  return ((err as QueueException).getResponse() as { error: { code: string } }).error.code
+}
+
+describe('QueueService — enqueue deadline', () => {
+  afterEach(() => {
+    jest.useRealTimers()
+  })
+
+  // A producer call on a Redis that never answers must come back with an error the caller can act
+  // on, not hang the request that made it.
+  it('rejects with CONNECTION_TIMEOUT when add never settles', async () => {
+    jest.useFakeTimers()
+    const { service } = makeService()
+    service.getOrCreateQueue('email')
+    queueInstances[0]?.add.mockReturnValue(new Promise(() => undefined))
+
+    const pending = service.enqueue('email', 'send', {})
+    const outcome = pending.catch((err: unknown) => err)
+    await jest.advanceTimersByTimeAsync(10_000)
+
+    const err = await outcome
+    expect(err).toBeInstanceOf(QueueException)
+    expect(codeOf(err)).toBe(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT)
+    expect(JSON.stringify((err as QueueException).getResponse())).toContain('10000')
+  })
+
+  it('stays pending until the deadline, then rejects', async () => {
+    jest.useFakeTimers()
+    const { service } = makeService()
+    service.getOrCreateQueue('email')
+    queueInstances[0]?.add.mockReturnValue(new Promise(() => undefined))
+    let settled = false
+
+    const outcome = service.enqueue('email', 'send', {}).then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      },
+    )
+    await jest.advanceTimersByTimeAsync(9_999)
+    expect(settled).toBe(false)
+    await jest.advanceTimersByTimeAsync(1)
+    await outcome
+
+    expect(settled).toBe(true)
+  })
+
+  it('does not hold a timer once add has settled', async () => {
+    jest.useFakeTimers()
+    const { service } = makeService()
+    service.getOrCreateQueue('email')
+    const job = { id: '1' } as Job
+    queueInstances[0]?.add.mockResolvedValue(job)
+
+    await expect(service.enqueue('email', 'send', {})).resolves.toBe(job)
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it('rejects the bulk path with CONNECTION_TIMEOUT too', async () => {
+    jest.useFakeTimers()
+    const { service } = makeService()
+    service.getOrCreateQueue('email')
+    queueInstances[0]?.addBulk.mockReturnValue(new Promise(() => undefined))
+
+    const outcome = service
+      .enqueueBulk('email', [{ name: 'a', data: {} }])
+      .catch((err: unknown) => err)
+    await jest.advanceTimersByTimeAsync(10_000)
+
+    expect(codeOf(await outcome)).toBe(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT)
+  })
+
+  it('swallows a rejection that arrives after the deadline', async () => {
+    jest.useFakeTimers()
+    const { service } = makeService()
+    service.getOrCreateQueue('email')
+    let fail: (e: Error) => void = () => undefined
+    queueInstances[0]?.add.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        fail = reject as (e: Error) => void
+      }),
+    )
+
+    const outcome = service.enqueue('email', 'send', {}).catch((err: unknown) => err)
+    await jest.advanceTimersByTimeAsync(10_000)
+    await outcome
+    fail(new Error('late'))
+    await jest.advanceTimersByTimeAsync(0)
   })
 })
 

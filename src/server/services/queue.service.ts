@@ -18,6 +18,7 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { validateJobSchedulerOptions } from '../utils/validate-job-scheduler-options'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { describeError } from '../utils/describe-error'
+import { withDeadline } from '../utils/with-deadline'
 
 /** Maximum number of jobs accepted by a single `enqueueBulk` call. */
 const MAX_BULK_SIZE = 1000
@@ -103,6 +104,15 @@ export class QueueService {
     return queue as unknown as Queue<TData, TResult>
   }
 
+  /** The error a producer call receives when Redis does not answer within `enqueueTimeoutMs`. */
+  private enqueueTimeout(operation: string): QueueException {
+    return new QueueException(
+      QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      { operation, timeoutMs: this.options.enqueueTimeoutMs },
+    )
+  }
+
   /** Resolve the raw cached queue (default generics) for internal delegation. */
   private queueFor(queueName: string): Queue {
     return this.getOrCreateQueue(queueName)
@@ -165,7 +175,11 @@ export class QueueService {
     data: TData,
     options?: JobsOptions,
   ): Promise<TypedJob<TData, TResult>> {
-    const job = await this.queueFor(queueName).add(jobName, data, options)
+    const job = await withDeadline(
+      this.queueFor(queueName).add(jobName, data, options),
+      this.options.enqueueTimeoutMs,
+      () => this.enqueueTimeout('enqueue'),
+    )
     return job
   }
 
@@ -197,15 +211,25 @@ export class QueueService {
       )
     }
     try {
-      const created = await this.queueFor(queueName).addBulk(
-        jobs.map((job) => ({
-          name: job.name,
-          data: job.data,
-          ...(job.options === undefined ? {} : { opts: job.options }),
-        })),
+      const created = await withDeadline(
+        this.queueFor(queueName).addBulk(
+          jobs.map((job) => ({
+            name: job.name,
+            data: job.data,
+            ...(job.options === undefined ? {} : { opts: job.options }),
+          })),
+        ),
+        this.options.enqueueTimeoutMs,
+        () => this.enqueueTimeout('enqueueBulk'),
       )
       return created
     } catch (err) {
+      if (
+        err instanceof QueueException &&
+        errorCodeOf(err) === QUEUE_ERROR_CODES.CONNECTION_TIMEOUT
+      ) {
+        throw err
+      }
       throw new QueueException(
         QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED,
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -385,4 +409,9 @@ export class QueueService {
     }
     this.#queues.clear()
   }
+}
+
+/** The stable code a `QueueException` carries in its response envelope. */
+function errorCodeOf(err: QueueException): string {
+  return (err.getResponse() as { error: { code: string } }).error.code
 }

@@ -32,6 +32,8 @@ function makeResolved(shutdown?: Partial<ResolvedQueueOptions['shutdown']>): Res
     metrics: { enabled: false, cacheTtlMs: 5000 },
     shutdown: { drainTimeoutMs: 5000, drainOnShutdown: false, ...shutdown },
     connectionReadyTimeoutMs: 10000,
+    commandTimeoutMs: 5000,
+    enqueueTimeoutMs: 10000,
   }
 }
 

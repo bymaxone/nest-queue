@@ -71,6 +71,8 @@ const leaves: Record<string, unknown> = {
   'shutdown.drainTimeoutMs': resolved.shutdown.drainTimeoutMs,
   'shutdown.drainOnShutdown': resolved.shutdown.drainOnShutdown,
   connectionReadyTimeoutMs: resolved.connectionReadyTimeoutMs,
+  commandTimeoutMs: resolved.commandTimeoutMs,
+  enqueueTimeoutMs: resolved.enqueueTimeoutMs,
   isGlobal: BymaxQueueModule.forRoot({ connection }).global,
 }
 

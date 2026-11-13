@@ -13,7 +13,10 @@ import type { QueueConnectionMode } from '../interfaces/queue-connection.interfa
 import { assertBlockingConnection, isClientUsable } from '../utils/validate-connection'
 import { attachClientErrorListener } from '../utils/attach-client-error-listener'
 import { duplicateConnection } from '../utils/duplicate-connection'
-import { DEFAULT_CONNECTION_READY_TIMEOUT_MS } from '../constants/default-options'
+import {
+  DEFAULT_COMMAND_TIMEOUT_MS,
+  DEFAULT_CONNECTION_READY_TIMEOUT_MS,
+} from '../constants/default-options'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 
@@ -96,13 +99,20 @@ export class ConnectionResolver {
   /**
    * Merge the consumer's options with the owned-connection policy
    * (`lazyConnect: false`, so the client connects eagerly and `init` can wait
-   * for `ready`) and narrow the result to the shape ioredis 6's constructor
+   * for `ready`; a command deadline, so a frozen Redis fails a call in seconds; and no offline
+   * queue, so a call made during an outage fails at once instead of buffering without bound —
+   * each only where the consumer has not chosen a value) and narrow the result to the shape ioredis 6's constructor
    * accepts. The runtime object is unchanged — the cast only drops the
    * `undefined` that `RedisOptions.replyMapping` carries and the constructor
    * rejects.
    */
   private ownedOptions(options?: Partial<RedisOptions>): OwnedRedisOptions {
-    return { ...(options ?? {}), lazyConnect: false } as OwnedRedisOptions
+    return {
+      commandTimeout: this.#options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS,
+      enableOfflineQueue: false,
+      ...(options ?? {}),
+      lazyConnect: false,
+    } as OwnedRedisOptions
   }
 
   /** The resolved Queue-role client. */
@@ -157,6 +167,14 @@ export class ConnectionResolver {
         QUEUE_ERROR_CODES.CONNECTION_INVALID,
         HttpStatus.INTERNAL_SERVER_ERROR,
         { status: client.status },
+      )
+    }
+    if (client.options.maxRetriesPerRequest === null) {
+      this.#logger.warn(
+        'The shared client has maxRetriesPerRequest: null, so a producer call made while Redis is ' +
+          'unreachable waits for as long as the outage lasts; enqueue is bounded by ' +
+          'enqueueTimeoutMs, other QueueService calls are not. Give the client a finite limit to ' +
+          'fail fast.',
       )
     }
     const probe = duplicateConnection(client)

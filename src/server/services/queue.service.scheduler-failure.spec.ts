@@ -53,6 +53,8 @@ function makeService(queueOptions: ResolvedQueueOptions['queueOptions'] = {}): Q
     metrics: { enabled: false, cacheTtlMs: 5000 },
     shutdown: { drainTimeoutMs: 30000, drainOnShutdown: false },
     connectionReadyTimeoutMs: 10000,
+    commandTimeoutMs: 5000,
+    enqueueTimeoutMs: 10000,
   }
   return new QueueService(connection, options)
 }

@@ -71,6 +71,8 @@ function makeOptions(telemetry?: ResolvedQueueOptions['telemetry']): ResolvedQue
     metrics: { enabled: false, cacheTtlMs: 5000 },
     shutdown: { drainTimeoutMs: 30000, drainOnShutdown: false },
     connectionReadyTimeoutMs: 10000,
+    commandTimeoutMs: 5000,
+    enqueueTimeoutMs: 10000,
   }
   if (telemetry !== undefined) base.telemetry = telemetry
   return base

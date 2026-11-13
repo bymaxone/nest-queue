@@ -13,10 +13,10 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.2.14] — 2026-11-13
 
-No action required. Against 1.2.13 the built declarations differ only in the documentation comment
-of `connectionReadyTimeoutMs` (`scripts/check-api-surface.mjs` reports no difference), so the public
-API is unchanged; the connection resolver in `dist/` differs, and a boot that succeeds behaves as
-before.
+The connection the library opens now has a command deadline and no offline
+queue, so read the Apply note below. Against 1.2.13 the built declarations gain `commandTimeoutMs`
+and `enqueueTimeoutMs` on `BymaxQueueModuleOptions` and change the documentation comment of
+`connectionReadyTimeoutMs`. A boot that succeeds, and an enqueue that Redis answers, behave as before.
 
 ### Fixed
 
@@ -33,6 +33,34 @@ before.
   (`WRONGPASS`, `NOAUTH`) or a client that stopped reconnecting rejects at once with
   `queue.connection_invalid`. Code that matched the raw `ioredis` error of a failed boot should
   match the `QueueException` code instead.
+
+### Changed
+
+- **A producer call can no longer hang on a Redis that does not answer.** On the connection the
+  library opens, every command now carries a 5 s deadline (`commandTimeoutMs`, or the ioredis
+  `commandTimeout` you set), and `enqueue` and `enqueueBulk` reject with `CONNECTION_TIMEOUT` after
+  `enqueueTimeoutMs` (10 s) in either connection mode.
+- **The owned connection no longer buffers commands during an outage.** Its offline queue is off, so
+  a call made while Redis is down fails at once instead of waiting in memory. Set `options.enableOfflineQueue: true` to keep the old
+  behaviour. Worker and QueueEvents connections keep their offline queue and have no command deadline.
+- **A shared client with `maxRetriesPerRequest: null` is reported at boot.** Calls other than `enqueue` and
+  `enqueueBulk` then wait for as long as an outage lasts; the library warns and does not refuse.
+
+### Documentation
+
+- **The README no longer says a Redis outage fails fast regardless of configuration.** It now states
+  what bounds a producer call and when the bound does not apply.
+
+#### Apply to a derived backend
+
+- If you rely on an `enqueue` waiting out a Redis outage, it now rejects with `CONNECTION_TIMEOUT`
+  after `enqueueTimeoutMs` (the add may still complete in Redis afterwards, so retry with a stable
+  `jobId` or `deduplication`); raise the option to keep waiting longer.
+- If your Mode B code calls a `QueueService` method during a Redis outage and expected it to wait for
+  the reconnect, it now rejects at once, since the owned connection has no offline queue; set
+  `connection.options.enableOfflineQueue: true` to restore that.
+- A command that takes longer than 5 s on the owned connection (a very large `getJobs` range, for
+  example) now rejects; raise `commandTimeoutMs`.
 
 ---
 
