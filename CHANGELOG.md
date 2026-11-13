@@ -13,7 +13,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.2.14] — 2026-11-13
 
-Two options are new, and the connection the library opens now has a command deadline and no offline
+The connection the library opens now has a command deadline and no offline
 queue, so read the Apply note below. Against 1.2.13 the built declarations gain `commandTimeoutMs`
 and `enqueueTimeoutMs` on `BymaxQueueModuleOptions` and change the documentation comment of
 `connectionReadyTimeoutMs`. A boot that succeeds, and an enqueue that Redis answers, behave as before.
@@ -43,8 +43,8 @@ and `enqueueTimeoutMs` on `BymaxQueueModuleOptions` and change the documentation
 - **The owned connection no longer buffers commands during an outage.** Its offline queue is off, so
   a call made while Redis is down fails at once instead of waiting in memory. Set `options.enableOfflineQueue: true` to keep the old
   behaviour. Worker and QueueEvents connections keep their offline queue and have no command deadline.
-- **A shared client with `maxRetriesPerRequest: null` is reported at boot.** It makes every producer
-  call wait for as long as an outage lasts; the library warns and does not refuse.
+- **A shared client with `maxRetriesPerRequest: null` is reported at boot.** Calls other than `enqueue` and
+  `enqueueBulk` then wait for as long as an outage lasts; the library warns and does not refuse.
 
 ### Documentation
 
