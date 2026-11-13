@@ -46,8 +46,17 @@ and `enqueueTimeoutMs` on `BymaxQueueModuleOptions` and change the documentation
 - **A shared client with `maxRetriesPerRequest: null` is reported at boot.** Calls other than `enqueue` and
   `enqueueBulk` then wait for as long as an outage lasts; the library warns and does not refuse.
 
+- **Shutdown is bounded by one budget, not one per worker.** Workers are closed in parallel and the
+  queue-events and connection steps share what is left of `drainTimeoutMs`; a connection that has not
+  quit by then is disconnected. With several stuck workers the previous sequence took the budget once
+  for each.
+- **`unregister` releases the connection even when the worker's `close()` throws.** It then rethrows
+  that error; the registry entry is dropped and the socket closed either way.
+
 ### Documentation
 
+- **A timed-out `enqueue` may still have been added**, and the README says to pass a deterministic
+  `jobId` for anything that must not run twice.
 - **The README no longer says a Redis outage fails fast regardless of configuration.** It now states
   what bounds a producer call and when the bound does not apply.
 
@@ -56,6 +65,8 @@ and `enqueueTimeoutMs` on `BymaxQueueModuleOptions` and change the documentation
 - If you rely on an `enqueue` waiting out a Redis outage, it now rejects with `CONNECTION_TIMEOUT`
   after `enqueueTimeoutMs` (the add may still complete in Redis afterwards, so retry with a stable
   `jobId` or `deduplication`); raise the option to keep waiting longer.
+- If you relied on shutdown taking up to one `drainTimeoutMs` per stuck worker, it now takes at most
+  one in total; raise `drainTimeoutMs` if jobs need longer.
 - If your Mode B code calls a `QueueService` method during a Redis outage and expected it to wait for
   the reconnect, it now rejects at once, since the owned connection has no offline queue; set
   `connection.options.enableOfflineQueue: true` to restore that.

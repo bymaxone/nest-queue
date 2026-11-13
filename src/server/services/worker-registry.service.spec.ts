@@ -460,6 +460,21 @@ describe('WorkerRegistry.unregister', () => {
     expect(failingConn.disconnect).toHaveBeenCalledTimes(1)
   })
 
+  // A worker whose close throws is gone either way; its socket and its registry entry must not stay.
+  it('still releases the connection and drops the entry when close() throws, then rethrows', async () => {
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
+    registry.register({ queueName: 'email', handler: noopHandler })
+    const [worker] = createdWorkers
+    worker?.close.mockRejectedValueOnce(new Error('close failed'))
+    const conn = registry.getConnections().get('email') as unknown as { quit: jest.Mock }
+
+    await expect(registry.unregister('email')).rejects.toThrow('close failed')
+
+    expect(conn.quit).toHaveBeenCalledTimes(1)
+    expect(registry.list()).not.toContain('email')
+    expect(registry.getConnections().has('email')).toBe(false)
+  })
+
   it('is a no-op for an unknown queue name', async () => {
     // Unregistering a non-existent queue must not throw.
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())
