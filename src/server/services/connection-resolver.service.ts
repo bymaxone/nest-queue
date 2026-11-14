@@ -193,10 +193,10 @@ export class ConnectionResolver {
     }
     if (client.options.maxRetriesPerRequest === null) {
       this.#logger.warn(
-        'The shared client has maxRetriesPerRequest: null, so a producer call made while Redis is ' +
-          'unreachable waits for as long as the outage lasts; enqueue is bounded by ' +
-          'enqueueTimeoutMs, other QueueService calls are not. Give the client a finite limit to ' +
-          'fail fast.',
+        'The shared client has maxRetriesPerRequest: null, so a command issued while Redis is ' +
+          'unreachable stays queued in the client for as long as the outage lasts. QueueService calls ' +
+          'are bounded by enqueueTimeoutMs and the caller is released, but the command is not ' +
+          'cancelled. Give the client a finite limit to fail fast.',
       )
     }
     const probe = duplicateConnection(client)
