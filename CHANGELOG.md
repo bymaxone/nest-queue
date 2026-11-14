@@ -11,7 +11,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [1.2.14] — 2026-11-13
+## [1.2.14] — 2026-11-14
 
 Several defaults change in this release, so read the Apply note below. A boot that succeeds, an
 enqueue that Redis answers and a job that completes behave as before.
