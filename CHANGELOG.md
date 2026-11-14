@@ -11,6 +11,24 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.20] — 2026-11-14
+
+Against 1.2.19 the declared types do not change.
+
+### Changed
+
+- **A failed startup no longer reports an error code in the response.** The startup-budget `CONNECTION_TIMEOUT` carried `details: { timeoutMs, lastErrorCode }` and a refused credential `CONNECTION_INVALID` carried `details: { lastErrorCode }`, with a socket code such as `ECONNREFUSED` or a reply keyword such as `WRONGPASS`. Both told an HTTP client about the backing service's network state or credentials. The timeout now carries `{ timeoutMs }` and the refusal `{}`; the last error is the exception's `cause`, and the client's error listener has already logged it. The status and the code of the exception are unchanged.
+
+### Documentation
+
+- `waitReady` no longer says its rejection carries the last error's code.
+
+#### Apply to a derived backend
+
+- If you read `details.lastErrorCode` of a startup failure, read the exception's `cause` (or the log line) instead.
+
+---
+
 ## [1.2.19] — 2026-11-14
 
 Against 1.2.18 the declared types do not change.
@@ -1124,7 +1142,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.19...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.20...HEAD
+[1.2.20]: https://github.com/bymaxone/nest-queue/compare/v1.2.19...v1.2.20
 [1.2.19]: https://github.com/bymaxone/nest-queue/compare/v1.2.18...v1.2.19
 [1.2.18]: https://github.com/bymaxone/nest-queue/compare/v1.2.17...v1.2.18
 [1.2.17]: https://github.com/bymaxone/nest-queue/compare/v1.2.16...v1.2.17
