@@ -120,12 +120,14 @@ describe('README Configuration table', () => {
     const text = (documented.get('defaultJobOptions') ?? '').replaceAll('`', '')
     const attempts = /attempts: (\d+)/.exec(text)?.[1]
     const delay = /exponential backoff (\d+) ms/.exec(text)?.[1]
+    const jitter = /(\d+)% jitter/.exec(text)?.[1]
     const complete = /removeOnComplete: \{ age: (\d+ [hd]), count: (\d+) \}/.exec(text)
     const failed = /removeOnFail: \{ age: (\d+ [hd]), count: (\d+) \}/.exec(text)
 
     expect(DEFAULT_JOB_OPTIONS.backoff.type).toBe('exponential')
     expect(Number(attempts)).toBe(DEFAULT_JOB_OPTIONS.attempts)
     expect(Number(delay)).toBe(DEFAULT_JOB_OPTIONS.backoff.delay)
+    expect(Number(jitter) / 100).toBe(DEFAULT_JOB_OPTIONS.backoff.jitter)
     expect(seconds(complete?.[1] ?? '')).toBe(DEFAULT_JOB_OPTIONS.removeOnComplete.age)
     expect(Number(complete?.[2])).toBe(DEFAULT_JOB_OPTIONS.removeOnComplete.count)
     expect(seconds(failed?.[1] ?? '')).toBe(DEFAULT_JOB_OPTIONS.removeOnFail.age)

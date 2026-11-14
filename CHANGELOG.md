@@ -60,8 +60,18 @@ and `enqueueTimeoutMs` on `BymaxQueueModuleOptions` and change the documentation
   `worker.cancelAllJobs()`); closing the worker does not abort it. Before, a hung handler held its
   slot for good and the rest of the queue waited.
 
+- **Retries are spread by default.** The default backoff now carries 50% jitter: a retry waits between
+  half of its exponential delay and the whole of it, so jobs that failed together no longer retry in
+  the same instant after an outage. A `backoff` you set yourself is used as given.
+- **`getJobs` reads a bounded window.** At most 1 000 jobs per call, with integer bounds and
+  `0 <= start <= end`; an `end` of `-1`, which BullMQ reads as the whole list, is refused with
+  `INVALID_OPTIONS`.
+
 ### Documentation
 
+- **Queue names are documented as keys, not user input**, because each distinct name keeps a queue and
+  its Redis resources for the life of the process.
+- **The `prefix` option's JSDoc says it is a namespace, not an access control**.
 - **A timed-out `enqueue` may still have been added**, and the README says to pass a deterministic
   `jobId` for anything that must not run twice.
 - **The README no longer says a Redis outage fails fast regardless of configuration.** It now states
@@ -72,6 +82,12 @@ and `enqueueTimeoutMs` on `BymaxQueueModuleOptions` and change the documentation
 - If you rely on an `enqueue` waiting out a Redis outage, it now rejects with `CONNECTION_TIMEOUT`
   after `enqueueTimeoutMs` (the add may still complete in Redis afterwards, so retry with a stable
   `jobId` or `deduplication`); raise the option to keep waiting longer.
+- If you assert exact retry delays, expect them between 50% and 100% of the computed value; set
+  `defaultJobOptions.backoff` without `jitter` to keep exact delays.
+- If you call `getJobs` with an `end` of `-1` or a window over 1 000 jobs, those calls now throw
+  `INVALID_OPTIONS`. Page through the list with several calls of at most 1 000 jobs, for example
+  `getJobs(queue, status, start, start + 499)` in a loop until a page comes back short; the README
+  has the loop.
 - Nothing changes until you set `jobTimeoutMs`. If you do, a handler that runs longer than it is
   failed and retried while its own promise keeps running unless it honours the `AbortSignal`, so keep
   handlers idempotent. If you wrap `ProgrammaticWorkerConfig.handler`, accept the new optional second
