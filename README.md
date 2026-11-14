@@ -472,9 +472,8 @@ It implements a **bounded drain protocol** with at-least-once semantics:
    by the next instance. What the abandoned handler produces afterwards, a result or a failure, is
    dropped, so the stopped worker cannot restart its connection. The handler's own promise keeps
    running, because user code cannot be cancelled. A sandboxed (file-based) worker is the
-   exception: BullMQ cleans only the child processes that are idle, so a job still running in its
-   child when the budget ends leaves that child process, and with it the host process, running
-   until the child exits.
+   exception: its job runs in a child process the registry cannot wrap, and in a measured run the
+   host process did not exit by itself after the budget ended with such a job still running.
 4. Queue-events and the connections the library opened for workers and queue-events are closed,
    each within what is left of the budget; a connection that has not quit by then is disconnected.
 5. Once NestJS has stopped the HTTP server (`onApplicationShutdown`), the flow producer, the
