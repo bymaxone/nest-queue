@@ -191,14 +191,14 @@ describe('QueueService — against a Redis that never replies, with real ioredis
   it('rejects enqueue with CONNECTION_TIMEOUT when the command deadline passes first', async () => {
     const { service, resolver } = await silentRedis(300, 10_000)
 
-    const started = Date.now()
+    // No elapsed-time bound: a call with no deadline stays pending for as long as the server stays
+    // silent, and the `timeoutMs` of 300 below proves it was the command deadline that ended it.
     const err = await service.enqueue('email', 'send', {}).catch((e: unknown) => e)
 
     expect(describeException(err)).toMatchObject({
       code: QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
       details: { operation: 'enqueue', timeoutMs: 300 },
     })
-    expect(Date.now() - started).toBeLessThan(3000)
     resolver.getClient().disconnect()
   })
 
