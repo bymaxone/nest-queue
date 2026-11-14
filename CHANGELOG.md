@@ -11,6 +11,20 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.22] — 2026-11-14
+
+Against 1.2.21 the declared types do not change.
+
+### Fixed
+
+- **A process no longer lingers about 2 s after shutdown when Redis is down.** Closing a client that is reconnecting calls `disconnect()`, which arms ioredis's teardown timer (`disconnectTimeout`, 2 000 ms by default); only the stream's `close` clears it, and a client whose stream has already closed never emits another, so the process exited that long after the close. The connection the library opens (Mode B) is now created with `disconnectTimeout: 1`, and the worker and queue-events connections duplicated from it inherit it. A value you set in `connection.options` wins. One behaviour changes with it: a forced `disconnect()` on a client that has an open stream, including the one ioredis makes before it reconnects, now destroys the socket after 1 ms instead of after up to 2 s, so a half-written command on that socket is dropped sooner.
+
+#### Apply to a Mode A client
+
+- A client you pass in keeps its own `disconnectTimeout`, and the connections duplicated from it inherit that value. Set `disconnectTimeout` on that client if you want the same exit time.
+
+---
+
 ## [1.2.21] — 2026-11-14
 
 Against 1.2.20 the declared types change in one place: `ConnectionResolver.teardown` takes an optional `timeoutMs`.
@@ -1158,7 +1172,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.21...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.22...HEAD
+[1.2.22]: https://github.com/bymaxone/nest-queue/compare/v1.2.21...v1.2.22
 [1.2.21]: https://github.com/bymaxone/nest-queue/compare/v1.2.20...v1.2.21
 [1.2.20]: https://github.com/bymaxone/nest-queue/compare/v1.2.19...v1.2.20
 [1.2.19]: https://github.com/bymaxone/nest-queue/compare/v1.2.18...v1.2.19

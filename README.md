@@ -479,7 +479,12 @@ It implements a **bounded drain protocol** with at-least-once semantics:
 5. Once NestJS has stopped the HTTP server (`onApplicationShutdown`), the flow producer, the
    cached queues and, in Mode B, the library's own Redis connection are closed; its quit is bounded
    by what is left of the same budget, and never by less than one second, and an unanswered quit
-   is followed by a disconnect. NestJS runs
+   is followed by a disconnect. The library's own connection, and the worker and queue-events
+   connections duplicated from it, are created with ioredis's `disconnectTimeout` at 1 ms (an
+   explicit value in `connection.options` wins), so that disconnecting a client that is
+   reconnecting does not hold the process for ioredis's default 2 s. A client you pass in Mode A
+   keeps its own `disconnectTimeout`, and so do the connections duplicated from it: set it on that
+   client if you want the same exit time. NestJS runs
    `onModuleDestroy` before it stops the HTTP server, so a request that is still being served can
    enqueue a job after step 4; those resources stay open until the server is down.
 

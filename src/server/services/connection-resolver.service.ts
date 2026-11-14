@@ -15,6 +15,7 @@ import { attachClientErrorListener } from '../utils/attach-client-error-listener
 import { duplicateConnection } from '../utils/duplicate-connection'
 import {
   DEFAULT_COMMAND_TIMEOUT_MS,
+  DISCONNECT_TIMEOUT_MS,
   DEFAULT_CONNECTION_READY_TIMEOUT_MS,
   DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS,
 } from '../constants/default-options'
@@ -117,6 +118,7 @@ export class ConnectionResolver {
     return {
       commandTimeout: this.#options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS,
       enableOfflineQueue: false,
+      disconnectTimeout: DISCONNECT_TIMEOUT_MS,
       ...(options ?? {}),
       lazyConnect: false,
     } as OwnedRedisOptions
