@@ -19,6 +19,7 @@ import {
 } from '../constants/default-options'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
+import { disconnectUnlessEnded } from '../utils/disconnect-unless-ended'
 
 /**
  * The exact options shape ioredis 6's `Redis` constructor accepts.
@@ -94,7 +95,7 @@ export class ConnectionResolver {
     } catch (cause) {
       // The client keeps reconnecting on its own until it is closed, and nothing else holds a
       // reference to it once startup has failed: close it here, or it outlives the failed boot.
-      this.#client.disconnect()
+      disconnectUnlessEnded(this.#client)
       throw cause
     }
   }
@@ -181,7 +182,7 @@ export class ConnectionResolver {
     if (this.isOwned() && this.#client) {
       const client = this.#client
       await client.quit().catch(() => {
-        client.disconnect()
+        disconnectUnlessEnded(client)
       })
     }
   }
@@ -210,7 +211,7 @@ export class ConnectionResolver {
     try {
       assertBlockingConnection(probe)
     } finally {
-      probe.disconnect()
+      disconnectUnlessEnded(probe)
     }
   }
 

@@ -55,3 +55,25 @@ describe('validateOptions — timer-valued options', () => {
     )
   })
 })
+
+describe('validateOptions — metrics.cacheTtlMs', () => {
+  it.each([0.5, 1.5, Number.NaN, Number.POSITIVE_INFINITY, -0.5])(
+    'refuses %s as not a whole number',
+    (bad) => {
+      // `NaN < 0` is false, so a range check alone let it through and the cache silently stopped.
+      expect(reasonOf({ ...base, metrics: { cacheTtlMs: bad } })).toBe(
+        'metrics.cacheTtlMs must be a whole number',
+      )
+    },
+  )
+
+  it('keeps the existing message for a negative whole number', () => {
+    expect(reasonOf({ ...base, metrics: { cacheTtlMs: -1 } })).toBe(
+      'metrics.cacheTtlMs must be >= 0',
+    )
+  })
+
+  it.each([0, 1, 5000])('accepts %s', (ok) => {
+    expect(reasonOf({ ...base, metrics: { cacheTtlMs: ok } })).toBeUndefined()
+  })
+})

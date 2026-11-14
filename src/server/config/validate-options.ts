@@ -98,6 +98,11 @@ export function validateOptions(opts: BymaxQueueModuleOptions): void {
   checkTimerDelay('shutdown.drainTimeoutMs', drainTimeoutMs)
 
   const cacheTtlMs = opts.metrics?.cacheTtlMs
+  // `NaN` is neither below 0 nor above anything, so it would pass a range check and silently turn
+  // the cache off; a fraction or an infinite TTL is not a duration anyone meant.
+  if (cacheTtlMs !== undefined && !Number.isInteger(cacheTtlMs)) {
+    invalid('metrics.cacheTtlMs must be a whole number')
+  }
   // Stryker disable next-line ConditionalExpression: equivalent — dropping the presence check leaves `undefined < 0`, which is false; same reasoning as the drain timeout above
   if (cacheTtlMs !== undefined && cacheTtlMs < 0) {
     invalid('metrics.cacheTtlMs must be >= 0')

@@ -28,6 +28,7 @@ import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { DEFAULT_WORKER_CONCURRENCY } from '../constants/default-options'
+import { disconnectUnlessEnded } from '../utils/disconnect-unless-ended'
 
 /**
  * Configuration for registering an in-process (NestJS-DI-backed) worker.
@@ -147,7 +148,7 @@ export class WorkerRegistry {
       )
     } catch (cause) {
       // Disconnect the duplicated connection to prevent a Redis resource leak.
-      conn.disconnect()
+      disconnectUnlessEnded(conn)
       throw new QueueException(
         QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -202,7 +203,7 @@ export class WorkerRegistry {
       worker = new Worker(queueName, processorFile, bullOpts)
     } catch (cause) {
       // Disconnect the duplicated connection to prevent a Redis resource leak.
-      conn.disconnect()
+      disconnectUnlessEnded(conn)
       throw new QueueException(
         QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -283,7 +284,7 @@ export class WorkerRegistry {
     try {
       await connection.quit()
     } catch {
-      connection.disconnect()
+      disconnectUnlessEnded(connection)
     }
   }
 

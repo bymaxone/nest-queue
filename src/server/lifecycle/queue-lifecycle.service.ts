@@ -33,6 +33,7 @@ import { FlowService } from '../services/flow.service'
 import { QueueService } from '../services/queue.service'
 import { WorkerRegistry } from '../services/worker-registry.service'
 import { QueueEventsRegistry } from '../services/queue-events-registry.service'
+import { disconnectUnlessEnded } from '../utils/disconnect-unless-ended'
 
 /** How long a worker's forced close may take, in milliseconds, once the drain budget has ended. */
 const FORCE_CLOSE_GRACE_MS = 1000
@@ -173,7 +174,7 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
     await Promise.all(
       connections.map(async (connection) => {
         await bounded(connection.quit(), deadline).catch(() => {
-          connection.disconnect()
+          disconnectUnlessEnded(connection)
         })
       }),
     )

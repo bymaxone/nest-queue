@@ -17,7 +17,7 @@ import { QUEUE_ERROR_MESSAGES } from '../constants/error-codes'
  * — only scalar configuration values such as `{ actualValue, expectedValue }`.
  *
  * @example Throwing
- * throw new QueueException('queue.connection_timeout', 500, { timeoutMs: 10_000 })
+ * throw new QueueException('queue.connection_timeout', 503, { timeoutMs: 10_000 })
  * @example Branching on the code in a consumer
  * catch (err) {
  *   if (err instanceof QueueException) {

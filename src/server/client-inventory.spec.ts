@@ -45,20 +45,25 @@ const realDuplicate: (this: Redis, override?: Partial<RedisOptions>) => Redis =
 beforeEach(() => {
   duplicates.length = 0
   roots.length = 0
-  // The timers below belong to ioredis (a socket the client already closed leaves its 2 s
-  // teardown timer pending) and to BullMQ (a stalled-job check that was in flight when the worker
-  // closed arms one more). Neither can be cancelled from outside, and real ones would hold the
-  // process open for seconds after the last test. Faking only the timer functions lets the sockets
-  // and the event-loop primitives run for real while every pending timer is dropped below.
+  // A stalled-job check that was in flight when a worker closed arms one more BullMQ timer, which
+  // cannot be cancelled from outside and would hold the process open for seconds after the last
+  // test. Faking only `setTimeout` and `clearTimeout` lets the sockets and every other primitive
+  // run for real while the pending timers are dropped below.
   jest.useFakeTimers({
     doNotFake: [
       'nextTick',
       'setImmediate',
       'clearImmediate',
+      'setInterval',
+      'clearInterval',
       'queueMicrotask',
       'Date',
       'performance',
       'hrtime',
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'requestIdleCallback',
+      'cancelIdleCallback',
     ],
   })
   jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
