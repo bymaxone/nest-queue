@@ -57,8 +57,9 @@ async function resolverOnSilent(): Promise<ConnectionResolver> {
 }
 
 describe('ConnectionResolver.teardown against a Redis that never answers', () => {
-  // With no bound of its own the quit would wait the minute out: the test timeout fails it.
-  it('completes within the bound it is given, and ends the client', async () => {
+  // With no bound of its own the quit would wait the minute out; a bound ten times too long
+  // outlasts the ceiling asserted below.
+  it('completes at the bound it is given, and ends the client', async () => {
     const resolver = await resolverOnSilent()
     const client = resolver.getClient()
     const ended = new Promise<void>((resolve) => {
@@ -67,8 +68,15 @@ describe('ConnectionResolver.teardown against a Redis that never answers', () =>
       })
     })
 
+    const startedAt = Date.now()
     await expect(resolver.teardown(300)).resolves.toBeUndefined()
+    const elapsed = Date.now() - startedAt
     await ended
+
+    // The quit waits out the bound (a timer may fire a few milliseconds early) and not much more;
+    // the ceiling leaves a loaded runner a wide margin over the 300 ms asked for.
+    expect(elapsed).toBeGreaterThanOrEqual(250)
+    expect(elapsed).toBeLessThan(2000)
 
     expect(client.status).toBe('end')
   })
