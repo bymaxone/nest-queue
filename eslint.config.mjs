@@ -82,6 +82,9 @@ export default tseslint.config(
     // constructs this rule cannot tell apart.
     files: ['src/**/*.ts'],
     ignores: ['src/**/*.spec.ts'],
+    // An `eslint-disable` comment would otherwise accept a long function without a trace: inline
+    // configuration is ignored here, so the directive does nothing and the rule still reports.
+    linterOptions: { noInlineConfig: true },
     rules: {
       'max-lines-per-function': [
         'error',
