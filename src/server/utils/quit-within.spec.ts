@@ -31,6 +31,19 @@ describe('quitWithin', () => {
     expect(jest.getTimerCount()).toBe(0)
   })
 
+  // A quit that throws instead of returning a promise is a failed quit too, and no timer is left.
+  it('disconnects after a quit that throws synchronously, and holds no timer', async () => {
+    jest.useFakeTimers()
+    const { client, disconnect } = clientWith(() => {
+      throw new Error('quit threw')
+    })
+
+    await expect(quitWithin(client, 1000)).resolves.toBeUndefined()
+
+    expect(disconnect).toHaveBeenCalledTimes(1)
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
   it('disconnects after a quit that failed, without rejecting', async () => {
     const { client, disconnect } = clientWith(() =>
       Promise.reject(new Error('Connection is closed.')),

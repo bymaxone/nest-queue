@@ -19,18 +19,15 @@ import { disconnectUnlessEnded } from './disconnect-unless-ended'
  */
 export async function quitWithin(client: Redis, timeoutMs: number): Promise<void> {
   let timer: NodeJS.Timeout | undefined
-  const unanswered = new Promise<false>((resolve) => {
-    timer = setTimeout(() => {
-      resolve(false)
-    }, timeoutMs)
+  const unanswered = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(reject, timeoutMs)
     timer.unref()
   })
-  const quit = client.quit().then(
-    () => true,
-    () => false,
-  )
-  const answered = await Promise.race([quit, unanswered]).finally(() => {
+  try {
+    await Promise.race([client.quit(), unanswered])
+  } catch {
+    disconnectUnlessEnded(client)
+  } finally {
     clearTimeout(timer)
-  })
-  if (!answered) disconnectUnlessEnded(client)
+  }
 }
