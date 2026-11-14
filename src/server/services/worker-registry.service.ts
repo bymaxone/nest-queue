@@ -18,6 +18,7 @@ import { ConnectionResolver } from './connection-resolver.service'
 import { duplicateConnection } from '../utils/duplicate-connection'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { describeError } from '../utils/describe-error'
+import { withDeadline } from '../utils/with-deadline'
 import type { WorkerOptions } from '../interfaces/worker-options.interface'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
@@ -34,8 +35,13 @@ import { DEFAULT_WORKER_CONCURRENCY, MAX_WORKER_CONCURRENCY } from '../constants
 export interface ProgrammaticWorkerConfig<TData = unknown, TResult = unknown> {
   /** BullMQ queue the worker should consume. */
   queueName: string
-  /** Async function that processes a single job. Must be idempotent. */
-  handler: (job: Job<TData, TResult>) => Promise<TResult>
+  /**
+   * Async function that processes a single job. Must be idempotent. Its optional second argument
+   * is the job's `AbortSignal`: it aborts when the job's `jobTimeoutMs` passes or when BullMQ
+   * cancels the job (`worker.cancelJob()`, `worker.cancelAllJobs()`). Closing the worker does not
+   * abort it. Pass it to whatever the handler awaits so the work stops with the job.
+   */
+  handler: (job: Job<TData, TResult>, signal?: AbortSignal) => Promise<TResult>
   /** Optional worker tuning overrides. */
   options?: WorkerOptions
 }
@@ -131,7 +137,11 @@ export class WorkerRegistry {
 
     let worker: Worker<TData, TResult>
     try {
-      worker = new Worker<TData, TResult>(queueName, handler, bullOpts)
+      worker = new Worker<TData, TResult>(
+        queueName,
+        toProcessor(handler, options?.jobTimeoutMs),
+        bullOpts,
+      )
     } catch (cause) {
       // Disconnect the duplicated connection to prevent a Redis resource leak.
       conn.disconnect()
@@ -167,6 +177,13 @@ export class WorkerRegistry {
    */
   registerSandboxed(config: SandboxedWorkerConfig): Worker {
     const { queueName, processorFile, options } = config
+    if (options?.jobTimeoutMs !== undefined) {
+      throw new QueueException(
+        QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        { reason: 'jobTimeoutMs is not available for sandboxed workers' },
+      )
+    }
     this.validateProcessorFile(processorFile)
     this.guardDuplicate(queueName)
     this.validateOptions(options)
@@ -314,6 +331,7 @@ export class WorkerRegistry {
         )
       }
     }
+    this.validateJobTimeout(opts)
     if (opts?.limiter !== undefined) {
       if (opts.limiter.max < 1) {
         throw new QueueException(
@@ -335,6 +353,29 @@ export class WorkerRegistry {
           },
         )
       }
+    }
+  }
+
+  /**
+   * Validate `jobTimeoutMs`, which must be a timer delay Node honours: above 2^31 - 1 ms it would
+   * fire after 1 ms and fail every job at once.
+   *
+   * @param opts - The caller-supplied options (may be undefined).
+   * @throws {QueueException} `WORKER_REGISTRATION_FAILED` when the value is out of range.
+   */
+  private validateJobTimeout(opts?: WorkerOptions): void {
+    if (
+      opts?.jobTimeoutMs !== undefined &&
+      !(opts.jobTimeoutMs > 0 && opts.jobTimeoutMs <= 2_147_483_647)
+    ) {
+      throw new QueueException(
+        QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        {
+          reason: 'jobTimeoutMs must be a number from 1 to 2147483647',
+          actual: opts.jobTimeoutMs,
+        },
+      )
     }
   }
 
@@ -421,5 +462,49 @@ export class WorkerRegistry {
     // into the worker; the key stays absent when telemetry is not configured.
     if (this.options.telemetry !== undefined) result.telemetry = this.options.telemetry
     return result
+  }
+}
+
+/** What a job fails with when its handler outlives `jobTimeoutMs`; BullMQ retries it like any error. */
+class JobTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`queue.job_timeout: the handler did not settle within ${String(timeoutMs)}ms`)
+    this.name = 'JobTimeoutError'
+  }
+}
+
+/**
+ * Adapt a library handler to BullMQ's processor signature. BullMQ calls its processor with
+ * `(job, token, signal)`, and creates that per-job signal only for a processor that declares three
+ * parameters, which both processors returned here do; the handler gets `(job, signal)`. With a
+ * timeout, the signal handed over also aborts at the deadline, which is when the job fails and the
+ * slot frees; the handler's own promise is not cancelled. The relay listener on BullMQ's signal is
+ * removed as soon as the job settles.
+ */
+function toProcessor<TData, TResult>(
+  handler: (job: Job<TData, TResult>, signal?: AbortSignal) => Promise<TResult>,
+  timeoutMs: number | undefined,
+): (job: Job<TData, TResult>, token?: string, signal?: AbortSignal) => Promise<TResult> {
+  if (timeoutMs === undefined) return (job, _token, signal) => handler(job, signal)
+  return (job, _token, signal) => {
+    const own = new AbortController()
+    const relay = (): void => {
+      own.abort(signal?.reason)
+    }
+    if (signal?.aborted === true) relay()
+    signal?.addEventListener('abort', relay, { once: true })
+    // Calling the handler inside a promise turns a throw before it returns one into a rejection,
+    // so the cleanup below runs for it too.
+    return withDeadline(
+      Promise.resolve().then(() => handler(job, own.signal)),
+      timeoutMs,
+      () => {
+        const error = new JobTimeoutError(timeoutMs)
+        own.abort(error)
+        return error
+      },
+    ).finally(() => {
+      signal?.removeEventListener('abort', relay)
+    })
   }
 }

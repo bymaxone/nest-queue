@@ -99,19 +99,20 @@ export class ProcessorDiscoveryService implements OnModuleInit {
    *
    * @param instance - The provider instance whose methods serve as handlers.
    * @param handlers - Accumulated `@Process` metadata entries for the class.
-   * @returns A dispatcher `(job: Job) => Promise<unknown>`.
+   * @returns A dispatcher `(job: Job, signal?: AbortSignal) => Promise<unknown>`.
    */
   buildDispatcher(
     instance: Record<string | symbol, unknown>,
     handlers: ProcessHandlerMetadata[],
-  ): (job: Job) => Promise<unknown> {
-    const namedHandlers = new Map<string, (job: Job) => Promise<unknown>>()
-    let catchAll: ((job: Job) => Promise<unknown>) | undefined
+  ): (job: Job, signal?: AbortSignal) => Promise<unknown> {
+    type Handler = (job: Job, signal?: AbortSignal) => Promise<unknown>
+    const namedHandlers = new Map<string, Handler>()
+    let catchAll: Handler | undefined
 
     for (const { jobName, methodKey } of handlers) {
       const method = instance[methodKey]
       if (typeof method !== 'function') continue
-      const fn = (method as (job: Job) => Promise<unknown>).bind(instance)
+      const fn = (method as Handler).bind(instance)
       if (jobName !== undefined) {
         namedHandlers.set(jobName, fn)
       } else {
@@ -119,10 +120,10 @@ export class ProcessorDiscoveryService implements OnModuleInit {
       }
     }
 
-    return (job: Job): Promise<unknown> => {
+    return (job: Job, signal?: AbortSignal): Promise<unknown> => {
       const specific = namedHandlers.get(job.name)
-      if (specific) return specific(job)
-      if (catchAll) return catchAll(job)
+      if (specific) return specific(job, signal)
+      if (catchAll) return catchAll(job, signal)
       return Promise.reject(
         new Error(
           `No handler registered for job name "${job.name}" on queue — ` +

@@ -53,6 +53,13 @@ and `enqueueTimeoutMs` on `BymaxQueueModuleOptions` and change the documentation
 - **`unregister` releases the connection even when the worker's `close()` throws.** It then rethrows
   that error; the registry entry is dropped and the socket closed either way.
 
+- **`jobTimeoutMs` bounds a handler that never settles.** It is a new worker option with no default.
+  When it passes, the job fails with a `queue.job_timeout` error, retries under its `attempts` and
+  `backoff`, and its concurrency slot is free again. Handlers receive an `AbortSignal` as a second
+  argument, which aborts at that moment or when BullMQ cancels the job (`worker.cancelJob()`,
+  `worker.cancelAllJobs()`); closing the worker does not abort it. Before, a hung handler held its
+  slot for good and the rest of the queue waited.
+
 ### Documentation
 
 - **A timed-out `enqueue` may still have been added**, and the README says to pass a deterministic
@@ -65,6 +72,10 @@ and `enqueueTimeoutMs` on `BymaxQueueModuleOptions` and change the documentation
 - If you rely on an `enqueue` waiting out a Redis outage, it now rejects with `CONNECTION_TIMEOUT`
   after `enqueueTimeoutMs` (the add may still complete in Redis afterwards, so retry with a stable
   `jobId` or `deduplication`); raise the option to keep waiting longer.
+- Nothing changes until you set `jobTimeoutMs`. If you do, a handler that runs longer than it is
+  failed and retried while its own promise keeps running unless it honours the `AbortSignal`, so keep
+  handlers idempotent. If you wrap `ProgrammaticWorkerConfig.handler`, accept the new optional second
+  parameter.
 - If you relied on shutdown taking up to one `drainTimeoutMs` per stuck worker, it now takes at most
   one in total; raise `drainTimeoutMs` if jobs need longer.
 - If your Mode B code calls a `QueueService` method during a Redis outage and expected it to wait for
