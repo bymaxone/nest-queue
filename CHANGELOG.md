@@ -17,7 +17,7 @@ Against 1.2.16 the public declarations do not change; the HTTP status some error
 
 ### Changed
 
-- **`CONNECTION_TIMEOUT` now carries HTTP status 503, not 500.** It is thrown when a Redis command times out, when a call gets no answer within `enqueueTimeoutMs`, when the connection is down, and when the owned connection does not become ready within `connectionReadyTimeoutMs`. Redis being unavailable is a condition a retry may clear, which 503 says and 500 did not.
+- **`CONNECTION_TIMEOUT` now carries HTTP status 503, not 500.** It is thrown when a Redis command times out, when a call gets no answer within `enqueueTimeoutMs`, when the owned connection is down, and when the owned connection does not become ready within `connectionReadyTimeoutMs`. Redis being unavailable is a condition a retry may clear, which 503 says and 500 did not.
 - **A batch over the 1000 cap is now a 400.** `enqueueBulk` and `FlowService.addBulk` still reject it with `BULK_ENQUEUE_FAILED`, but the status is 400 because the caller sent too much; a failure of unknown cause inside the call stays 500.
 - The README error table lists every status a code can carry and says why. `CONNECTION_INVALID`, `INVALID_OPTIONS` from module options, `WORKER_REGISTRATION_FAILED` and `DUPLICATE_PROCESSOR` stay 500: they are configuration or wiring faults in the host.
 - A spec fails when a throw site carries a status its code is not listed for.
