@@ -26,6 +26,9 @@ const REDIS_IMAGE =
 const HOST_PORT = 46_397
 const URL = `redis://127.0.0.1:${String(HOST_PORT)}`
 const ENQUEUE_TIMEOUT_MS = 1500
+/** The drain budget the fixture host runs with, and the margin allowed on top of it. */
+const DRAIN_BUDGET_MS = 1000
+const SHUTDOWN_MARGIN_MS = 3000
 
 const sleep = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms))
 
@@ -133,6 +136,7 @@ describe('E2E — a Redis that goes away and comes back', () => {
 describe('E2E — the process after app.close() with a handler that outlasts the drain budget', () => {
   /** Run the fixture host and report when it printed CLOSED, when it exited and what it wrote after. */
   async function runChild(handlerSettlesMs: number): Promise<{
+    closingAt: number
     closedAt: number
     exitedAt: number
     stderrAfterClose: string
@@ -151,11 +155,13 @@ describe('E2E — the process after app.close() with a handler that outlasts the
     })
     let stdout = ''
     let stderr = ''
+    let closingAt = 0
     let closedAt = 0
     let stderrAfterClose = ''
     let exitedAt = 0
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString()
+      if (closingAt === 0 && stdout.includes('CLOSING')) closingAt = Date.now()
       if (closedAt === 0 && stdout.includes('CLOSED')) closedAt = Date.now()
     })
     child.stderr.on('data', (chunk: Buffer) => {
@@ -169,27 +175,27 @@ describe('E2E — the process after app.close() with a handler that outlasts the
     const waitUntil = Date.now() + 30_000
     while (exitedAt === 0 && Date.now() < waitUntil) await sleep(100)
     if (exitedAt === 0) child.kill('SIGKILL')
-    return { closedAt, exitedAt, stderrAfterClose, stderr }
+    return { closingAt, closedAt, exitedAt, stderrAfterClose, stderr }
   }
 
   it('exits by itself within the drain budget plus a small margin when it never settles', async () => {
-    const { closedAt, exitedAt, stderrAfterClose, stderr } = await runChild(0)
+    const { closingAt, closedAt, exitedAt, stderrAfterClose, stderr } = await runChild(0)
 
     expect(exitedAt).toBeGreaterThan(0)
     expect(closedAt).toBeGreaterThan(0)
-    // The close itself took the drain budget (1 s); the process was gone within a few seconds more.
-    expect(exitedAt - closedAt).toBeLessThan(3000)
+    // From just before app.close() to the process being gone: the drain budget (1 s) plus a margin.
+    expect(exitedAt - closingAt).toBeLessThan(DRAIN_BUDGET_MS + SHUTDOWN_MARGIN_MS)
     expect(stderrAfterClose).not.toContain('Connection is closed')
     expect(stderr).not.toContain('CHILD ERROR')
   }, 90_000)
 
   // The handler settles 0.5 s after the budget ended: the worker that was stopped must stay stopped.
   it('exits by itself when the handler settles after the budget ended', async () => {
-    const { closedAt, exitedAt, stderrAfterClose, stderr } = await runChild(1500)
+    const { closingAt, closedAt, exitedAt, stderrAfterClose, stderr } = await runChild(1500)
 
     expect(exitedAt).toBeGreaterThan(0)
     expect(closedAt).toBeGreaterThan(0)
-    expect(exitedAt - closedAt).toBeLessThan(3000)
+    expect(exitedAt - closingAt).toBeLessThan(DRAIN_BUDGET_MS + SHUTDOWN_MARGIN_MS)
     expect(stderrAfterClose).not.toContain('Connection is closed')
     expect(stderr).not.toContain('CHILD ERROR')
   }, 90_000)

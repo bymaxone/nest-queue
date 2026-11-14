@@ -1,5 +1,10 @@
-// A host that closes the application while a handler that never settles is running, then does
-// nothing else: only what the library itself left behind can keep this process alive.
+/**
+ * @fileoverview A host that closes the application while a handler that never settles (or one that
+ * settles after the drain budget) is running, then does nothing else: only what the library itself
+ * left behind can keep this process alive. It prints CLOSING just before `app.close()` and CLOSED
+ * when it returns, so a test can time the whole shutdown.
+ * @layer test/e2e/fixtures
+ */
 import 'reflect-metadata'
 import { NestFactory } from '@nestjs/core'
 import { Module } from '@nestjs/common'
@@ -16,7 +21,7 @@ Module({
   imports: [
     BymaxQueueModule.forRoot({
       connection: { url: process.env.REDIS_URL },
-      shutdown: { drainTimeoutMs: 1000 },
+      shutdown: { drainTimeoutMs: Number(process.env.DRAIN_TIMEOUT_MS ?? 1000) },
     }),
   ],
 })(Host)
@@ -38,6 +43,7 @@ try {
   })
   await app.get(QueueService).enqueue('stuck', 'job', {})
   for (let i = 0; i < 100 && !active; i++) await new Promise((resolve) => setTimeout(resolve, 100))
+  console.log('CLOSING')
   await app.close()
   console.log('CLOSED')
 } catch (error) {
