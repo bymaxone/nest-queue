@@ -13,7 +13,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.2.20] — 2026-11-14
 
-Against 1.2.19 the declared types do not change.
+Against 1.2.19 the declared types do not change; one JSDoc comment in the declarations does (`waitReady`).
 
 ### Changed
 
