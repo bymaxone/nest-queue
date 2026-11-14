@@ -17,6 +17,16 @@ function invalid(reason: string): never {
 }
 
 /**
+ * Refuse a timer-valued option Node would not honour: above 2^31 - 1 ms, or not a whole number, a
+ * timer fires after 1 ms, so a deadline would end at once instead of waiting longer.
+ */
+function checkTimerDelay(name: string, value: number | undefined): void {
+  if (value !== undefined && !isTimerDelayMs(value)) {
+    invalid(`${name} must be a whole number from 1 to ${String(MAX_TIMER_DELAY_MS)}`)
+  }
+}
+
+/**
  * Whether ioredis can parse `url`. It reads a `redis://` or `rediss://` URL as it is and prefixes
  * every other string with a scheme (`redis:` for `//host`, `redis://` otherwise) before handing it
  * to the WHATWG parser, which rejects what it cannot read and makes the client constructor throw
@@ -85,6 +95,7 @@ export function validateOptions(opts: BymaxQueueModuleOptions): void {
   if (drainTimeoutMs !== undefined && drainTimeoutMs <= 0) {
     invalid('shutdown.drainTimeoutMs must be > 0')
   }
+  checkTimerDelay('shutdown.drainTimeoutMs', drainTimeoutMs)
 
   const cacheTtlMs = opts.metrics?.cacheTtlMs
   // Stryker disable next-line ConditionalExpression: equivalent — dropping the presence check leaves `undefined < 0`, which is false; same reasoning as the drain timeout above
@@ -92,12 +103,7 @@ export function validateOptions(opts: BymaxQueueModuleOptions): void {
     invalid('metrics.cacheTtlMs must be >= 0')
   }
 
-  for (const key of ['commandTimeoutMs', 'enqueueTimeoutMs'] as const) {
-    const value = opts[key]
-    // Node reads a timer delay above 2^31 - 1 ms as 1 ms, so a larger deadline would end every call
-    // at once instead of waiting longer.
-    if (value !== undefined && !isTimerDelayMs(value)) {
-      invalid(`${key} must be a whole number from 1 to ${String(MAX_TIMER_DELAY_MS)}`)
-    }
+  for (const key of ['commandTimeoutMs', 'enqueueTimeoutMs', 'connectionReadyTimeoutMs'] as const) {
+    checkTimerDelay(key, opts[key])
   }
 }

@@ -52,3 +52,6 @@ export const DEFAULT_METRICS_CACHE_TTL_MS = 5_000 as const
 
 /** Default window (ms) for in-flight jobs to drain before the worker is stopped on shutdown. */
 export const DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS = 30_000 as const
+
+/** Maximum number of jobs (or flow trees) accepted by one bulk call. */
+export const MAX_BULK_SIZE = 1_000 as const

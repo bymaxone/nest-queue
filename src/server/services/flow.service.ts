@@ -12,7 +12,9 @@ import type { ConnectionResolver } from './connection-resolver.service'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
-import { withCommandTimeoutCode } from '../utils/command-timeout'
+import { timeoutException, withCommandTimeoutCode } from '../utils/command-timeout'
+import { withDeadline } from '../utils/with-deadline'
+import { DEFAULT_ENQUEUE_TIMEOUT_MS, MAX_BULK_SIZE } from '../constants/default-options'
 
 /**
  * Wrapper over the BullMQ `FlowProducer` for hierarchical (parent/child) job
@@ -36,14 +38,17 @@ export class FlowService {
   private readonly logger = new Logger(FlowService.name)
   private readonly producer?: FlowProducer
   readonly #connection: ConnectionResolver
+  readonly #deadlineMs: number
 
   constructor(
     connection: ConnectionResolver,
     enabled: boolean,
     prefix: string,
     telemetry?: Telemetry,
+    enqueueTimeoutMs: number = DEFAULT_ENQUEUE_TIMEOUT_MS,
   ) {
     this.#connection = connection
+    this.#deadlineMs = enqueueTimeoutMs
     if (enabled) {
       this.producer = new FlowProducer({
         connection: connection.getClient(),
@@ -73,14 +78,11 @@ export class FlowService {
    *   A job whose custom `jobId` already exists is not added again: its node carries the EXISTING
    *   id with the data of this call, so the tree does not describe what is stored; call
    *   `QueueService.getJob` when you need it.
-   * @throws {QueueException} `FLOW_DISABLED` (503) when flows are not enabled.
+   * @throws {QueueException} `FLOW_DISABLED` (503) when flows are not enabled; `CONNECTION_TIMEOUT`
+   *   when Redis does not answer within `enqueueTimeoutMs` (the flow may still have been added).
    */
   async add(flow: FlowJob): Promise<JobNode> {
-    return withCommandTimeoutCode(
-      'addFlow',
-      () => this.commandTimeout(),
-      this.requireProducer().add(flow),
-    )
+    return this.bounded('addFlow', this.requireProducer().add(flow))
   }
 
   /**
@@ -89,13 +91,32 @@ export class FlowService {
    * @param flows - Flow tree definitions.
    * @returns The root `JobNode` for each flow, in input order.
    *   A job whose custom `jobId` already exists is not added again; see {@link FlowService.add}.
-   * @throws {QueueException} `FLOW_DISABLED` (503) when flows are not enabled.
+   * @throws {QueueException} `FLOW_DISABLED` (503) when flows are not enabled;
+   *   `BULK_ENQUEUE_FAILED` for more than 1000 flows; `CONNECTION_TIMEOUT` as for
+   *   {@link FlowService.add}.
    */
   async addBulk(flows: readonly FlowJob[]): Promise<JobNode[]> {
+    const producer = this.requireProducer()
+    if (flows.length > MAX_BULK_SIZE) {
+      throw new QueueException(
+        QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        { reason: 'batch size exceeds limit', limit: MAX_BULK_SIZE, received: flows.length },
+      )
+    }
+    return this.bounded('addFlowBulk', producer.addBulk([...flows]))
+  }
+
+  /**
+   * Hold the caller to `enqueueTimeoutMs`, and report a command timeout or a down connection as
+   * `CONNECTION_TIMEOUT`. A call that timed out may still have been added: BullMQ is not asked to
+   * cancel it.
+   */
+  private bounded<T>(operation: string, work: Promise<T>): Promise<T> {
     return withCommandTimeoutCode(
-      'addFlowBulk',
+      operation,
       () => this.commandTimeout(),
-      this.requireProducer().addBulk([...flows]),
+      withDeadline(work, this.#deadlineMs, () => timeoutException(operation, this.#deadlineMs)),
     )
   }
 

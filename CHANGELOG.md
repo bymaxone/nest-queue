@@ -11,6 +11,30 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.16] — 2026-11-14
+
+Against 1.2.15 the built declarations gain a fifth optional `FlowService` constructor parameter, `enqueueTimeoutMs`; nothing else in the public API changes.
+
+### Fixed
+
+- **Timer-valued options that Node cannot honour are refused at startup.** `shutdown.drainTimeoutMs` and `connectionReadyTimeoutMs` accepted `NaN`, fractions and values above 2 147 483 647 ms, which Node reads as a 1 ms timer, so the drain or the startup wait ended at once. Both must now be whole numbers from 1 to 2 147 483 647, like `commandTimeoutMs` and `enqueueTimeoutMs`.
+- **Worker options are checked before BullMQ sees them.** `concurrency`, `limiter.max` and `limiter.duration` must be whole numbers (`NaN` passed the range check). `lockDuration` and `stalledInterval` must be whole numbers from 1000 to 2 147 483 647: BullMQ renews a lock at half of `lockDuration`, so under one second the renewal falls inside ordinary event-loop delay and a busy process loses locks it still holds.
+- **`getJobSchedulers` has the same window bound as `getJobs`.** BullMQ reads an end index of `-1` as "every scheduler"; the window is now at most 1000 entries and a malformed one is refused with `INVALID_OPTIONS`.
+- **`FlowService.add` and `addBulk` are bounded.** Each is held to `enqueueTimeoutMs` and rejects with `CONNECTION_TIMEOUT` (a flow that timed out may still have been added), and `addBulk` refuses more than 1000 flows with `BULK_ENQUEUE_FAILED`, as `enqueueBulk` does.
+- **A call waiting for the connection is released when the client ends.** `ConnectionResolver.awaitReady()` kept its callers waiting until their deadline after ioredis had given up reconnecting; they are now released at once and the call reports the real failure.
+
+### Documentation
+
+- A handler that outlives `jobTimeoutMs` no longer counts against `concurrency`; the README says so.
+
+#### Apply to a derived backend
+
+- If you pass `shutdown.drainTimeoutMs` or `connectionReadyTimeoutMs` as a fraction or above 2 147 483 647, or a worker `lockDuration` or `stalledInterval` below 1000, startup or registration now throws; use a whole number in range.
+- If you call `getJobSchedulers` with an open or oversized window, request at most 1000 entries per call.
+- If you construct `FlowService` yourself, pass `enqueueTimeoutMs` as the fifth argument; it defaults to 10 000.
+
+---
+
 ## [1.2.15] — 2026-11-14
 
 Against 1.2.14 the built declarations gain `ConnectionResolver.awaitReady()`; nothing else in the public API changes.

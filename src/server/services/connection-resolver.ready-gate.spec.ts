@@ -98,4 +98,32 @@ describe('ConnectionResolver.awaitReady', () => {
     client.emit('ready')
     await second
   })
+
+  // `end` means ioredis will not reconnect: a caller kept waiting would only learn that at its deadline.
+  it('releases every waiter when the client ends, and gives both listeners back', async () => {
+    const { resolver, client } = await resolverFor('reconnecting')
+    const before = { ready: client.listenerCount('ready'), end: client.listenerCount('end') }
+
+    const waits = Array.from({ length: 3 }, () => resolver.awaitReady())
+    client.status = 'end'
+    client.emit('end')
+
+    await expect(Promise.all(waits)).resolves.toStrictEqual([undefined, undefined, undefined])
+    expect(client.listenerCount('ready')).toBe(before.ready)
+    expect(client.listenerCount('end')).toBe(before.end)
+    // The next call finds an ended client: it is not gated, so the call itself reports the failure.
+    await expect(resolver.awaitReady()).resolves.toBeUndefined()
+  })
+
+  it('gives the end listener back when the client becomes ready', async () => {
+    const { resolver, client } = await resolverFor('reconnecting')
+    const before = client.listenerCount('end')
+
+    const wait = resolver.awaitReady()
+    client.status = 'ready'
+    client.emit('ready')
+    await wait
+
+    expect(client.listenerCount('end')).toBe(before)
+  })
 })
