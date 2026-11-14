@@ -331,19 +331,7 @@ export class WorkerRegistry {
         )
       }
     }
-    if (
-      opts?.jobTimeoutMs !== undefined &&
-      !(opts.jobTimeoutMs > 0 && opts.jobTimeoutMs <= 2_147_483_647)
-    ) {
-      throw new QueueException(
-        QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
-        HttpStatus.INTERNAL_SERVER_ERROR,
-        {
-          reason: 'jobTimeoutMs must be a number from 1 to 2147483647',
-          actual: opts.jobTimeoutMs,
-        },
-      )
-    }
+    this.validateJobTimeout(opts)
     if (opts?.limiter !== undefined) {
       if (opts.limiter.max < 1) {
         throw new QueueException(
@@ -365,6 +353,29 @@ export class WorkerRegistry {
           },
         )
       }
+    }
+  }
+
+  /**
+   * Validate `jobTimeoutMs`, which must be a timer delay Node honours: above 2^31 - 1 ms it would
+   * fire after 1 ms and fail every job at once.
+   *
+   * @param opts - The caller-supplied options (may be undefined).
+   * @throws {QueueException} `WORKER_REGISTRATION_FAILED` when the value is out of range.
+   */
+  private validateJobTimeout(opts?: WorkerOptions): void {
+    if (
+      opts?.jobTimeoutMs !== undefined &&
+      !(opts.jobTimeoutMs > 0 && opts.jobTimeoutMs <= 2_147_483_647)
+    ) {
+      throw new QueueException(
+        QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        {
+          reason: 'jobTimeoutMs must be a number from 1 to 2147483647',
+          actual: opts.jobTimeoutMs,
+        },
+      )
     }
   }
 
