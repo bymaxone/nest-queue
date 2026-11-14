@@ -17,11 +17,13 @@ export const MAX_WORKER_CONCURRENCY = 1_000 as const
 
 /**
  * Default options applied to every job enqueued through the service. The
- * `removeOnFail.count` cap bounds Redis memory growth under failure storms.
+ * `removeOnFail.count` cap bounds Redis memory growth under failure storms. The backoff jitter
+ * spreads each retry over the upper half of its delay, so jobs that failed together (a Redis
+ * outage, a downstream timeout) do not all retry in the same instant.
  */
 export const DEFAULT_JOB_OPTIONS = {
   attempts: 3,
-  backoff: { type: 'exponential', delay: 2000 },
+  backoff: { type: 'exponential', delay: 2000, jitter: 0.5 },
   removeOnComplete: { age: 24 * 3600, count: 1000 },
   removeOnFail: { age: 7 * 24 * 3600, count: 5000 },
 } as const satisfies JobsOptions
@@ -41,6 +43,9 @@ export const DEFAULT_COMMAND_TIMEOUT_MS = 5_000 as const
  * covers a shared client whose retries are unbounded, which the command timeout cannot reach.
  */
 export const DEFAULT_ENQUEUE_TIMEOUT_MS = 10_000 as const
+
+/** Largest number of jobs one `getJobs` call may read. */
+export const MAX_JOBS_PAGE_SIZE = 1_000 as const
 
 /** Default TTL (ms) for the metrics cache. */
 export const DEFAULT_METRICS_CACHE_TTL_MS = 5_000 as const

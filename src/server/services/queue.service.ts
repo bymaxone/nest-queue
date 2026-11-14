@@ -17,6 +17,7 @@ import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { validateJobSchedulerOptions } from '../utils/validate-job-scheduler-options'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
+import { MAX_JOBS_PAGE_SIZE } from '../constants/default-options'
 import { describeError } from '../utils/describe-error'
 import { withDeadline } from '../utils/with-deadline'
 
@@ -260,7 +261,9 @@ export class QueueService {
    * @param queueName - Target queue.
    * @param status - Status filter.
    * @param start - Starting index (inclusive). Default: 0.
-   * @param end - Ending index (inclusive). Default: 50.
+   * @param end - Ending index (inclusive). Default: 50. The window may span at most
+   *   `MAX_JOBS_PAGE_SIZE` (1000) jobs, and BullMQ's `-1` (everything) is refused.
+   * @throws {QueueException} `INVALID_OPTIONS` when the window is not a bounded range of integers.
    */
   async getJobs<TData = unknown, TResult = unknown>(
     queueName: string,
@@ -268,6 +271,17 @@ export class QueueService {
     start = 0,
     end = 50,
   ): Promise<TypedJob<TData, TResult>[]> {
+    if (
+      !Number.isInteger(start) ||
+      !Number.isInteger(end) ||
+      start < 0 ||
+      end < start ||
+      end - start >= MAX_JOBS_PAGE_SIZE
+    ) {
+      throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, HttpStatus.BAD_REQUEST, {
+        reason: `getJobs needs integers with 0 <= start <= end and at most ${String(MAX_JOBS_PAGE_SIZE)} jobs per call`,
+      })
+    }
     const jobs = await this.queueFor(queueName).getJobs([status], start, end)
     return jobs
   }

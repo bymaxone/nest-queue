@@ -401,6 +401,34 @@ describe('QueueService — inspection', () => {
     expect(queueInstances[0]?.getJobs).toHaveBeenCalledWith(['waiting'], 0, 50)
   })
 
+  // `end` of -1 reads every job of the status, and a wide window reads a page the size of the queue.
+  it.each([
+    ['an end of -1, which BullMQ reads as the whole list', 0, -1],
+    ['an end below the start', 10, 5],
+    ['a negative start', -1, 10],
+    ['a fractional bound', 0, 1.5],
+    ['a window of more than 1000 jobs', 0, 1000],
+  ])('refuses %s', async (_label, start, end) => {
+    const { service } = makeService()
+    service.getOrCreateQueue('email')
+
+    const err = await service.getJobs('email', 'waiting', start, end).catch((e: unknown) => e)
+
+    expect(err).toBeInstanceOf(QueueException)
+    expect(codeOf(err)).toBe(QUEUE_ERROR_CODES.INVALID_OPTIONS)
+    expect(queueInstances[0]?.getJobs).not.toHaveBeenCalled()
+  })
+
+  it('accepts a window of exactly 1000 jobs', async () => {
+    const { service } = makeService()
+    service.getOrCreateQueue('email')
+    queueInstances[0]?.getJobs.mockResolvedValue([])
+
+    await service.getJobs('email', 'waiting', 500, 1499)
+
+    expect(queueInstances[0]?.getJobs).toHaveBeenCalledWith(['waiting'], 500, 1499)
+  })
+
   it('forwards an explicit pagination window', async () => {
     // Custom start/end values reach BullMQ unchanged.
     const { service } = makeService()

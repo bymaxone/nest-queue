@@ -18,7 +18,10 @@ export interface BymaxQueueModuleOptions {
   connection: QueueConnectionConfig
   /** Default options applied to every job enqueued through the service. */
   defaultJobOptions?: JobsOptions
-  /** Prefix for all Redis keys (multi-tenant isolation). Default: 'bull'. */
+  /**
+   * Prefix for all Redis keys, a namespace and not an access control: anything that can reach the
+   * Redis instance can read every prefix on it. Default: 'bull'.
+   */
   prefix?: string
   /** Default options applied to every Queue, merged with the job/prefix defaults. */
   queueOptions?: Partial<Omit<QueueOptions, 'connection' | 'defaultJobOptions' | 'prefix'>>
