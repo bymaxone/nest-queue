@@ -11,6 +11,28 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.19] — 2026-11-14
+
+Against 1.2.18 the declared types do not change.
+
+### Fixed
+
+- **The response of a startup that ended because Redis was unreachable no longer carries the error code.** The `CONNECTION_INVALID` it was reported with had `details: { lastErrorCode: 'ECONNREFUSED' }`, the low-level cause in the response body. The new `CONNECTION_TIMEOUT` carries only `operation` and `reason`; the error is the exception's `cause`.
+
+### Changed
+
+- **A Mode B client that ends because Redis could not be reached is now `CONNECTION_TIMEOUT` with status 503, not `CONNECTION_INVALID` with 500.** With `retryStrategy` returning `null` the first failure ends the client before it is ready. When the last error it raised is a network error (including the `AggregateError` a host with several addresses raises) or the command timeout of the ready check, a retry may help, which 503 says. `details` carries `operation: 'connect'` and `reason: 'unavailable'`; the error code is in the exception's `cause`, not in the response. A refused credential, an error that is not one of these, and an end with no error recorded stay `CONNECTION_INVALID` with 500.
+
+### Documentation
+
+- The README error table lists the new cause of `CONNECTION_TIMEOUT`.
+
+#### Apply to a derived backend
+
+- If you branch on the code or status of a startup failure with a `retryStrategy` that returns `null`, a refused or unreachable Redis is now `queue.connection_timeout` (503) where it was `queue.connection_invalid` (500).
+
+---
+
 ## [1.2.18] — 2026-11-14
 
 Against 1.2.17 the declared types do not change; one JSDoc `@example` line in the declarations does.
@@ -1102,7 +1124,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.18...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.19...HEAD
+[1.2.19]: https://github.com/bymaxone/nest-queue/compare/v1.2.18...v1.2.19
 [1.2.18]: https://github.com/bymaxone/nest-queue/compare/v1.2.17...v1.2.18
 [1.2.17]: https://github.com/bymaxone/nest-queue/compare/v1.2.16...v1.2.17
 [1.2.16]: https://github.com/bymaxone/nest-queue/compare/v1.2.15...v1.2.16
