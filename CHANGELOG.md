@@ -11,6 +11,29 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.17] — 2026-11-14
+
+Against 1.2.16 the public declarations do not change; the HTTP status some errors carry does.
+
+### Changed
+
+- **`CONNECTION_TIMEOUT` now carries HTTP status 503, not 500.** It is thrown when a Redis command times out, when a call gets no answer within `enqueueTimeoutMs`, when the connection is down, and when the owned connection does not become ready within `connectionReadyTimeoutMs`. Redis being unavailable is a condition a retry may clear, which 503 says and 500 did not.
+- **A batch over the 1000 cap is now a 400.** `enqueueBulk` and `FlowService.addBulk` still reject it with `BULK_ENQUEUE_FAILED`, but the status is 400 because the caller sent too much; a failure of unknown cause inside the call stays 500.
+- The README error table lists every status a code can carry and says why. `CONNECTION_INVALID`, `INVALID_OPTIONS` from module options, `WORKER_REGISTRATION_FAILED` and `DUPLICATE_PROCESSOR` stay 500: they are configuration or wiring faults in the host.
+- A spec fails when a throw site carries a status its code is not listed for.
+
+### Documentation
+
+- `commandTimeoutMs` is documented as having no floor: a value shorter than the Redis round trip makes every command fail, so startup fails with `CONNECTION_TIMEOUT` after `connectionReadyTimeoutMs`.
+- The `getJobSchedulers` window error now says "schedulers" where it said "jobs".
+
+#### Apply to a derived backend
+
+- If you branch on the HTTP status of a `CONNECTION_TIMEOUT` error, expect 503 where it was 500.
+- If you branch on the status of a `BULK_ENQUEUE_FAILED` error for a batch of more than 1000, expect 400 where it was 500.
+
+---
+
 ## [1.2.16] — 2026-11-14
 
 Against 1.2.15 the built declarations gain a fifth optional `FlowService` constructor parameter, `enqueueTimeoutMs`; nothing else in the public API changes.
@@ -1060,7 +1083,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.16...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.17...HEAD
+[1.2.17]: https://github.com/bymaxone/nest-queue/compare/v1.2.16...v1.2.17
 [1.2.16]: https://github.com/bymaxone/nest-queue/compare/v1.2.15...v1.2.16
 [1.2.15]: https://github.com/bymaxone/nest-queue/compare/v1.2.14...v1.2.15
 [1.2.14]: https://github.com/bymaxone/nest-queue/compare/v1.2.13...v1.2.14

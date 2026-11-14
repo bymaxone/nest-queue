@@ -46,6 +46,11 @@ function describeException(err: unknown): { code: string; details: unknown } {
   return { code: error.code, details: error.details }
 }
 
+/** The HTTP status a QueueException carries. */
+function statusOf(err: unknown): number {
+  return (err as QueueException).getStatus()
+}
+
 beforeEach(() => {
   producers.length = 0
   jest.useFakeTimers()
@@ -74,6 +79,7 @@ describe('FlowService — the enqueue deadline', () => {
       expect(settled).toBe(false)
       await jest.advanceTimersByTimeAsync(1)
 
+      expect(statusOf(await outcome)).toBe(503)
       expect(describeException(await outcome)).toStrictEqual({
         code: 'queue.connection_timeout',
         details: {
@@ -104,6 +110,7 @@ describe('FlowService — the addBulk count cap', () => {
       .catch((e: unknown) => e)
 
     expect(producer.addBulk).toHaveBeenCalledTimes(1)
+    expect(statusOf(err)).toBe(400)
     expect(describeException(err)).toStrictEqual({
       code: 'queue.bulk_enqueue_failed',
       details: { reason: 'batch size exceeds limit', limit: 1000, received: 1001 },

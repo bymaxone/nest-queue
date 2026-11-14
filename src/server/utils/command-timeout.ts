@@ -23,7 +23,7 @@ export function timeoutException(
 ): QueueException {
   const exception = new QueueException(
     QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
-    HttpStatus.INTERNAL_SERVER_ERROR,
+    HttpStatus.SERVICE_UNAVAILABLE,
     { operation, timeoutMs },
   )
   if (cause !== undefined) exception.cause = cause
@@ -41,7 +41,7 @@ export function timeoutException(
 export function unavailableException(operation: string, cause: unknown): QueueException {
   const exception = new QueueException(
     QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
-    HttpStatus.INTERNAL_SERVER_ERROR,
+    HttpStatus.SERVICE_UNAVAILABLE,
     { operation, reason: 'offline' },
   )
   exception.cause = cause

@@ -431,6 +431,8 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
         error: { code: string; details: unknown }
       }
       expect(body.error.code).toBe(QUEUE_ERROR_CODES.CONNECTION_INVALID)
+      // A refused credential is a configuration fault: retrying cannot help.
+      expect(((await failure) as QueueException).getStatus()).toBe(500)
       expect(body.error.details).toStrictEqual({})
     }
   })

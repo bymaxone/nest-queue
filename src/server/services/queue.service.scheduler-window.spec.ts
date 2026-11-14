@@ -79,7 +79,7 @@ describe('QueueService — the getJobSchedulers window', () => {
     expect(error.code).toBe('queue.invalid_options')
     expect(error.details).toStrictEqual({
       reason:
-        'getJobSchedulers needs integers with 0 <= start <= end and at most 1000 jobs per call',
+        'getJobSchedulers needs integers with 0 <= start <= end and at most 1000 schedulers per call',
     })
     expect(queue.getJobSchedulers).not.toHaveBeenCalled()
   })

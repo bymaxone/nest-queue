@@ -118,7 +118,7 @@ describe('unavailableException', () => {
     expect(describeException(exception)).toStrictEqual({
       code: QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
       details: { operation: 'getJob', reason: 'offline' },
-      status: 500,
+      status: 503,
     })
     expect(exception.cause).toBe(cause)
   })
@@ -129,7 +129,7 @@ describe('timeoutException', () => {
     expect(describeException(timeoutException('enqueue', 5000))).toStrictEqual({
       code: QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
       details: { operation: 'enqueue', timeoutMs: 5000 },
-      status: 500,
+      status: 503,
     })
   })
 
@@ -163,7 +163,7 @@ describe('withCommandTimeoutCode', () => {
     expect(describeException(err)).toStrictEqual({
       code: QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
       details: { operation: 'getJob', timeoutMs: 5000 },
-      status: 500,
+      status: 503,
     })
     expect((err as QueueException).cause).toBe(cause)
   })
@@ -178,7 +178,7 @@ describe('withCommandTimeoutCode', () => {
     expect(describeException(err)).toStrictEqual({
       code: QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
       details: { operation: 'enqueue', reason: 'offline' },
-      status: 500,
+      status: 503,
     })
     expect((err as QueueException).cause).toBe(cause)
   })
