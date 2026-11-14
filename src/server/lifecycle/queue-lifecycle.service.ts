@@ -26,6 +26,7 @@ import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import { describeError } from '../utils/describe-error'
 import { withDeadline } from '../utils/with-deadline'
+import { abandonWorker } from '../utils/abandoned-workers'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { ConnectionResolver } from '../services/connection-resolver.service'
 import { FlowService } from '../services/flow.service'
@@ -127,6 +128,7 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
           )
         } catch (cause) {
           undrained++
+          abandonWorker(worker)
           const stopped =
             'it is stopped without waiting for its in-flight job, which becomes stalled and is retried'
           this.logger.warn(

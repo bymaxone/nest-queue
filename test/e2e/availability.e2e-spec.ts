@@ -130,13 +130,23 @@ describe('E2E — a Redis that goes away and comes back', () => {
   }, 120_000)
 })
 
-describe('E2E — the process after app.close() with a handler that never settles', () => {
-  it('exits by itself within the drain budget plus a small margin, with no renewal errors', async () => {
+describe('E2E — the process after app.close() with a handler that outlasts the drain budget', () => {
+  /** Run the fixture host and report when it printed CLOSED, when it exited and what it wrote after. */
+  async function runChild(handlerSettlesMs: number): Promise<{
+    closedAt: number
+    exitedAt: number
+    stderrAfterClose: string
+    stderr: string
+  }> {
     const dist = resolve(__dirname, '../../dist/server/index.mjs')
     if (!existsSync(dist)) execFileSync('pnpm', ['build'], { cwd: resolve(__dirname, '../..') })
 
     const child = spawn(process.execPath, [resolve(__dirname, 'fixtures/stuck-worker.child.mjs')], {
-      env: { ...process.env, REDIS_URL: URL },
+      env: {
+        ...process.env,
+        REDIS_URL: URL,
+        HANDLER_SETTLES_MS: String(handlerSettlesMs),
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     let stdout = ''
@@ -159,10 +169,26 @@ describe('E2E — the process after app.close() with a handler that never settle
     const waitUntil = Date.now() + 30_000
     while (exitedAt === 0 && Date.now() < waitUntil) await sleep(100)
     if (exitedAt === 0) child.kill('SIGKILL')
+    return { closedAt, exitedAt, stderrAfterClose, stderr }
+  }
+
+  it('exits by itself within the drain budget plus a small margin when it never settles', async () => {
+    const { closedAt, exitedAt, stderrAfterClose, stderr } = await runChild(0)
 
     expect(exitedAt).toBeGreaterThan(0)
     expect(closedAt).toBeGreaterThan(0)
     // The close itself took the drain budget (1 s); the process was gone within a few seconds more.
+    expect(exitedAt - closedAt).toBeLessThan(3000)
+    expect(stderrAfterClose).not.toContain('Connection is closed')
+    expect(stderr).not.toContain('CHILD ERROR')
+  }, 90_000)
+
+  // The handler settles 0.5 s after the budget ended: the worker that was stopped must stay stopped.
+  it('exits by itself when the handler settles after the budget ended', async () => {
+    const { closedAt, exitedAt, stderrAfterClose, stderr } = await runChild(1500)
+
+    expect(exitedAt).toBeGreaterThan(0)
+    expect(closedAt).toBeGreaterThan(0)
     expect(exitedAt - closedAt).toBeLessThan(3000)
     expect(stderrAfterClose).not.toContain('Connection is closed')
     expect(stderr).not.toContain('CHILD ERROR')

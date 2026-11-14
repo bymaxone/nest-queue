@@ -20,6 +20,7 @@ import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { describeError } from '../utils/describe-error'
 import { withDeadline } from '../utils/with-deadline'
 import { isTimerDelayMs } from '../utils/timer-delay'
+import { isAbandoned } from '../utils/abandoned-workers'
 import type { WorkerOptions } from '../interfaces/worker-options.interface'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
@@ -140,7 +141,7 @@ export class WorkerRegistry {
     try {
       worker = new Worker<TData, TResult>(
         queueName,
-        toProcessor(handler, options?.jobTimeoutMs),
+        toProcessor(handler, options?.jobTimeoutMs, () => isAbandoned(worker)),
         bullOpts,
       )
     } catch (cause) {
@@ -479,7 +480,7 @@ class JobTimeoutError extends Error {
  * slot frees; the handler's own promise is not cancelled. The relay listener on BullMQ's signal is
  * removed as soon as the job settles.
  */
-function toProcessor<TData, TResult>(
+function adaptHandler<TData, TResult>(
   handler: (job: Job<TData, TResult>, signal?: AbortSignal) => Promise<TResult>,
   timeoutMs: number | undefined,
 ): (job: Job<TData, TResult>, token?: string, signal?: AbortSignal) => Promise<TResult> {
@@ -506,4 +507,27 @@ function toProcessor<TData, TResult>(
       signal?.removeEventListener('abort', relay)
     })
   }
+}
+
+/**
+ * The processor BullMQ is given: the adapted handler, whose outcome is dropped once the worker has
+ * been abandoned by the shutdown. A dropped outcome leaves the returned promise pending for good,
+ * so BullMQ never resumes the worker that the shutdown already stopped; the job's lock is gone and
+ * it is retried elsewhere, so nothing is lost that was not already. It still declares three
+ * parameters, which is what makes BullMQ create the per-job signal.
+ */
+function toProcessor<TData, TResult>(
+  handler: (job: Job<TData, TResult>, signal?: AbortSignal) => Promise<TResult>,
+  timeoutMs: number | undefined,
+  abandoned: () => boolean,
+): (job: Job<TData, TResult>, token?: string, signal?: AbortSignal) => Promise<TResult> {
+  const run = adaptHandler(handler, timeoutMs)
+  return (job, token, signal) =>
+    run(job, token, signal).then(
+      (value) => (abandoned() ? new Promise<never>(() => undefined) : value),
+      (error: unknown) => {
+        if (abandoned()) return new Promise<never>(() => undefined)
+        throw error
+      },
+    )
 }

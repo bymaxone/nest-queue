@@ -26,10 +26,14 @@ try {
   let active = false
   app.get(WorkerRegistry).register({
     queueName: 'stuck',
-    handler: () =>
-      new Promise(() => {
-        active = true
-      }),
+    handler: () => {
+      active = true
+      // Settles after this many ms when set (a slow job that outlasts the budget), never otherwise.
+      const settlesAfter = Number(process.env.HANDLER_SETTLES_MS ?? 0)
+      return new Promise((resolve) => {
+        if (settlesAfter > 0) setTimeout(resolve, settlesAfter)
+      })
+    },
     options: { lockDuration: 2000 },
   })
   await app.get(QueueService).enqueue('stuck', 'job', {})

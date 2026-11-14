@@ -10,6 +10,7 @@ import { Logger } from '@nestjs/common'
 import type { Queue, QueueEvents, Worker } from 'bullmq'
 import type { Redis } from 'ioredis'
 import { QueueLifecycle } from './queue-lifecycle.service'
+import { isAbandoned } from '../utils/abandoned-workers'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import type { ConnectionResolver } from '../services/connection-resolver.service'
@@ -336,6 +337,30 @@ describe('QueueLifecycle shutdown — stopping a worker', () => {
     await pending
 
     expect(close.mock.calls).toEqual([[true]])
+  })
+
+  // A handler that settles after the budget would let BullMQ's pause reopen the blocking connection.
+  it('marks a worker it stops without draining as abandoned, and no other', async () => {
+    jest.useFakeTimers()
+    const stuck = makeWorker(
+      jest.fn().mockResolvedValue(undefined),
+      jest.fn().mockReturnValue(new Promise(() => undefined)),
+    )
+    const drained = makeWorker(jest.fn().mockResolvedValue(undefined))
+    const { lifecycle } = makeLifecycle({
+      workers: new Map([
+        ['stuck', stuck],
+        ['drained', drained],
+      ]),
+      resolved: makeResolved({ drainTimeoutMs: 1000 }),
+    })
+
+    const pending = lifecycle.onModuleDestroy()
+    await jest.advanceTimersByTimeAsync(1000)
+    await pending
+
+    expect(isAbandoned(stuck)).toBe(true)
+    expect(isAbandoned(drained)).toBe(false)
   })
 
   it('stops a worker whose pause fails the same way, with the real cause in the log', async () => {
