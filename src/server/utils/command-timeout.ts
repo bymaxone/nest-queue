@@ -37,12 +37,18 @@ export function timeoutException(
  *
  * @param operation - The public call that was refused.
  * @param cause - The error ioredis rejected with, kept for diagnosis.
+ * @param reason - `offline` for a call refused while the connection is down; `unavailable` for a
+ *   startup that ended because Redis could not be reached.
  */
-export function unavailableException(operation: string, cause: unknown): QueueException {
+export function unavailableException(
+  operation: string,
+  cause: unknown,
+  reason: 'offline' | 'unavailable' = 'offline',
+): QueueException {
   const exception = new QueueException(
     QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
     HttpStatus.SERVICE_UNAVAILABLE,
-    { operation, reason: 'offline' },
+    { operation, reason },
   )
   exception.cause = cause
   return exception

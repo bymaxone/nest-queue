@@ -76,6 +76,20 @@ export default tseslint.config(
     },
   },
   {
+    // AGENTS.md: a function over 50 lines is a finding for what a change introduces. Lines are
+    // counted raw (blank lines and comments included), the way a reviewer reads the file. Tests are
+    // out of scope: their unit is the body of a single `it`, and `describe` callbacks are grouping
+    // constructs this rule cannot tell apart.
+    files: ['src/**/*.ts'],
+    ignores: ['src/**/*.spec.ts'],
+    rules: {
+      'max-lines-per-function': [
+        'error',
+        { max: 50, skipBlankLines: false, skipComments: false, IIFEs: true },
+      ],
+    },
+  },
+  {
     files: ['**/*.spec.ts', 'test/**/*.ts'],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'off',

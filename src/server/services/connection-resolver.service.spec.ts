@@ -506,7 +506,77 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     expect((err as QueueException).getResponse()).toMatchObject({
       error: { code: QUEUE_ERROR_CODES.CONNECTION_INVALID },
     })
+    // No error was recorded, so nothing says Redis was unreachable: only our own disconnect ends a
+    // client that way, and a retry cannot change it.
+    expect((err as QueueException).getStatus()).toBe(500)
     expect(client.disconnect).toHaveBeenCalledTimes(1)
+  })
+
+  describe('an ended client, by the last error it recorded', () => {
+    /** Run a startup whose client raises `error` and then ends; the exception it rejects with. */
+    async function endedAfter(error: unknown): Promise<QueueException> {
+      const client = new FakeRedis('connecting', null)
+      redisConstructor.mockReturnValue(asRedis(client))
+      const init = new ConnectionResolver(optionsWith({ url: 'redis://localhost:6379' }))
+        .init()
+        .then(
+          () => undefined,
+          (err: unknown) => err,
+        )
+      client.emit('error', error)
+      client.emit('end')
+      return (await init) as QueueException
+    }
+
+    // `localhost` resolves to two addresses, so Node raises one AggregateError that carries the
+    // code of its attempts and has an empty message: the code is the only thing to read.
+    it('is unavailable (503) for the AggregateError a host with several addresses raises', async () => {
+      const err = await endedAfter(
+        Object.assign(new AggregateError([], ''), { code: 'ECONNREFUSED' }),
+      )
+
+      expect(err.getStatus()).toBe(503)
+      expect(err.getResponse()).toMatchObject({
+        error: {
+          code: QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
+          details: { operation: 'connect', reason: 'unavailable' },
+        },
+      })
+    })
+
+    it.each([
+      'ECONNREFUSED',
+      'ECONNRESET',
+      'ETIMEDOUT',
+      'EPIPE',
+      'ENOTFOUND',
+      'EAI_AGAIN',
+      'EHOSTUNREACH',
+      'ENETUNREACH',
+    ])('is unavailable (503) for the network code %s', async (code) => {
+      const err = await endedAfter(Object.assign(new Error(`connect ${code}`), { code }))
+
+      expect(err.getStatus()).toBe(503)
+    })
+
+    it('is unavailable (503) for the command timeout of the ready check, which has no code', async () => {
+      const err = await endedAfter(new Error('Command timed out'))
+
+      expect(err.getStatus()).toBe(503)
+      expect((err.cause as Error).message).toBe('Command timed out')
+    })
+
+    it.each([
+      ['a code outside the network set', Object.assign(new Error('boom'), { code: 'EACCES' })],
+      ['an error with no code and another message', new Error('Connection is closed.')],
+    ])('stays CONNECTION_INVALID (500) for %s', async (_label, error) => {
+      const err = await endedAfter(error)
+
+      expect(err.getStatus()).toBe(500)
+      expect(err.getResponse()).toMatchObject({
+        error: { code: QUEUE_ERROR_CODES.CONNECTION_INVALID },
+      })
+    })
   })
 
   it('quits the owned client on destroy', async () => {

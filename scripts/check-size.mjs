@@ -6,15 +6,15 @@ import { brotliCompressSync } from 'node:zlib'
 /**
  * Brotli-compressed bundle budgets in bytes, measured on the bundles after
  * `scripts/strip-bundle-comments.mjs`. The server entry carries the full NestJS module surface; the
- * shared entry is types and constants only. The server budget is the measured artifact (10,832 B with
+ * shared entry is types and constants only. The server budget is the measured artifact (11,013 B with
  * the per-job timeout, the jitter default, the bounded getJobs, the command-timeout code, the shared
- * ready-wait, the per-call deadline, the worker option bounds, the flow deadline and the disconnect guard) plus a margin
- * of 18 B. It is set from what was built and
+ * ready-wait, the per-call deadline, the worker option bounds, the flow deadline, the disconnect guard and the startup
+ * outage classifier) plus a margin of 27 B. It is set from what was built and
  * raised only after the next measurement, never ahead of it. The shared bundle
  * (396 B) keeps about 11% headroom.
  */
 const BUDGETS = {
-  'dist/server/index.mjs': 10_850,
+  'dist/server/index.mjs': 11_040,
   'dist/shared/index.mjs': 440,
 }
 

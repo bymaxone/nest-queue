@@ -45,6 +45,11 @@ interface WithConstructor {
   constructor: object
 }
 
+/** The listener metadata a decorator wrote on `ctor` under `key`, or none. */
+function listenersOf(ctor: unknown, key: string | symbol): QueueEventListenerMetadata[] {
+  return (Reflect.getOwnMetadata(key, ctor as object) ?? []) as QueueEventListenerMetadata[]
+}
+
 /**
  * Scans all registered NestJS providers at bootstrap, discovers classes
  * annotated with `@Processor`, and wires each into BullMQ:
@@ -144,9 +149,47 @@ export class ProcessorDiscoveryService implements OnModuleInit {
     instance: Record<string | symbol, unknown>,
     processorMeta: ProcessorMetadata,
   ): void {
-    const { queueName, workerOptions, _warnedNoConcurrency } = processorMeta
+    const { queueName, workerOptions } = processorMeta
     const ctor = (instance as WithConstructor).constructor
+    this.claimQueue(processorMeta)
 
+    const handlers = (Reflect.getOwnMetadata(PROCESS_HANDLERS_METADATA_KEY, ctor) ??
+      []) as ProcessHandlerMetadata[]
+    const dispatcher = this.buildDispatcher(instance, handlers)
+
+    const worker = this.workers.register({
+      queueName,
+      handler: dispatcher,
+      options: workerOptions,
+    })
+
+    this.bindListeners(
+      worker,
+      instance,
+      listenersOf(ctor, WORKER_EVENT_LISTENERS_METADATA_KEY),
+      '@OnWorkerEvent',
+    )
+
+    const queueListeners = listenersOf(ctor, QUEUE_EVENT_LISTENERS_METADATA_KEY)
+    if (queueListeners.length > 0) {
+      this.bindListeners(
+        this.events.getOrCreate(queueName),
+        instance,
+        queueListeners,
+        '@OnQueueEvent',
+      )
+    }
+  }
+
+  /**
+   * Take the queue name for this processor: refuse a second processor for the same queue, and warn
+   * when the decorator left `concurrency` to the default.
+   *
+   * @param processorMeta - Metadata written by `@Processor`.
+   * @throws {QueueException} `DUPLICATE_PROCESSOR` when another processor already claimed the queue.
+   */
+  private claimQueue(processorMeta: ProcessorMetadata): void {
+    const { queueName, _warnedNoConcurrency } = processorMeta
     if (this.registeredQueues.has(queueName)) {
       throw new QueueException(
         QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR,
@@ -163,51 +206,34 @@ export class ProcessorDiscoveryService implements OnModuleInit {
           'Set an explicit concurrency for production workloads.',
       )
     }
+  }
 
-    const handlers = (Reflect.getOwnMetadata(PROCESS_HANDLERS_METADATA_KEY, ctor) ??
-      []) as ProcessHandlerMetadata[]
-    const dispatcher = this.buildDispatcher(instance, handlers)
-
-    const worker = this.workers.register({
-      queueName,
-      handler: dispatcher,
-      options: workerOptions,
-    })
-
-    const workerListeners = (Reflect.getOwnMetadata(WORKER_EVENT_LISTENERS_METADATA_KEY, ctor) ??
-      []) as QueueEventListenerMetadata[]
-    const workerEmitter = worker as unknown as GenericEmitter
-    for (const { eventName, methodKey } of workerListeners) {
+  /**
+   * Attach each declared listener that names a method of `instance` to `emitter`, guarded so a
+   * failing handler is reported instead of escaping. A name that is not a method is skipped.
+   *
+   * @param emitter - The Worker or QueueEvents the listeners are bound to.
+   * @param instance - The provider the handlers belong to.
+   * @param listeners - The metadata written by the event decorator.
+   * @param decorator - The decorator's name, for the failure log.
+   */
+  private bindListeners(
+    emitter: GenericEmitter,
+    instance: Record<string | symbol, unknown>,
+    listeners: readonly QueueEventListenerMetadata[],
+    decorator: string,
+  ): void {
+    for (const { eventName, methodKey } of listeners) {
       const method = instance[methodKey]
       if (typeof method === 'function') {
-        workerEmitter.on(
+        emitter.on(
           eventName,
           this.guardListener(instance, method as (...args: unknown[]) => unknown, {
-            decorator: '@OnWorkerEvent',
+            decorator,
             eventName,
             methodKey,
           }),
         )
-      }
-    }
-
-    const queueListeners = (Reflect.getOwnMetadata(QUEUE_EVENT_LISTENERS_METADATA_KEY, ctor) ??
-      []) as QueueEventListenerMetadata[]
-    if (queueListeners.length > 0) {
-      const qe = this.events.getOrCreate(queueName)
-      const qeEmitter = qe as unknown as GenericEmitter
-      for (const { eventName, methodKey } of queueListeners) {
-        const method = instance[methodKey]
-        if (typeof method === 'function') {
-          qeEmitter.on(
-            eventName,
-            this.guardListener(instance, method as (...args: unknown[]) => unknown, {
-              decorator: '@OnQueueEvent',
-              eventName,
-              methodKey,
-            }),
-          )
-        }
       }
     }
   }
