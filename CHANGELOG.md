@@ -39,7 +39,7 @@ enqueue that Redis answers and a job that completes behave as before.
   `commandTimeout` you set), and `enqueue` and `enqueueBulk` reject with `CONNECTION_TIMEOUT` after
   `enqueueTimeoutMs` (10 s) in either connection mode. A command that hits the connection's deadline
   is reported the same way, as `CONNECTION_TIMEOUT` with `details.operation` and `timeoutMs` and the
-  original error as `cause`, for every `QueueService` and `FlowService` call that reaches Redis.
+  original error as `cause`.
 - **The owned connection no longer buffers commands during an outage.** Its offline queue is off, so
   a call made while Redis is down fails at once instead of waiting in memory. Set `options.enableOfflineQueue: true` to keep the old
   behaviour. Worker and QueueEvents connections keep their offline queue and have no command deadline.
