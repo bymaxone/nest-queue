@@ -211,7 +211,12 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
    * Mode A is a no-op for the consumer's shared client.
    */
   private async teardownConnection(): Promise<void> {
-    await this.connection.teardown().catch(() => undefined)
+    // What is left of the one shutdown budget, with the grace a force close gets: a quit that the
+    // workers' drain left no time for still has long enough to be answered by a healthy Redis.
+    const budget = (this.startedAt ?? Date.now()) + this.resolved.shutdown.drainTimeoutMs
+    await this.connection
+      .teardown(Math.max(budget - Date.now(), FORCE_CLOSE_GRACE_MS))
+      .catch(() => undefined)
   }
 }
 
