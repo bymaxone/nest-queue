@@ -230,15 +230,11 @@ export class QueueService {
     jobs: readonly BulkJob<TData>[],
   ): Promise<TypedJob<TData, TResult>[]> {
     if (jobs.length > MAX_BULK_SIZE) {
-      throw new QueueException(
-        QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED,
-        HttpStatus.INTERNAL_SERVER_ERROR,
-        {
-          reason: 'batch size exceeds limit',
-          limit: MAX_BULK_SIZE,
-          received: jobs.length,
-        },
-      )
+      throw new QueueException(QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED, HttpStatus.BAD_REQUEST, {
+        reason: 'batch size exceeds limit',
+        limit: MAX_BULK_SIZE,
+        received: jobs.length,
+      })
     }
     try {
       const created = await this.call('enqueueBulk', queueName, () =>
@@ -298,7 +294,7 @@ export class QueueService {
     start = 0,
     end = 50,
   ): Promise<TypedJob<TData, TResult>[]> {
-    assertPageWindow('getJobs', start, end)
+    assertPageWindow('getJobs', 'jobs', start, end)
     const jobs = await this.call('getJobs', queueName, () =>
       this.queueFor(queueName).getJobs([status], start, end),
     )
@@ -392,7 +388,7 @@ export class QueueService {
     end = 50,
     asc = true,
   ): Promise<Awaited<ReturnType<Queue['getJobSchedulers']>>> {
-    assertPageWindow('getJobSchedulers', start, end)
+    assertPageWindow('getJobSchedulers', 'schedulers', start, end)
     return this.call('getJobSchedulers', queueName, () =>
       this.queueFor(queueName).getJobSchedulers(start, end, asc),
     )

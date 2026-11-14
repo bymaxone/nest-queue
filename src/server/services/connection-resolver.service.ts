@@ -235,9 +235,11 @@ export class ConnectionResolver {
         client.off('error', onError)
         client.off('end', onEnd)
       }
-      const fail = (code: string, extra: Record<string, unknown>): void => {
+      // The status follows the cause: a budget that ended means Redis is unavailable (retry may
+      // help), a refused credential or an ended client is a configuration fault (retry cannot).
+      const fail = (code: string, status: HttpStatus, extra: Record<string, unknown>): void => {
         cleanup()
-        reject(new QueueException(code, HttpStatus.INTERNAL_SERVER_ERROR, details(extra)))
+        reject(new QueueException(code, status, details(extra)))
       }
       const onReady = (): void => {
         cleanup()
@@ -245,13 +247,14 @@ export class ConnectionResolver {
       }
       const onError = (err: unknown): void => {
         lastErrorCode = startupErrorCode(err)
-        if (isReplyError(err)) fail(QUEUE_ERROR_CODES.CONNECTION_INVALID, {})
+        if (isReplyError(err))
+          fail(QUEUE_ERROR_CODES.CONNECTION_INVALID, HttpStatus.INTERNAL_SERVER_ERROR, {})
       }
       const onEnd = (): void => {
-        fail(QUEUE_ERROR_CODES.CONNECTION_INVALID, {})
+        fail(QUEUE_ERROR_CODES.CONNECTION_INVALID, HttpStatus.INTERNAL_SERVER_ERROR, {})
       }
       const timer = setTimeout(() => {
-        fail(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT, { timeoutMs })
+        fail(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT, HttpStatus.SERVICE_UNAVAILABLE, { timeoutMs })
       }, timeoutMs)
       client.once('ready', onReady)
       client.on('error', onError)

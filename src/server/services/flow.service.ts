@@ -98,11 +98,11 @@ export class FlowService {
   async addBulk(flows: readonly FlowJob[]): Promise<JobNode[]> {
     const producer = this.requireProducer()
     if (flows.length > MAX_BULK_SIZE) {
-      throw new QueueException(
-        QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED,
-        HttpStatus.INTERNAL_SERVER_ERROR,
-        { reason: 'batch size exceeds limit', limit: MAX_BULK_SIZE, received: flows.length },
-      )
+      throw new QueueException(QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED, HttpStatus.BAD_REQUEST, {
+        reason: 'batch size exceeds limit',
+        limit: MAX_BULK_SIZE,
+        received: flows.length,
+      })
     }
     return this.bounded('addFlowBulk', producer.addBulk([...flows]))
   }

@@ -13,11 +13,17 @@ import { MAX_JOBS_PAGE_SIZE } from '../constants/default-options'
  * end", so an open window returns every entry in one reply.
  *
  * @param operation - The public method name, used in the reason.
+ * @param noun - What the window counts, used in the reason.
  * @param start - First index, inclusive.
  * @param end - Last index, inclusive.
  * @throws {QueueException} `INVALID_OPTIONS` (400) when the window is unbounded or malformed.
  */
-export function assertPageWindow(operation: string, start: number, end: number): void {
+export function assertPageWindow(
+  operation: string,
+  noun: string,
+  start: number,
+  end: number,
+): void {
   if (
     !Number.isInteger(start) ||
     !Number.isInteger(end) ||
@@ -26,7 +32,7 @@ export function assertPageWindow(operation: string, start: number, end: number):
     end - start >= MAX_JOBS_PAGE_SIZE
   ) {
     throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, HttpStatus.BAD_REQUEST, {
-      reason: `${operation} needs integers with 0 <= start <= end and at most ${String(MAX_JOBS_PAGE_SIZE)} jobs per call`,
+      reason: `${operation} needs integers with 0 <= start <= end and at most ${String(MAX_JOBS_PAGE_SIZE)} ${noun} per call`,
     })
   }
 }

@@ -170,6 +170,7 @@ describe('ConnectionResolver Mode B startup, with real ioredis', () => {
       error: { code: string; details: unknown }
     }
     expect(body.error.code).toBe(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT)
+    expect((failure as QueueException).getStatus()).toBe(503)
     expect(body.error.details).toEqual({ timeoutMs: 500, lastErrorCode: 'ECONNREFUSED' })
     expect(JSON.stringify(body)).not.toContain('s3cr3t')
     // A client left reconnecting would connect as soon as something listens; this one must not.

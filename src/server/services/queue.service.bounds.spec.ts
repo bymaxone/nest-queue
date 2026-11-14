@@ -90,7 +90,7 @@ describe('QueueService — what a timed-out call reports', () => {
     expect(envelope(await outcome)).toStrictEqual({
       code: QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
       details: { operation, timeoutMs: 10_000 },
-      status: 500,
+      status: 503,
     })
   })
 })
@@ -107,6 +107,33 @@ describe('QueueService — enqueueBulk failures', () => {
       .catch((e: unknown) => e)
 
     expect(envelope(err).code).toBe(QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED)
+  })
+
+  // The status follows the cause: a batch the caller made too large is theirs to fix, a failure
+  // of unknown cause inside the call is not.
+  it('answers 400 for a batch over the cap and 500 for a wrapped failure', async () => {
+    const { service, queue } = makeService()
+    queue.addBulk.mockRejectedValue(new Error('boom'))
+
+    const oversized = await service
+      .enqueueBulk(
+        'email',
+        Array.from({ length: 1001 }, () => ({ name: 'send', data: {} })),
+      )
+      .catch((e: unknown) => e)
+    const wrapped = await service
+      .enqueueBulk('email', [{ name: 'send', data: {} }])
+      .catch((e: unknown) => e)
+
+    expect(envelope(oversized)).toMatchObject({
+      code: QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED,
+      status: 400,
+    })
+    expect(queue.addBulk).toHaveBeenCalledTimes(1)
+    expect(envelope(wrapped)).toMatchObject({
+      code: QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED,
+      status: 500,
+    })
   })
 })
 
