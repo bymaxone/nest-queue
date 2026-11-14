@@ -129,7 +129,7 @@ describe('error response contract — no text of an underlying failure in a resp
   )
 
   it('inventories every construction site it is meant to scan', () => {
-    expect(calls.length).toBeGreaterThanOrEqual(25)
+    expect(calls.length).toBeGreaterThanOrEqual(26)
   })
 
   // The text of an underlying error (a driver's message, a host name, a credential keyword) tells
