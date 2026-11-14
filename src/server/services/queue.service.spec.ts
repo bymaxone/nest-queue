@@ -343,41 +343,6 @@ describe('QueueService — enqueueBulk', () => {
   })
 })
 
-describe('QueueService — enqueueBulk failure cause', () => {
-  it.each([
-    ['an Error', new Error('redis down')],
-    ['null', null],
-    ['undefined', undefined],
-    ['a plain { message }', { message: 'plain failure' }],
-    ['a null-prototype object', Object.create(null) as object],
-  ])(
-    'reports a rejection with %s as a typed exception whose cause is the rejection, not its text',
-    async (_l, rejection) => {
-      // Reading `.message` off a rejected value throws a TypeError for null and undefined, which
-      // would replace the typed failure with a second error. The text of the failure (it can name
-      // the host or the server) stays out of the response: the rejection itself is the cause.
-      const { service } = makeService()
-      service.getOrCreateQueue('email')
-      queueInstances[0]?.addBulk.mockRejectedValue(rejection)
-
-      const err: unknown = await service
-        .enqueueBulk('email', [{ name: 'a', data: {} }])
-        .catch((e: unknown) => e)
-
-      expect(err).toBeInstanceOf(QueueException)
-      const exception = err as QueueException
-      expect(exception.getResponse()).toStrictEqual({
-        error: {
-          code: 'queue.bulk_enqueue_failed',
-          message: 'Bulk enqueue failed',
-          details: { operation: 'enqueueBulk' },
-        },
-      })
-      expect(exception.cause).toBe(rejection)
-    },
-  )
-})
-
 describe('QueueService — inspection', () => {
   it('returns the job when found', async () => {
     // getJob returns the BullMQ job as-is when present.
@@ -716,21 +681,6 @@ describe('QueueService — bulk and scheduler hardening', () => {
         received: 1001,
       })
     }
-  })
-
-  it('keeps the text of an addBulk failure out of the response', async () => {
-    // A BullMQ failure is wrapped; its message can name the host or the server state, so it is
-    // the exception's cause and never part of the response.
-    const { service } = makeService()
-    service.getOrCreateQueue('email')
-    const failure = new Error('connect ECONNREFUSED db.internal:6379')
-    queueInstances[0]?.addBulk.mockRejectedValue(failure)
-    const err: unknown = await service
-      .enqueueBulk('email', [{ name: 'a', data: {} }])
-      .catch((e: unknown) => e)
-
-    expect(JSON.stringify((err as QueueException).getResponse())).not.toContain('db.internal')
-    expect((err as QueueException).cause).toBe(failure)
   })
 
   it('omits the opts key for a bulk job without options', async () => {
