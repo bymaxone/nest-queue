@@ -18,5 +18,9 @@
   {
     "file": "src/stryker-scope.spec.ts",
     "reason": "Reads stryker.config.json, tsup.config.ts and the source text to pin the mutation scope; it executes no code under src, so it can kill no mutant."
+  },
+  {
+    "file": "src/server/constants/default-options.spec.ts",
+    "reason": "Reads DEFAULT_JOB_OPTIONS from src/server/constants, which the mutation scope excludes by design (the constant tables are mutated by pnpm mutation:const-tables), and feeds it to BullMQ's own backoff strategy; it executes no code the run mutates, so it can kill no mutant."
   }
 ]
