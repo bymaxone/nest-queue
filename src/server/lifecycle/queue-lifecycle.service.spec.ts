@@ -319,6 +319,49 @@ describe('QueueLifecycle shutdown — one overall budget', () => {
     expect(quit).toHaveBeenCalledTimes(4)
   })
 
+  it('does not force a worker that closes inside the budget', async () => {
+    jest.useFakeTimers()
+    const close = jest.fn().mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, 1000)
+        }),
+    )
+    const { lifecycle } = makeLifecycle({
+      workers: new Map([['slowish', makeWorker(close)]]),
+      resolved: makeResolved({ drainTimeoutMs: 5000 }),
+    })
+
+    const pending = lifecycle.onModuleDestroy()
+    await jest.advanceTimersByTimeAsync(1000)
+    await pending
+
+    expect(warnSpy).not.toHaveBeenCalled()
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(close).not.toHaveBeenCalledWith(true)
+  })
+
+  it('forces a stuck worker exactly when the budget runs out, not before', async () => {
+    jest.useFakeTimers()
+    const close = jest
+      .fn()
+      .mockImplementation((force?: boolean) =>
+        force === true ? Promise.resolve() : new Promise<void>(() => undefined),
+      )
+    const { lifecycle } = makeLifecycle({
+      workers: new Map([['stuck', makeWorker(close)]]),
+      resolved: makeResolved({ drainTimeoutMs: 3000 }),
+    })
+
+    const pending = lifecycle.onModuleDestroy()
+    await jest.advanceTimersByTimeAsync(2999)
+    expect(close).not.toHaveBeenCalledWith(true)
+    await jest.advanceTimersByTimeAsync(1)
+    await pending
+
+    expect(close).toHaveBeenCalledWith(true)
+  })
+
   it('does not let a worker that closes in time wait on one that does not', async () => {
     jest.useFakeTimers()
     const fast = jest.fn<Promise<void>, []>().mockResolvedValue(undefined)

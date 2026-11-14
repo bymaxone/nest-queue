@@ -98,6 +98,7 @@ describe('WorkerRegistry — jobTimeoutMs', () => {
     const err = await outcome
     expect(err).toBeInstanceOf(Error)
     expect(err).not.toBeInstanceOf(QueueException)
+    expect((err as Error).name).toBe('JobTimeoutError')
     expect((err as Error).message).toContain('queue.job_timeout')
     expect((err as Error).message).toContain('3000')
     expect(seen?.aborted).toBe(true)
@@ -209,29 +210,63 @@ describe('WorkerRegistry — the processor BullMQ is given', () => {
   })
 })
 
+/** The `{ error: { code, details } }` envelope of the QueueException a call throws. */
+function thrownEnvelope(call: () => unknown): { error: { code: string; details: unknown } } {
+  try {
+    call()
+  } catch (err) {
+    return (err as QueueException).getResponse() as { error: { code: string; details: unknown } }
+  }
+  throw new Error('the call did not throw')
+}
+
 describe('WorkerRegistry — jobTimeoutMs validation', () => {
   it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648])(
-    'refuses %s when registering',
+    'refuses %s when registering, and says why',
     (bad) => {
       const registry = new WorkerRegistry(fakeConnection(), makeOptions())
-      expect(() => {
+
+      const { error } = thrownEnvelope(() => {
         registry.register({
           queueName: 'q',
           handler: () => Promise.resolve(),
           options: { jobTimeoutMs: bad },
         })
-      }).toThrow(QueueException)
+      })
+
+      expect(error.code).toBe('queue.worker_registration_failed')
+      expect(error.details).toStrictEqual({
+        reason: 'jobTimeoutMs must be a number from 1 to 2147483647',
+        actual: bad,
+      })
     },
   )
 
+  it.each([1, 2_147_483_647])('accepts %s, the ends of the supported range', (ok) => {
+    const registry = new WorkerRegistry(fakeConnection(), makeOptions())
+
+    expect(() =>
+      registry.register({
+        queueName: 'q',
+        handler: () => Promise.resolve(),
+        options: { jobTimeoutMs: ok },
+      }),
+    ).not.toThrow()
+  })
+
   it('refuses the option for a sandboxed worker, whose processor runs out of process', () => {
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())
-    expect(() => {
+
+    const { error } = thrownEnvelope(() => {
       registry.registerSandboxed({
         queueName: 'q',
         processorFile: '/abs/processor.js',
         options: { jobTimeoutMs: 1000 },
       })
-    }).toThrow(QueueException)
+    })
+
+    expect(error.details).toStrictEqual({
+      reason: 'jobTimeoutMs is not available for sandboxed workers',
+    })
   })
 })

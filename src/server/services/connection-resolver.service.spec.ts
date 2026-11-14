@@ -70,7 +70,12 @@ describe('ConnectionResolver — Mode A (bring your own client)', () => {
     await new ConnectionResolver(optionsWith({ client: asRedis(client) })).init()
 
     expect(warn).toHaveBeenCalledTimes(1)
-    expect(String(warn.mock.calls[0]?.[0])).toContain('maxRetriesPerRequest')
+    expect(warn.mock.calls[0]?.[0]).toBe(
+      'The shared client has maxRetriesPerRequest: null, so a producer call made while Redis is ' +
+        'unreachable waits for as long as the outage lasts; enqueue is bounded by ' +
+        'enqueueTimeoutMs, other QueueService calls are not. Give the client a finite limit to ' +
+        'fail fast.',
+    )
     warn.mockRestore()
   })
 
@@ -399,7 +404,7 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
       error: { code: string; details: unknown }
     }
     expect(body.error.code).toBe(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT)
-    expect(body.error.details).toEqual({ timeoutMs: 1000 })
+    expect(body.error.details).toStrictEqual({ timeoutMs: 1000 })
     jest.useRealTimers()
   })
 
@@ -408,6 +413,8 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     // (or a reply with no message at all) gives no code to carry.
     for (const reply of [
       { name: 'ReplyError', message: 'lower case start' },
+      { name: 'ReplyError', message: 'invalid WRONGPASS later on' },
+      { name: 'ReplyError', message: { toString: () => 'WRONGPASS' } },
       { name: 'ReplyError' },
     ]) {
       const client = new FakeRedis('connecting', null)
@@ -424,8 +431,58 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
         error: { code: string; details: unknown }
       }
       expect(body.error.code).toBe(QUEUE_ERROR_CODES.CONNECTION_INVALID)
-      expect(body.error.details).toEqual({})
+      expect(body.error.details).toStrictEqual({})
     }
+  })
+
+  it('takes no code from the message of an error that is not a server reply', async () => {
+    // Only a server reply carries a leading token worth reporting; an ordinary error whose message
+    // merely looks like one leaves the exception without `lastErrorCode`.
+    jest.useFakeTimers()
+    const client = new FakeRedis('connecting', null)
+    redisConstructor.mockReturnValue(asRedis(client))
+    const failure = new ConnectionResolver({
+      connection: { url: 'redis://localhost:6379' },
+      connectionReadyTimeoutMs: 1000,
+    })
+      .init()
+      .then(
+        () => undefined,
+        (err: unknown) => err,
+      )
+    client.emit('error', new Error('WRONGPASS lookalike'))
+    jest.advanceTimersByTime(1000)
+
+    const body = ((await failure) as QueueException).getResponse() as {
+      error: { details: unknown }
+    }
+    expect(body.error.details).toStrictEqual({ timeoutMs: 1000 })
+    jest.useRealTimers()
+  })
+
+  it('survives an error event that carries no error object', async () => {
+    // A listener must not throw on `null` or `undefined`, or the failure would surface from `emit`.
+    const client = new FakeRedis('connecting', null)
+    redisConstructor.mockReturnValue(asRedis(client))
+    const init = new ConnectionResolver(optionsWith({ url: 'redis://localhost:6379' })).init()
+
+    expect(() => client.emit('error', null)).not.toThrow()
+    expect(() => client.emit('error', undefined)).not.toThrow()
+    client.emit('ready')
+
+    await expect(init).resolves.toBeUndefined()
+  })
+
+  it('leaves the end listeners as it found them once the client is ready', async () => {
+    const client = new FakeRedis('connecting', null)
+    redisConstructor.mockReturnValue(asRedis(client))
+    const before = client.listenerCount('end')
+    const init = new ConnectionResolver(optionsWith({ url: 'redis://localhost:6379' })).init()
+    expect(client.listenerCount('end')).toBe(before + 1)
+    client.emit('ready')
+    await init
+
+    expect(client.listenerCount('end')).toBe(before)
   })
 
   it('rejects at once, and disconnects, when the client gives up reconnecting', async () => {
