@@ -16,19 +16,45 @@
  * Exit codes: 0 pass · 1 assertion failed · 2 build artifacts missing.
  *
  * Usage: pnpm build && node scripts/dogfood-smoke-test.mjs
+ *
+ * With `PACKAGE_TARBALL=<file.tgz>` the checks run against that tarball instead of the working
+ * tree: it is unpacked to a temporary directory, its `dist/` and manifest are the ones imported and
+ * read, its listing is the one inspected, and the throwaway consumer installs the tarball itself,
+ * not a link to the repository. A release passes the tarball it is about to publish, as a copy.
  */
 
 import { execSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, symlinkSync, writeFileSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-// Created lazily inside the consumer section so an earlier `process.exit(2)`
-// leaks no temp dir.
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const TARBALL = process.env.PACKAGE_TARBALL ? resolve(process.env.PACKAGE_TARBALL) : undefined
+// Created lazily so an earlier `process.exit(2)` leaks no temp dir.
 let consumerDir
+let unpackDir
+
+// The package under test: the working tree, or the unpacked tarball.
+let ROOT = REPO_ROOT
+if (TARBALL !== undefined) {
+  if (!existsSync(TARBALL)) {
+    console.error(`PACKAGE_TARBALL does not exist: ${TARBALL}`)
+    process.exit(2)
+  }
+  unpackDir = mkdtempSync(join(tmpdir(), 'dogfood-package-'))
+  const unpack = spawnSync('tar', ['-xzf', TARBALL, '-C', unpackDir], { encoding: 'utf8' })
+  if (unpack.status !== 0) {
+    console.error(`Could not unpack ${TARBALL}\n${unpack.stderr ?? ''}`)
+    rmSync(unpackDir, { recursive: true, force: true })
+    process.exit(2)
+  }
+  ROOT = join(unpackDir, 'package')
+  // The peers (`@nestjs/*`, `bullmq`, `ioredis`, ...) resolve from the repository's own installed
+  // modules, as they do when the checks run on the working tree.
+  symlinkSync(join(REPO_ROOT, 'node_modules'), join(ROOT, 'node_modules'), 'dir')
+}
 
 const SUBPATHS = ['server', 'shared']
 // `.d.cts` is not decoration: it is the declaration file the `exports` map hands
@@ -104,6 +130,7 @@ for (const subpath of SUBPATHS) {
     const file = `dist/${subpath}/index.${ext}`
     if (!existsSync(resolve(ROOT, file))) {
       console.error(`Missing build artifact: ${file} — run \`pnpm build\` first.`)
+      if (unpackDir) rmSync(unpackDir, { recursive: true, force: true })
       process.exit(2)
     }
     pass(file)
@@ -136,16 +163,30 @@ for (const name of EXPECTED_SHARED_EXPORTS) {
 }
 
 // -- 5. Tarball contents -----------------------------------------------------
-section('5. Tarball contents (npm pack --dry-run)')
+section(TARBALL === undefined ? '5. Tarball contents (npm pack --dry-run)' : '5. Tarball contents')
 try {
-  const packOut = execSync('npm pack --dry-run 2>&1', { cwd: ROOT, encoding: 'utf8' })
-  const SIZE_RE = /\s+[\d.]+\s*(?:[Mm][Bb]|[Kk][Bb]?|[Bb])\s+\S+/
-  const SIZE_STRIP_RE = /.*npm notice\s+[\d.]+\s*(?:[Mm][Bb]|[Kk][Bb]?|[Bb])\s+/
-  const contentLines = packOut
-    .split('\n')
-    .filter((l) => l.includes('npm notice') && SIZE_RE.test(l))
-    .map((l) => l.replace(SIZE_STRIP_RE, '').trim())
-    .filter((l) => Boolean(l) && !l.startsWith('npm notice') && !/^sha\d+:/i.test(l))
+  let contentLines
+  if (TARBALL === undefined) {
+    const packOut = execSync('npm pack --dry-run 2>&1', { cwd: ROOT, encoding: 'utf8' })
+    const SIZE_RE = /\s+[\d.]+\s*(?:[Mm][Bb]|[Kk][Bb]?|[Bb])\s+\S+/
+    const SIZE_STRIP_RE = /.*npm notice\s+[\d.]+\s*(?:[Mm][Bb]|[Kk][Bb]?|[Bb])\s+/
+    contentLines = packOut
+      .split('\n')
+      .filter((l) => l.includes('npm notice') && SIZE_RE.test(l))
+      .map((l) => l.replace(SIZE_STRIP_RE, '').trim())
+      .filter((l) => Boolean(l) && !l.startsWith('npm notice') && !/^sha\d+:/i.test(l))
+  } else {
+    // The listing of the file itself: every entry sits under `package/`.
+    // `tar` gets the path as an argument, never through a shell, so no character in it is interpreted.
+    const list = spawnSync('tar', ['-tzf', TARBALL], { encoding: 'utf8' })
+    if (list.status !== 0)
+      throw new Error(`tar could not list the tarball\n${describeFailure(list)}`)
+    const listing = list.stdout
+    contentLines = listing
+      .split('\n')
+      .filter((l) => l.startsWith('package/') && !l.endsWith('/'))
+      .map((l) => l.slice('package/'.length))
+  }
   const unexpected = contentLines.filter(
     (f) =>
       !ALLOWED_TARBALL_PATHS.some(
@@ -203,7 +244,7 @@ try {
         // auto-install-peers: the point of this check is that a consumer who
         // followed the README's install line can resolve the package.
         dependencies: {
-          '@bymax-one/nest-queue': `file:${ROOT}`,
+          '@bymax-one/nest-queue': `file:${TARBALL ?? REPO_ROOT}`,
           '@nestjs/common': '^11.0.0',
           '@nestjs/core': '^11.0.0',
           bullmq: '^5.16.0',
@@ -318,6 +359,14 @@ try {
     : fail(`Expected QueueException(INVALID_OPTIONS) from forRoot({}), got: ${String(threw)}`)
 } catch (err) {
   fail(`Behavioral smoke threw: ${err instanceof Error ? err.message : String(err)}`)
+}
+
+if (unpackDir) {
+  try {
+    rmSync(unpackDir, { recursive: true, force: true })
+  } catch {
+    // ignore cleanup failures
+  }
 }
 
 console.log('')
