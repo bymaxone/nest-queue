@@ -152,6 +152,17 @@ describe('QueueService — a cold queue while the client is not ready', () => {
     expect(queues[0]?.getJob).toHaveBeenCalledTimes(2)
   })
 
+  it('waits again for a queue name after the service has been closed', async () => {
+    const awaitReady = jest.fn().mockResolvedValue(undefined)
+    const service = makeService(awaitReady)
+    await service.getJob('cold', '1')
+
+    await service.closeAll()
+    await service.getJob('cold', '1')
+
+    expect(awaitReady).toHaveBeenCalledTimes(2)
+  })
+
   it('waits separately for a second queue name', async () => {
     const awaitReady = jest.fn().mockResolvedValue(undefined)
     const service = makeService(awaitReady)

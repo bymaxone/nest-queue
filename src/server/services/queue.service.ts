@@ -123,6 +123,7 @@ export class QueueService {
     let expired = false
     const guarded = withDeadline(
       this.afterReady(queueName).then(() => {
+        // Stryker disable next-line StringLiteral: equivalent — the deadline already rejected the caller, so this error is absorbed and never read
         if (expired) throw new Error('the call had already timed out')
         return run()
       }),

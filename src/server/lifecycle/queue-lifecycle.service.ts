@@ -136,11 +136,11 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
               : `Worker "${name}" failed to close gracefully (${describeError(cause)}); ${stopped}`,
           )
           // Bounded: a close that never settles must not hold the rest of the teardown.
-          await withDeadline(
-            worker.close(true),
-            FORCE_CLOSE_GRACE_MS,
-            () => new DrainTimeoutError(),
-          ).catch(() => undefined)
+          // Stryker disable next-line ArrowFunction: equivalent — the deadline error is swallowed by the catch below, so no caller can observe its value
+          const deadlineError = (): DrainTimeoutError => new DrainTimeoutError()
+          await withDeadline(worker.close(true), FORCE_CLOSE_GRACE_MS, deadlineError).catch(
+            () => undefined,
+          )
         }
       }),
     )
