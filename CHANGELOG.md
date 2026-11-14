@@ -71,7 +71,7 @@ and `enqueueTimeoutMs` on `BymaxQueueModuleOptions` and change the documentation
 
 - **Queue names are documented as keys, not user input**, because each distinct name keeps a queue and
   its Redis resources for the life of the process.
-- **The `prefix` option's JSDoc says it is a namespace, not an access control**, as the README does.
+- **The `prefix` option's JSDoc says it is a namespace, not an access control**.
 - **A timed-out `enqueue` may still have been added**, and the README says to pass a deterministic
   `jobId` for anything that must not run twice.
 - **The README no longer says a Redis outage fails fast regardless of configuration.** It now states
