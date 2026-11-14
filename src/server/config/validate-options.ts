@@ -17,8 +17,8 @@ function invalid(reason: string): never {
 }
 
 /**
- * Refuse a timer-valued option Node would not honour: above 2^31 - 1 ms, or not a whole number, a
- * timer fires after 1 ms, so a deadline would end at once instead of waiting longer.
+ * Refuse a timer-valued option Node would not honour: `NaN` or above 2^31 - 1 ms a timer fires
+ * after 1 ms, so a deadline would end at once, and a fraction is not a delay anyone meant.
  */
 function checkTimerDelay(name: string, value: number | undefined): void {
   if (value !== undefined && !isTimerDelayMs(value)) {
