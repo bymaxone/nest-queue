@@ -107,6 +107,43 @@ describe('error status contract — the source', () => {
   })
 })
 
+describe('error response contract — no text of an underlying failure in a response', () => {
+  /** The full text of every `new QueueException(...)` call in a source text, comments stripped. */
+  function callTexts(text: string): string[] {
+    return [...text.matchAll(/new QueueException\(/g)].map((match) => {
+      let depth = 0
+      let end = match.index + match[0].length - 1
+      for (; end < text.length; end++) {
+        if (text[end] === '(') depth++
+        else if (text[end] === ')' && --depth === 0) break
+      }
+      return text.slice(match.index, end + 1)
+    })
+  }
+
+  const calls = sources(root).flatMap((file) =>
+    callTexts(withoutComments(readFileSync(file, 'utf8'))).map((call) => ({
+      file: file.slice(root.length + 1),
+      call: call.replace(/\s+/g, ' '),
+    })),
+  )
+
+  it('inventories every construction site it is meant to scan', () => {
+    expect(calls.length).toBeGreaterThanOrEqual(25)
+  })
+
+  // The text of an underlying error (a driver's message, a host name, a credential keyword) tells
+  // an HTTP client about the backing service. It belongs on the exception's `cause`, which is not
+  // serialised, and in the log; a response carries fixed fields and the caller's own values only.
+  it('puts no error text, error object or cause in the details of any site', () => {
+    const offenders = calls
+      .filter(({ call }) => /describeError|\.message\b|String\(err|\bcause\b/.test(call))
+      .map(({ file, call }) => `${file}: ${call.slice(0, 120)}`)
+
+    expect(offenders).toEqual([])
+  })
+})
+
 describe('error status contract — the README table', () => {
   const readme = readFileSync(resolve(root, '../../README.md'), 'utf8')
   const rows = readme

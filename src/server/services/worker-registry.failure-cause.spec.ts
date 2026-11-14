@@ -68,13 +68,13 @@ function throwNullPrototypeOnce(): void {
 
 describe('WorkerRegistry — failure cause', () => {
   it('reports a null-prototype constructor throw as a typed exception, not a TypeError', () => {
-    // String(Object.create(null)) throws, so describing the cause must not depend on it: the
-    // registration failure has to reach the caller as the typed exception, not as a TypeError.
+    // String(Object.create(null)) throws, so nothing about the failure may depend on rendering the
+    // cause: the registration failure has to reach the caller as the typed exception, not as a
+    // TypeError. The cause is the thrown value itself and the response carries only the queue.
     throwNullPrototypeOnce()
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     const details = detailsOf(() => registry.register({ queueName: 'email', handler: noopHandler }))
-    expect(details.queueName).toBe('email')
-    expect(details.cause).toBe('unknown error')
+    expect(details).toStrictEqual({ queueName: 'email' })
   })
 
   it('reports a null-prototype sandboxed constructor throw as a typed exception', () => {
@@ -84,7 +84,6 @@ describe('WorkerRegistry — failure cause', () => {
     const details = detailsOf(() =>
       registry.registerSandboxed({ queueName: 'sb', processorFile: '/tmp/p.js' }),
     )
-    expect(details.queueName).toBe('sb')
-    expect(details.cause).toBe('unknown error')
+    expect(details).toStrictEqual({ queueName: 'sb' })
   })
 })

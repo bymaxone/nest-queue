@@ -345,16 +345,17 @@ describe('QueueService — enqueueBulk', () => {
 
 describe('QueueService — enqueueBulk failure cause', () => {
   it.each([
-    ['an Error', new Error('redis down'), 'redis down'],
-    ['null', null, 'null'],
-    ['undefined', undefined, 'undefined'],
-    ['a plain { message }', { message: 'plain failure' }, 'plain failure'],
-    ['a null-prototype object', Object.create(null) as object, 'unknown error'],
+    ['an Error', new Error('redis down')],
+    ['null', null],
+    ['undefined', undefined],
+    ['a plain { message }', { message: 'plain failure' }],
+    ['a null-prototype object', Object.create(null) as object],
   ])(
-    'reports a rejection with %s as a typed exception with a string cause',
-    async (_l, rejection, cause) => {
+    'reports a rejection with %s as a typed exception whose cause is the rejection, not its text',
+    async (_l, rejection) => {
       // Reading `.message` off a rejected value throws a TypeError for null and undefined, which
-      // would replace the typed failure with a second error.
+      // would replace the typed failure with a second error. The text of the failure (it can name
+      // the host or the server) stays out of the response: the rejection itself is the cause.
       const { service } = makeService()
       service.getOrCreateQueue('email')
       queueInstances[0]?.addBulk.mockRejectedValue(rejection)
@@ -364,11 +365,15 @@ describe('QueueService — enqueueBulk failure cause', () => {
         .catch((e: unknown) => e)
 
       expect(err).toBeInstanceOf(QueueException)
-      const body = (err as QueueException).getResponse() as {
-        error: { code: string; details: { cause: unknown } }
-      }
-      expect(body.error.code).toBe('queue.bulk_enqueue_failed')
-      expect(body.error.details.cause).toBe(cause)
+      const exception = err as QueueException
+      expect(exception.getResponse()).toStrictEqual({
+        error: {
+          code: 'queue.bulk_enqueue_failed',
+          message: 'Bulk enqueue failed',
+          details: { operation: 'enqueueBulk' },
+        },
+      })
+      expect(exception.cause).toBe(rejection)
     },
   )
 })
@@ -713,17 +718,19 @@ describe('QueueService — bulk and scheduler hardening', () => {
     }
   })
 
-  it('reports the underlying cause when addBulk fails', async () => {
-    // A BullMQ failure is wrapped with its message under details.cause.
+  it('keeps the text of an addBulk failure out of the response', async () => {
+    // A BullMQ failure is wrapped; its message can name the host or the server state, so it is
+    // the exception's cause and never part of the response.
     const { service } = makeService()
     service.getOrCreateQueue('email')
-    queueInstances[0]?.addBulk.mockRejectedValue(new Error('redis down'))
-    try {
-      await service.enqueueBulk('email', [{ name: 'a', data: {} }])
-      throw new Error('expected a throw')
-    } catch (err) {
-      expect(detailsOf(err).cause).toBe('redis down')
-    }
+    const failure = new Error('connect ECONNREFUSED db.internal:6379')
+    queueInstances[0]?.addBulk.mockRejectedValue(failure)
+    const err: unknown = await service
+      .enqueueBulk('email', [{ name: 'a', data: {} }])
+      .catch((e: unknown) => e)
+
+    expect(JSON.stringify((err as QueueException).getResponse())).not.toContain('db.internal')
+    expect((err as QueueException).cause).toBe(failure)
   })
 
   it('omits the opts key for a bulk job without options', async () => {
