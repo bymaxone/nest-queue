@@ -13,7 +13,7 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.2.18] — 2026-11-14
 
-Against 1.2.17 the public declarations do not change.
+Against 1.2.17 the declared types do not change; one JSDoc `@example` line in the declarations does.
 
 ### Fixed
 
