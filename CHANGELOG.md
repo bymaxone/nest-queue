@@ -17,7 +17,7 @@ Against 1.2.21 the declared types do not change.
 
 ### Fixed
 
-- **A process no longer lingers about 2 s after shutdown when Redis is down.** Closing a client that is reconnecting calls `disconnect()`, which arms ioredis's teardown timer (`disconnectTimeout`, 2 000 ms by default); only the stream's `close` clears it, and a client with no open stream never emits one, so the process exited that long after the close. The connection the library opens (Mode B) is now created with `disconnectTimeout: 1`, and the worker and queue-events connections duplicated from it inherit it. A value you set in `connection.options` wins. One behaviour changes with it: a forced `disconnect()` on a client that has an open stream, including the one ioredis makes before it reconnects, now destroys the socket after 1 ms instead of after up to 2 s, so a half-written command on that socket is dropped sooner.
+- **A process no longer lingers about 2 s after shutdown when Redis is down.** Closing a client that is reconnecting calls `disconnect()`, which arms ioredis's teardown timer (`disconnectTimeout`, 2 000 ms by default); only the stream's `close` clears it, and a client whose stream has already closed never emits another, so the process exited that long after the close. The connection the library opens (Mode B) is now created with `disconnectTimeout: 1`, and the worker and queue-events connections duplicated from it inherit it. A value you set in `connection.options` wins. One behaviour changes with it: a forced `disconnect()` on a client that has an open stream, including the one ioredis makes before it reconnects, now destroys the socket after 1 ms instead of after up to 2 s, so a half-written command on that socket is dropped sooner.
 
 #### Apply to a Mode A client
 
