@@ -102,7 +102,9 @@ describe('ConnectionResolver — a client that ends because Redis could not be r
 
     expect(err.getStatus()).toBe(503)
     expect(bodyOf(err)).toStrictEqual(UNAVAILABLE)
-    expect((err.cause as { code?: string }).code).toBe('ECONNRESET')
+    // Which one depends on whether ioredis wrote the ready check's INFO before the reset reached it:
+    // a write after the reset fails with EPIPE, a read of it with ECONNRESET. Both are in the set.
+    expect(['ECONNRESET', 'EPIPE']).toContain((err.cause as { code?: string }).code)
   })
 
   // `.invalid` never resolves (RFC 6761); a resolver that cannot answer at all raises EAI_AGAIN,
