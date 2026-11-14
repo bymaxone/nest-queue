@@ -186,6 +186,44 @@ describe('ConnectionResolver Mode B startup, with real ioredis', () => {
     expect(connections).toBe(0)
   })
 
+  // A server that refuses the password the way Redis does, so the error is a real ReplyError that
+  // ioredis raised. The client keeps retrying (the template's default), so the startup ends because
+  // the reply error cannot be waited out, not because the client gave up.
+  it('rejects a refused credential at once, with no keyword or text of the reply in the response', async () => {
+    const server = createServer((socket) => {
+      socket.on('error', () => undefined)
+      socket.on('data', () => {
+        socket.write('-WRONGPASS invalid username-password pair or user is disabled.\r\n')
+      })
+    })
+    servers.push(server)
+    const port = await new Promise<number>((resolve) => {
+      server.listen(0, '127.0.0.1', () => {
+        resolve((server.address() as { port: number }).port)
+      })
+    })
+    const resolver = new ConnectionResolver({
+      connection: { url: `redis://:s3cr3t@127.0.0.1:${String(port)}`, options: ownedOptions },
+      connectionReadyTimeoutMs: 20_000,
+    })
+
+    const failure = (await resolver.init().then(
+      () => undefined,
+      (err: unknown) => err,
+    )) as QueueException
+
+    expect(failure.getStatus()).toBe(500)
+    expect(failure.getResponse()).toEqual({
+      error: {
+        code: QUEUE_ERROR_CODES.CONNECTION_INVALID,
+        message: 'Invalid Redis connection configuration',
+        details: {},
+      },
+    })
+    expect(JSON.stringify(failure.getResponse())).not.toMatch(/WRONGPASS|s3cr3t|username/)
+    expect((failure.cause as Error).message).toContain('WRONGPASS')
+  })
+
   // A server that accepts the socket and never answers is what a frozen Redis looks like to the
   // client; before the command deadline such a call stayed pending for as long as the freeze did.
   it('rejects a command on a Redis that never replies, within the command deadline', async () => {
