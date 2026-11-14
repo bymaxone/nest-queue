@@ -489,9 +489,11 @@ function toProcessor<TData, TResult>(
   return (job, _token, signal) => {
     const own = new AbortController()
     const relay = (): void => {
+      // Stryker disable next-line OptionalChaining: equivalent — `relay` runs only when the signal exists, by the check and the listener below
       own.abort(signal?.reason)
     }
     if (signal?.aborted === true) relay()
+    // Stryker disable next-line BooleanLiteral: equivalent — the `finally` below removes the listener whether or not it fired once, and an abort cannot fire twice
     signal?.addEventListener('abort', relay, { once: true })
     // Calling the handler inside a promise turns a throw before it returns one into a rejection,
     // so the cleanup below runs for it too.
