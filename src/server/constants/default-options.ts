@@ -50,5 +50,5 @@ export const MAX_JOBS_PAGE_SIZE = 1_000 as const
 /** Default TTL (ms) for the metrics cache. */
 export const DEFAULT_METRICS_CACHE_TTL_MS = 5_000 as const
 
-/** Default window (ms) for in-flight jobs to drain before force-close on shutdown. */
+/** Default window (ms) for in-flight jobs to drain before the worker is stopped on shutdown. */
 export const DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS = 30_000 as const

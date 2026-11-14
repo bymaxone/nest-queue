@@ -18,7 +18,7 @@ import { PROCESS_HANDLERS_METADATA_KEY } from './metadata-keys.constants'
  * an entry to the accumulated metadata array.
  *
  * Delivery is at-least-once: a handler may run more than once for the same job
- * (worker crash, lock expiry, or a shutdown force-close). Handlers MUST be
+ * (worker crash, lock expiry, or a shutdown that outlasts the drain budget). Handlers MUST be
  * idempotent — use an idempotency key on writes, prefer upserts over inserts, or
  * keep an "already-processed" marker keyed by `job.id`.
  *

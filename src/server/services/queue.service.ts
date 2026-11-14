@@ -156,7 +156,7 @@ export class QueueService {
    * Add a single job to a queue. The queue is created lazily if needed.
    *
    * Delivery is **at-least-once** — a handler may run more than once for the same
-   * job (worker crash, lock expiry, or a shutdown force-close). Make handlers
+   * job (worker crash, lock expiry, or a shutdown that outlasts the drain budget). Make handlers
    * idempotent: use an idempotency key on writes, prefer upserts over inserts, or
    * keep an "already-processed" marker keyed by `job.id`.
    *
