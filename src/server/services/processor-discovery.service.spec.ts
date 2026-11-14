@@ -335,7 +335,7 @@ describe('ProcessorDiscoveryService.buildDispatcher', () => {
   })
 
   it('hands the abort signal to the named and the catch-all handler', async () => {
-    // The worker's signal (timeout or shutdown) must reach the consumer's method.
+    // The job's abort signal must reach the consumer's method.
     const namedSpy = jest.fn<Promise<void>, [Job, AbortSignal?]>().mockResolvedValue(undefined)
     const defaultSpy = jest.fn<Promise<void>, [Job, AbortSignal?]>().mockResolvedValue(undefined)
     const instance: Record<string | symbol, unknown> = { named: namedSpy, fallback: defaultSpy }

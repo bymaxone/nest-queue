@@ -37,8 +37,9 @@ export interface ProgrammaticWorkerConfig<TData = unknown, TResult = unknown> {
   queueName: string
   /**
    * Async function that processes a single job. Must be idempotent. Its optional second argument
-   * is an `AbortSignal` that aborts when the job's `jobTimeoutMs` passes or the worker is closing;
-   * pass it to whatever the handler awaits so the work stops with the job.
+   * is the job's `AbortSignal`: it aborts when the job's `jobTimeoutMs` passes or when BullMQ
+   * cancels the job (`worker.cancelJob()`, `worker.cancelAllJobs()`). Closing the worker does not
+   * abort it. Pass it to whatever the handler awaits so the work stops with the job.
    */
   handler: (job: Job<TData, TResult>, signal?: AbortSignal) => Promise<TResult>
   /** Optional worker tuning overrides. */
@@ -463,10 +464,11 @@ class JobTimeoutError extends Error {
 
 /**
  * Adapt a library handler to BullMQ's processor signature. BullMQ calls its processor with
- * `(job, token, signal)`; the handler gets `(job, signal)`. With a timeout, the signal handed over
- * also aborts at the deadline, which is when the job fails and the slot frees; the handler's own
- * promise is not cancelled. The worker's signal outlives every job, so the listener that relays its
- * abort is removed as soon as the job settles.
+ * `(job, token, signal)`, and creates that per-job signal only for a processor that declares three
+ * parameters, which both processors returned here do; the handler gets `(job, signal)`. With a
+ * timeout, the signal handed over also aborts at the deadline, which is when the job fails and the
+ * slot frees; the handler's own promise is not cancelled. The relay listener on BullMQ's signal is
+ * removed as soon as the job settles.
  */
 function toProcessor<TData, TResult>(
   handler: (job: Job<TData, TResult>, signal?: AbortSignal) => Promise<TResult>,

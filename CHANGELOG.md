@@ -56,7 +56,8 @@ and `enqueueTimeoutMs` on `BymaxQueueModuleOptions` and change the documentation
 - **`jobTimeoutMs` bounds a handler that never settles.** It is a new worker option with no default.
   When it passes, the job fails with a `queue.job_timeout` error, retries under its `attempts` and
   `backoff`, and its concurrency slot is free again. Handlers receive an `AbortSignal` as a second
-  argument, which aborts at that moment or when the worker is closing; before, a hung handler held its
+  argument, which aborts at that moment or when BullMQ cancels the job (`worker.cancelJob()`,
+  `worker.cancelAllJobs()`); closing the worker does not abort it. Before, a hung handler held its
   slot for good and the rest of the queue waited.
 
 ### Documentation

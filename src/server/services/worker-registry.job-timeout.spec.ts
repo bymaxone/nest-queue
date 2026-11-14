@@ -119,7 +119,7 @@ describe('WorkerRegistry — jobTimeoutMs', () => {
     await expect(processor(job)).rejects.toBe(boom)
   })
 
-  it('sets no timer and passes the worker signal through when no timeout is configured', async () => {
+  it('sets no timer and passes the signal BullMQ gave it through when no timeout is configured', async () => {
     jest.useFakeTimers()
     let seen: AbortSignal | undefined
     const outer = new AbortController()
@@ -134,7 +134,7 @@ describe('WorkerRegistry — jobTimeoutMs', () => {
     expect(seen).toBe(outer.signal)
   })
 
-  it("aborts the handler's signal when the worker signal aborts mid-job, with a timeout configured", async () => {
+  it("aborts the handler's signal when BullMQ's signal aborts mid-job, with a timeout configured", async () => {
     let seen: AbortSignal | undefined
     let finish: (value: string) => void = () => undefined
     const outer = new AbortController()
@@ -155,10 +155,9 @@ describe('WorkerRegistry — jobTimeoutMs', () => {
   })
 })
 
-describe('WorkerRegistry — the worker signal outlives the job', () => {
-  // BullMQ gives every job of a worker the same long-lived signal; a listener left behind per job
-  // would grow without bound over the life of the process.
-  it('leaves no listener on the worker signal after a job completes, fails or times out', async () => {
+describe('WorkerRegistry — the signal BullMQ passes to the processor', () => {
+  // The relay listener must be gone once the job settles, whichever way it ends.
+  it("leaves no listener on BullMQ's signal after a job completes, fails or times out", async () => {
     jest.useFakeTimers()
     const outer = new AbortController()
     const finished = registered(() => Promise.resolve('ok'), 3000)
@@ -176,7 +175,7 @@ describe('WorkerRegistry — the worker signal outlives the job', () => {
   })
 
   // A handler typed to return a promise can still throw before it returns one.
-  it('leaves no listener on the worker signal when a handler throws synchronously', async () => {
+  it("leaves no listener on BullMQ's signal when a handler throws synchronously", async () => {
     const outer = new AbortController()
     const boom = new Error('sync boom')
     const processor = registered(() => {
@@ -188,7 +187,7 @@ describe('WorkerRegistry — the worker signal outlives the job', () => {
     expect(getEventListeners(outer.signal, 'abort')).toHaveLength(0)
   })
 
-  it('aborts the handler signal at once when the worker signal is already aborted', async () => {
+  it("aborts the handler signal at once when BullMQ's signal is already aborted", async () => {
     let seen: AbortSignal | undefined
     const outer = new AbortController()
     outer.abort(new Error('closing'))
@@ -200,6 +199,13 @@ describe('WorkerRegistry — the worker signal outlives the job', () => {
     await processor(job, 't', outer.signal)
 
     expect(seen?.aborted).toBe(true)
+  })
+})
+
+describe('WorkerRegistry — the processor BullMQ is given', () => {
+  // BullMQ creates the per-job signal only for a processor that declares three parameters.
+  it.each([undefined, 3000])('declares three parameters when jobTimeoutMs is %s', (timeout) => {
+    expect(registered(() => Promise.resolve(), timeout).length).toBe(3)
   })
 })
 
