@@ -76,7 +76,8 @@ describe('timeoutException', () => {
     const cause = new Error('Command timed out')
 
     expect(timeoutException('getJob', 1, cause).cause).toBe(cause)
-    expect(timeoutException('getJob', 1).cause).toBeUndefined()
+    // No cause given means no `cause` property at all, not one holding `undefined`.
+    expect('cause' in timeoutException('getJob', 1)).toBe(false)
   })
 })
 
