@@ -25,6 +25,7 @@ import type {
   BYMAX_QUEUE_REDIS_CLIENT,
   BYMAX_QUEUE_CONNECTION_MODE,
   BYMAX_QUEUE_RESOLVED_OPTIONS,
+  FlowService,
   JobSchedulerRepeatOptions,
   JobStatus,
   JOB_STATUS,
@@ -102,6 +103,11 @@ export type _GetJob = Expect<
 
 // The status filter is the five-member union, not a bare `string`: a typo is a
 // compile error rather than a query that silently returns nothing.
+/** `enqueueTimeoutMs` is the optional fifth constructor argument of `FlowService`. */
+export type _FlowServiceDeadlineArg = Expect<
+  Equal<ConstructorParameters<typeof FlowService>[4], number | undefined>
+>
+
 export type _GetJobsStatusArg = Expect<Equal<Parameters<QueueService['getJobs']>[1], JobStatus>>
 
 // Bulk input is a readonly array — the service cannot mutate a caller's batch —

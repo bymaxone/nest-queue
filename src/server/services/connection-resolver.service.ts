@@ -162,10 +162,16 @@ export class ConnectionResolver {
     const client = this.getClient()
     if (!WAITING_STATUSES.has(client.status)) return Promise.resolve()
     this.#pendingReady ??= new Promise<void>((resolve) => {
-      client.once('ready', () => {
+      // `end` means ioredis will not reconnect: release the waiters so the call itself reports the
+      // failure, instead of leaving them to their deadline.
+      const release = (): void => {
+        client.off('ready', release)
+        client.off('end', release)
         this.#pendingReady = undefined
         resolve()
-      })
+      }
+      client.on('ready', release)
+      client.on('end', release)
     })
     return this.#pendingReady
   }

@@ -94,8 +94,9 @@ async function buildStack(connection: BymaxQueueModuleOptions['connection']): Pr
     queueName: 'inventory',
     handler: () => Promise.resolve(undefined),
     // BullMQ arms a timer of this length when the worker is closed while its stalled-job check is
-    // in flight; the default 30 s one would outlive the test.
-    options: { stalledInterval: 20 },
+    // in flight; the default 30 s one would outlive the test. One second is the shortest the
+    // registry accepts.
+    options: { stalledInterval: 1000 },
   })
   events.getOrCreate('inventory')
   return {

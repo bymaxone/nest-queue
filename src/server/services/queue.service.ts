@@ -17,13 +17,11 @@ import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { validateJobSchedulerOptions } from '../utils/validate-job-scheduler-options'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
-import { MAX_JOBS_PAGE_SIZE } from '../constants/default-options'
+import { MAX_BULK_SIZE } from '../constants/default-options'
+import { assertPageWindow } from '../utils/assert-page-window'
 import { describeError } from '../utils/describe-error'
 import { withDeadline } from '../utils/with-deadline'
 import { timeoutException, withCommandTimeoutCode } from '../utils/command-timeout'
-
-/** Maximum number of jobs accepted by a single `enqueueBulk` call. */
-const MAX_BULK_SIZE = 1000
 
 /** A typed job in the library's public shape. */
 type TypedJob<TData, TResult> = Job<TData, TResult>
@@ -300,17 +298,7 @@ export class QueueService {
     start = 0,
     end = 50,
   ): Promise<TypedJob<TData, TResult>[]> {
-    if (
-      !Number.isInteger(start) ||
-      !Number.isInteger(end) ||
-      start < 0 ||
-      end < start ||
-      end - start >= MAX_JOBS_PAGE_SIZE
-    ) {
-      throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, HttpStatus.BAD_REQUEST, {
-        reason: `getJobs needs integers with 0 <= start <= end and at most ${String(MAX_JOBS_PAGE_SIZE)} jobs per call`,
-      })
-    }
+    assertPageWindow('getJobs', start, end)
     const jobs = await this.call('getJobs', queueName, () =>
       this.queueFor(queueName).getJobs([status], start, end),
     )
@@ -392,9 +380,11 @@ export class QueueService {
    *
    * @param queueName - Target queue.
    * @param start - Page start index (inclusive). Default: 0.
-   * @param end - Page end index (inclusive). Default: 50.
+   * @param end - Page end index (inclusive). Default: 50. The window may span at most
+   *   `MAX_JOBS_PAGE_SIZE` (1000) entries, and BullMQ's `-1` (everything) is refused.
    * @param asc - Sort ascending by next run time. Default: true.
    * @returns The registered schedulers in the requested page.
+   * @throws {QueueException} `INVALID_OPTIONS` when the window is not a bounded range of integers.
    */
   async getJobSchedulers(
     queueName: string,
@@ -402,6 +392,7 @@ export class QueueService {
     end = 50,
     asc = true,
   ): Promise<Awaited<ReturnType<Queue['getJobSchedulers']>>> {
+    assertPageWindow('getJobSchedulers', start, end)
     return this.call('getJobSchedulers', queueName, () =>
       this.queueFor(queueName).getJobSchedulers(start, end, asc),
     )

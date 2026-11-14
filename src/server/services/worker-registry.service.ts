@@ -20,13 +20,14 @@ import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { describeError } from '../utils/describe-error'
 import { withDeadline } from '../utils/with-deadline'
 import { isTimerDelayMs } from '../utils/timer-delay'
+import { workerOptionProblem } from '../utils/worker-option-problem'
 import { isAbandoned } from '../utils/abandoned-workers'
 import type { WorkerOptions } from '../interfaces/worker-options.interface'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
-import { DEFAULT_WORKER_CONCURRENCY, MAX_WORKER_CONCURRENCY } from '../constants/default-options'
+import { DEFAULT_WORKER_CONCURRENCY } from '../constants/default-options'
 
 /**
  * Configuration for registering an in-process (NestJS-DI-backed) worker.
@@ -304,58 +305,23 @@ export class WorkerRegistry {
 
   /**
    * Validate tunable options before constructing a Worker.
-   * Enforces `concurrency` in `[1, MAX_WORKER_CONCURRENCY]` and
-   * `limiter.max`/`limiter.duration` `>= 1`.
+   * Enforces whole-number `concurrency` in `[1, MAX_WORKER_CONCURRENCY]`, whole-number
+   * `limiter.max`/`limiter.duration` `>= 1`, and `lockDuration`/`stalledInterval` within
+   * 1000..2^31 - 1.
    *
    * @param opts - The caller-supplied options (may be undefined).
    * @throws {QueueException} `WORKER_REGISTRATION_FAILED` when values are out of range.
    */
   private validateOptions(opts?: WorkerOptions): void {
-    if (opts?.concurrency !== undefined) {
-      if (opts.concurrency < 1) {
-        throw new QueueException(
-          QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
-          HttpStatus.INTERNAL_SERVER_ERROR,
-          {
-            reason: 'concurrency must be >= 1',
-            actual: opts.concurrency,
-          },
-        )
-      }
-      if (opts.concurrency > MAX_WORKER_CONCURRENCY) {
-        throw new QueueException(
-          QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
-          HttpStatus.INTERNAL_SERVER_ERROR,
-          {
-            reason: `concurrency must be <= ${MAX_WORKER_CONCURRENCY.toString()}`,
-            actual: opts.concurrency,
-          },
-        )
-      }
+    const problem = workerOptionProblem(opts)
+    if (problem !== undefined) {
+      throw new QueueException(
+        QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        problem,
+      )
     }
     this.validateJobTimeout(opts)
-    if (opts?.limiter !== undefined) {
-      if (opts.limiter.max < 1) {
-        throw new QueueException(
-          QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
-          HttpStatus.INTERNAL_SERVER_ERROR,
-          {
-            reason: 'limiter.max must be >= 1',
-            actual: opts.limiter.max,
-          },
-        )
-      }
-      if (opts.limiter.duration < 1) {
-        throw new QueueException(
-          QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
-          HttpStatus.INTERNAL_SERVER_ERROR,
-          {
-            reason: 'limiter.duration must be >= 1',
-            actual: opts.limiter.duration,
-          },
-        )
-      }
-    }
   }
 
   /**

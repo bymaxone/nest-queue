@@ -86,7 +86,13 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
         {
           provide: FlowService,
           useFactory: (conn: ConnectionResolver): FlowService =>
-            new FlowService(conn, resolved.flows.enabled, resolved.prefix, resolved.telemetry),
+            new FlowService(
+              conn,
+              resolved.flows.enabled,
+              resolved.prefix,
+              resolved.telemetry,
+              resolved.enqueueTimeoutMs,
+            ),
           inject: [ConnectionResolver],
         },
         {
@@ -131,7 +137,13 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
         {
           provide: FlowService,
           useFactory: (conn: ConnectionResolver, resolved: ResolvedQueueOptions): FlowService =>
-            new FlowService(conn, resolved.flows.enabled, resolved.prefix, resolved.telemetry),
+            new FlowService(
+              conn,
+              resolved.flows.enabled,
+              resolved.prefix,
+              resolved.telemetry,
+              resolved.enqueueTimeoutMs,
+            ),
           inject: [ConnectionResolver, BYMAX_QUEUE_RESOLVED_OPTIONS],
         },
         {
