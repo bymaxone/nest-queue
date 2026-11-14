@@ -13,13 +13,13 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.2.15] — 2026-11-14
 
-Three availability defects found by a second review of 1.2.14. Against 1.2.14 the built declarations gain one method, `ConnectionResolver.awaitReady()`, which `QueueService` uses; nothing else in the public API changes. The runtime behaviour changes are listed below.
+Availability defects found by a second review of 1.2.14. Against 1.2.14 the built declarations gain `ConnectionResolver.awaitReady()`, which `QueueService` uses; nothing else in the public API changes. The runtime behaviour changes are listed below.
 
 ### Fixed
 
 - **A call made while the connection is down now reports the documented error.** With the owned connection's offline queue off, a call on a queue already in use during a refused-connection outage rejected at once with ioredis's plain `Stream isn't writeable and enableOfflineQueue options is false`, so a host retrying on `CONNECTION_TIMEOUT` as documented never retried. It is now `CONNECTION_TIMEOUT` with `details.operation` and `details.reason: 'offline'`, and the ioredis error as `cause`.
 - **The first call on a queue no longer waits for Redis without a deadline.** `getMetrics`, `getJob`, `getJobs`, the scheduler calls, `pauseQueue`, `resumeQueue` and `cleanQueue` on a queue name not yet used waited in BullMQ for the client to be ready, with no bound, for as long as the outage lasted. Every `QueueService` call is now bounded by `enqueueTimeoutMs` and rejects with `CONNECTION_TIMEOUT`. The wait for the client is shared by all callers, so polling through an outage adds one listener set to the client, not one per call, and a call that was told it timed out is never run later.
-- **Shutdown no longer leaves a worker running after its drain budget.** A handler that never settled kept the worker's lock-renewal timer alive after `app.close()`: the process did not exit by itself and logged `Connection is closed.` about twice a second. BullMQ ignores a forced close once a graceful one has started, so the worker is now paused first and closed with `close(true)` as its first close when the budget runs out. The log and the documentation no longer say the worker was "force-closed" when the graceful close was still pending. The handler's own promise still keeps running, since user code cannot be cancelled.
+- **Shutdown no longer leaves a worker running after its drain budget.** A handler that never settled kept the worker's lock-renewal timer alive after `app.close()`: the process did not exit by itself and logged `Connection is closed.` repeatedly. BullMQ ignores a forced close once a graceful one has started, so the worker is now paused first and closed with `close(true)` as its first close when the budget runs out. The log and the documentation no longer say the worker was "force-closed" when the graceful close was still pending. The handler's own promise still keeps running, since user code cannot be cancelled.
 
 ### Documentation
 
