@@ -501,6 +501,16 @@ function lastWorkerOptions(): BullWorkerOptions {
 }
 
 /** Extract the structured details of a thrown QueueException. */
+/** The QueueException `run` throws. */
+function thrownException(run: () => unknown): QueueException {
+  try {
+    run()
+  } catch (err) {
+    return err as QueueException
+  }
+  throw new Error('expected the operation to throw')
+}
+
 function detailsOf(run: () => unknown): Record<string, unknown> {
   try {
     run()
@@ -662,30 +672,41 @@ describe('WorkerRegistry — validation boundaries and error details', () => {
     })
   })
 
-  it('reports the queue name and cause when the Worker constructor fails', () => {
-    // A construction failure surfaces the queue name and a stringified cause.
+  it('reports the queue name, and keeps the cause out of the response, when the Worker constructor fails', () => {
+    // The text of a construction failure can name the host or the server, so it is the exception's
+    // cause and never part of the response.
     const { Worker: MockWorker } = jest.requireMock<{ Worker: jest.Mock }>('bullmq')
+    const failure = new Error('boom db.internal')
     MockWorker.mockImplementationOnce(() => {
-      throw new Error('boom')
+      throw failure
     })
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())
-    const details = detailsOf(() => registry.register({ queueName: 'email', handler: noopHandler }))
-    expect(details.queueName).toBe('email')
-    expect(details.cause).toBe('boom')
+    const thrown = thrownException(() =>
+      registry.register({ queueName: 'email', handler: noopHandler }),
+    )
+    expect((thrown.getResponse() as { error: { details: unknown } }).error.details).toStrictEqual({
+      queueName: 'email',
+    })
+    expect(JSON.stringify(thrown.getResponse())).not.toContain('db.internal')
+    expect(thrown.cause).toBe(failure)
   })
 
-  it('reports the queue name and cause when the sandboxed Worker constructor fails', () => {
-    // The sandboxed path must surface the same structured diagnostics as register().
+  it('reports the queue name, and keeps the cause out of the response, when the sandboxed Worker constructor fails', () => {
+    // The sandboxed path surfaces the same response as register().
     const { Worker: MockWorker } = jest.requireMock<{ Worker: jest.Mock }>('bullmq')
+    const failure = new Error('spawn boom db.internal')
     MockWorker.mockImplementationOnce(() => {
-      throw new Error('spawn boom')
+      throw failure
     })
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())
-    const details = detailsOf(() =>
+    const thrown = thrownException(() =>
       registry.registerSandboxed({ queueName: 'sb', processorFile: '/tmp/p.js' }),
     )
-    expect(details.queueName).toBe('sb')
-    expect(details.cause).toBe('spawn boom')
+    expect((thrown.getResponse() as { error: { details: unknown } }).error.details).toStrictEqual({
+      queueName: 'sb',
+    })
+    expect(JSON.stringify(thrown.getResponse())).not.toContain('db.internal')
+    expect(thrown.cause).toBe(failure)
   })
 
   it('accepts every allowed sandboxed extension and rejects others with a reason', () => {

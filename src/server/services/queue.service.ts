@@ -19,7 +19,6 @@ import { validateJobSchedulerOptions } from '../utils/validate-job-scheduler-opt
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { MAX_BULK_SIZE } from '../constants/default-options'
 import { assertPageWindow } from '../utils/assert-page-window'
-import { describeError } from '../utils/describe-error'
 import { withDeadline } from '../utils/with-deadline'
 import { timeoutException, withCommandTimeoutCode } from '../utils/command-timeout'
 
@@ -254,12 +253,16 @@ export class QueueService {
       ) {
         throw err
       }
-      throw new QueueException(
-        QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED,
-        HttpStatus.INTERNAL_SERVER_ERROR,
-        {
-          cause: describeError(err),
-        },
+      // The text of the failure can name the host or the server: it is the cause, never the response.
+      throw Object.assign(
+        new QueueException(
+          QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED,
+          HttpStatus.INTERNAL_SERVER_ERROR,
+          {
+            operation: 'enqueueBulk',
+          },
+        ),
+        { cause: err },
       )
     }
   }

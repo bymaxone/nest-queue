@@ -221,17 +221,15 @@ export class ConnectionResolver {
    * reconnecting does not end the wait — a Redis that restarts during a deploy refuses connections
    * for a moment first — so the budget does. The two exceptions are an answer from the server that
    * waiting cannot change (a refused credential) and a client that has stopped reconnecting; both
-   * reject at once. The rejection carries the last error's code and never its message, which can
-   * name the host.
+   * reject at once. No rejection carries an error code or message in its response, since both can
+   * name the backing service's state or host: the last error, when there was one, is the
+   * exception's `cause`.
    */
   private async waitReady(timeoutMs: number): Promise<void> {
     const client = this.getClient()
     if (client.status === 'ready') return
     await new Promise<void>((resolve, reject) => {
-      let lastErrorCode: string | undefined
       let lastError: unknown
-      const details = (extra: Record<string, unknown>): Record<string, unknown> =>
-        lastErrorCode === undefined ? extra : { ...extra, lastErrorCode }
       const cleanup = (): void => {
         clearTimeout(timer)
         client.off('ready', onReady)
@@ -242,7 +240,9 @@ export class ConnectionResolver {
       // help), a refused credential or an ended client is a configuration fault (retry cannot).
       const fail = (code: string, status: HttpStatus, extra: Record<string, unknown>): void => {
         cleanup()
-        reject(new QueueException(code, status, details(extra)))
+        const exception = new QueueException(code, status, extra)
+        if (lastError !== undefined) exception.cause = lastError
+        reject(exception)
       }
       const onReady = (): void => {
         cleanup()
@@ -250,7 +250,6 @@ export class ConnectionResolver {
       }
       const onError = (err: unknown): void => {
         lastError = err
-        lastErrorCode = startupErrorCode(err)
         if (isReplyError(err))
           fail(QUEUE_ERROR_CODES.CONNECTION_INVALID, HttpStatus.INTERNAL_SERVER_ERROR, {})
       }
@@ -259,7 +258,6 @@ export class ConnectionResolver {
           fail(QUEUE_ERROR_CODES.CONNECTION_INVALID, HttpStatus.INTERNAL_SERVER_ERROR, {})
           return
         }
-        // The error code stays out of the response: it is in the cause, and the log line carries it.
         cleanup()
         reject(unavailableException('connect', lastError, 'unavailable'))
       }
@@ -285,7 +283,7 @@ const WAITING_STATUSES: ReadonlySet<string> = new Set([
  * The network errors Node reports on a connection that could not be made or was cut, in
  * `error.code`: the set the sibling libraries read for a Redis outage.
  */
-const NETWORK_CODES: ReadonlySet<string | undefined> = new Set<string | undefined>([
+const NETWORK_CODES: ReadonlySet<unknown> = new Set<unknown>([
   'ECONNREFUSED',
   'ECONNRESET',
   'ETIMEDOUT',
@@ -303,7 +301,9 @@ const NETWORK_CODES: ReadonlySet<string | undefined> = new Set<string | undefine
  * and the absence of any error are not outages.
  */
 function isUnreachable(err: unknown): boolean {
-  return isCommandTimeout(err) || NETWORK_CODES.has(startupErrorCode(err))
+  return (
+    isCommandTimeout(err) || NETWORK_CODES.has((err as { code?: unknown } | null | undefined)?.code)
+  )
 }
 
 /** True for an error the server answered with (`WRONGPASS`, `NOAUTH`, ...), as opposed to a socket fault. */
@@ -311,16 +311,4 @@ function isReplyError(err: unknown): boolean {
   return (
     typeof err === 'object' && err !== null && (err as { name?: unknown }).name === 'ReplyError'
   )
-}
-
-/**
- * The value-free code of a startup error: a socket error's `code` (`ECONNREFUSED`), or the leading
- * token of a server reply (`WRONGPASS`). Never the message, which can name the host or the user.
- */
-function startupErrorCode(err: unknown): string | undefined {
-  if (typeof err !== 'object' || err === null) return undefined
-  const { code, message } = err as { code?: unknown; message?: unknown }
-  if (typeof code === 'string') return code
-  if (isReplyError(err) && typeof message === 'string') return /^[A-Z][A-Z0-9_]*/.exec(message)?.[0]
-  return undefined
 }

@@ -161,3 +161,36 @@ describe('QueueService — the getJobs window', () => {
     })
   })
 })
+
+describe('QueueService — the cause of a failed enqueueBulk', () => {
+  it.each([
+    ['an Error', new Error('connect ECONNREFUSED db.internal:6379')],
+    ['null', null],
+    ['undefined', undefined],
+    ['a plain { message }', { message: 'plain failure' }],
+    ['a null-prototype object', Object.create(null) as object],
+  ])(
+    'reports a rejection with %s as a typed exception whose cause is the rejection, not its text',
+    async (_label, rejection) => {
+      // Reading `.message` off a rejected value throws a TypeError for null and undefined, which
+      // would replace the typed failure with a second error. The text of the failure can name the
+      // host or the server, so it stays out of the response: the rejection itself is the cause.
+      const { service, queue } = makeService()
+      queue.addBulk.mockRejectedValue(rejection)
+
+      const err = await service
+        .enqueueBulk('email', [{ name: 'send', data: {} }])
+        .catch((e: unknown) => e)
+
+      expect((err as QueueException).getResponse()).toStrictEqual({
+        error: {
+          code: QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED,
+          message: 'Bulk enqueue failed',
+          details: { operation: 'enqueueBulk' },
+        },
+      })
+      expect(JSON.stringify((err as QueueException).getResponse())).not.toContain('db.internal')
+      expect((err as QueueException).cause).toBe(rejection)
+    },
+  )
+})

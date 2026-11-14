@@ -17,7 +17,6 @@ import type { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
 import { duplicateConnection } from '../utils/duplicate-connection'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
-import { describeError } from '../utils/describe-error'
 import { withDeadline } from '../utils/with-deadline'
 import { isTimerDelayMs } from '../utils/timer-delay'
 import { workerOptionProblem } from '../utils/worker-option-problem'
@@ -149,13 +148,14 @@ export class WorkerRegistry {
     } catch (cause) {
       // Disconnect the duplicated connection to prevent a Redis resource leak.
       disconnectUnlessEnded(conn)
-      throw new QueueException(
-        QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
-        HttpStatus.INTERNAL_SERVER_ERROR,
-        {
-          queueName,
-          cause: describeError(cause),
-        },
+      // The text of the failure can name the host or the server: it is the cause, never the response.
+      throw Object.assign(
+        new QueueException(
+          QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
+          HttpStatus.INTERNAL_SERVER_ERROR,
+          { queueName },
+        ),
+        { cause },
       )
     }
 
@@ -204,13 +204,14 @@ export class WorkerRegistry {
     } catch (cause) {
       // Disconnect the duplicated connection to prevent a Redis resource leak.
       disconnectUnlessEnded(conn)
-      throw new QueueException(
-        QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
-        HttpStatus.INTERNAL_SERVER_ERROR,
-        {
-          queueName,
-          cause: describeError(cause),
-        },
+      // The text of the failure can name the host or the server: it is the cause, never the response.
+      throw Object.assign(
+        new QueueException(
+          QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
+          HttpStatus.INTERNAL_SERVER_ERROR,
+          { queueName },
+        ),
+        { cause },
       )
     }
 

@@ -318,7 +318,7 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     jest.useRealTimers()
   })
 
-  it('rejects with CONNECTION_TIMEOUT carrying only the last error code, and disconnects the client', async () => {
+  it('rejects with CONNECTION_TIMEOUT carrying only the budget, with the last error as cause, and disconnects the client', async () => {
     // The budget ends with the last transient error's code; the message, which can name the
     // host, never reaches the exception. The owned client is closed so it stops reconnecting.
     jest.useFakeTimers()
@@ -346,7 +346,7 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
       error: {
         code: QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
         message: 'Redis connection timeout',
-        details: { timeoutMs: 3000, lastErrorCode: 'ECONNREFUSED' },
+        details: { timeoutMs: 3000 },
       },
     })
     expect(JSON.stringify(err)).not.toContain('s3cr3t')
@@ -376,90 +376,100 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     expect((err as QueueException).getResponse()).toMatchObject({
       error: {
         code: QUEUE_ERROR_CODES.CONNECTION_INVALID,
-        details: { lastErrorCode: 'WRONGPASS' },
+        details: {},
       },
     })
     expect(client.disconnect).toHaveBeenCalledTimes(1)
   })
 
-  it('reports no code when the error carries none', async () => {
-    // A thrown string, an error without a `code`, and a reply without a leading token each leave
-    // the exception without `lastErrorCode` rather than inventing one from the message.
-    jest.useFakeTimers()
-    const client = new FakeRedis('connecting', null)
-    redisConstructor.mockReturnValue(asRedis(client))
-    const resolver = new ConnectionResolver({
-      connection: { url: 'redis://localhost:6379' },
-      connectionReadyTimeoutMs: 1000,
-    })
-    const failure = resolver.init().then(
-      () => undefined,
-      (err: unknown) => err,
-    )
-    client.emit('error', 'a thrown string')
-    client.emit('error', new Error('no code on this one'))
-    jest.advanceTimersByTime(1000)
+  // The cause of a failed startup (a socket code, the refusal of a credential) is the backing
+  // service's state and stays out of the response body: it is in the exception's `cause` and in the
+  // log line the client's error listener writes.
+  describe('the response of a failed startup carries no error code', () => {
+    const CODES =
+      /ECONN\w*|ENOTFOUND|EPIPE|ETIMEDOUT|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH|EACCES|WRONGPASS|NOAUTH/
 
-    const body = ((await failure) as QueueException).getResponse() as {
-      error: { code: string; details: unknown }
-    }
-    expect(body.error.code).toBe(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT)
-    expect(body.error.details).toStrictEqual({ timeoutMs: 1000 })
-    jest.useRealTimers()
-  })
-
-  it('rejects a reply error that has no leading token without a code', async () => {
-    // Reply errors end the wait at once; a message that does not start with an upper-case token
-    // (or a reply with no message at all) gives no code to carry.
-    for (const reply of [
-      { name: 'ReplyError', message: 'lower case start' },
-      { name: 'ReplyError', message: 'invalid WRONGPASS later on' },
-      { name: 'ReplyError', message: { toString: () => 'WRONGPASS' } },
-      { name: 'ReplyError' },
-    ]) {
+    /** Run a startup in which the client raises `error`, then ends or runs out of budget. */
+    async function failure(error: unknown, how: 'end' | 'budget'): Promise<QueueException> {
+      jest.useFakeTimers()
       const client = new FakeRedis('connecting', null)
       redisConstructor.mockReturnValue(asRedis(client))
-      const failure = new ConnectionResolver(optionsWith({ url: 'redis://localhost:6379' }))
+      const init = new ConnectionResolver({
+        connection: { url: 'redis://localhost:6379' },
+        connectionReadyTimeoutMs: 1000,
+      })
         .init()
         .then(
           () => undefined,
           (err: unknown) => err,
         )
-      client.emit('error', reply)
-
-      const body = ((await failure) as QueueException).getResponse() as {
-        error: { code: string; details: unknown }
-      }
-      expect(body.error.code).toBe(QUEUE_ERROR_CODES.CONNECTION_INVALID)
-      // A refused credential is a configuration fault: retrying cannot help.
-      expect(((await failure) as QueueException).getStatus()).toBe(500)
-      expect(body.error.details).toStrictEqual({})
+      client.emit('error', error)
+      if (how === 'end') client.emit('end')
+      else jest.advanceTimersByTime(1000)
+      const err = (await init) as QueueException
+      jest.useRealTimers()
+      return err
     }
-  })
 
-  it('takes no code from the message of an error that is not a server reply', async () => {
-    // Only a server reply carries a leading token worth reporting; an ordinary error whose message
-    // merely looks like one leaves the exception without `lastErrorCode`.
-    jest.useFakeTimers()
-    const client = new FakeRedis('connecting', null)
-    redisConstructor.mockReturnValue(asRedis(client))
-    const failure = new ConnectionResolver({
-      connection: { url: 'redis://localhost:6379' },
-      connectionReadyTimeoutMs: 1000,
-    })
-      .init()
-      .then(
-        () => undefined,
-        (err: unknown) => err,
-      )
-    client.emit('error', new Error('WRONGPASS lookalike'))
-    jest.advanceTimersByTime(1000)
+    const refused = (): Error =>
+      Object.assign(new Error('connect ECONNREFUSED 10.0.0.5:6379'), { code: 'ECONNREFUSED' })
+    const reply = (): Error =>
+      Object.assign(new Error('WRONGPASS invalid username-password pair'), { name: 'ReplyError' })
 
-    const body = ((await failure) as QueueException).getResponse() as {
-      error: { details: unknown }
-    }
-    expect(body.error.details).toStrictEqual({ timeoutMs: 1000 })
-    jest.useRealTimers()
+    it.each([
+      [
+        'the startup budget ends after a refused connection',
+        refused(),
+        'budget',
+        { timeoutMs: 1000 },
+        503,
+        QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
+      ],
+      [
+        'the server refuses the credentials',
+        reply(),
+        'end',
+        {},
+        500,
+        QUEUE_ERROR_CODES.CONNECTION_INVALID,
+      ],
+      [
+        'the client ends after a refused connection',
+        refused(),
+        'end',
+        { operation: 'connect', reason: 'unavailable' },
+        503,
+        QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
+      ],
+      [
+        'the client ends after the ready check timed out',
+        new Error('Command timed out'),
+        'end',
+        { operation: 'connect', reason: 'unavailable' },
+        503,
+        QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
+      ],
+      [
+        'the client ends after a code outside the network set',
+        Object.assign(new Error('boom'), { code: 'EACCES' }),
+        'end',
+        {},
+        500,
+        QUEUE_ERROR_CODES.CONNECTION_INVALID,
+      ],
+    ] as const)(
+      'when %s: the status, the exact details, no code in the body, the error as cause',
+      async (_label, error, how, details, status, code) => {
+        const err = await failure(error, how)
+
+        const response = err.getResponse() as { error: { code: string; details: unknown } }
+        expect(err.getStatus()).toBe(status)
+        expect(response.error.code).toBe(code)
+        expect(response.error.details).toStrictEqual(details)
+        expect(JSON.stringify(response)).not.toMatch(CODES)
+        expect(err.cause).toBe(error)
+      },
+    )
   })
 
   it('survives an error event that carries no error object', async () => {
@@ -509,6 +519,8 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     // No error was recorded, so nothing says Redis was unreachable: only our own disconnect ends a
     // client that way, and a retry cannot change it.
     expect((err as QueueException).getStatus()).toBe(500)
+    // There was no error to keep, so the exception has no cause at all.
+    expect('cause' in (err as QueueException)).toBe(false)
     expect(client.disconnect).toHaveBeenCalledTimes(1)
   })
 
@@ -569,6 +581,8 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     it.each([
       ['a code outside the network set', Object.assign(new Error('boom'), { code: 'EACCES' })],
       ['an error with no code and another message', new Error('Connection is closed.')],
+      ['an error event with no error object', null],
+      ['a thrown string', 'a thrown string'],
     ])('stays CONNECTION_INVALID (500) for %s', async (_label, error) => {
       const err = await endedAfter(error)
 
