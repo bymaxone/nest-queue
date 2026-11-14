@@ -20,6 +20,7 @@ import {
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { disconnectUnlessEnded } from '../utils/disconnect-unless-ended'
+import { isCommandTimeout, unavailableException } from '../utils/command-timeout'
 
 /**
  * The exact options shape ioredis 6's `Redis` constructor accepts.
@@ -228,6 +229,7 @@ export class ConnectionResolver {
     if (client.status === 'ready') return
     await new Promise<void>((resolve, reject) => {
       let lastErrorCode: string | undefined
+      let lastError: unknown
       const details = (extra: Record<string, unknown>): Record<string, unknown> =>
         lastErrorCode === undefined ? extra : { ...extra, lastErrorCode }
       const cleanup = (): void => {
@@ -247,12 +249,19 @@ export class ConnectionResolver {
         resolve()
       }
       const onError = (err: unknown): void => {
+        lastError = err
         lastErrorCode = startupErrorCode(err)
         if (isReplyError(err))
           fail(QUEUE_ERROR_CODES.CONNECTION_INVALID, HttpStatus.INTERNAL_SERVER_ERROR, {})
       }
       const onEnd = (): void => {
-        fail(QUEUE_ERROR_CODES.CONNECTION_INVALID, HttpStatus.INTERNAL_SERVER_ERROR, {})
+        if (!isUnreachable(lastError)) {
+          fail(QUEUE_ERROR_CODES.CONNECTION_INVALID, HttpStatus.INTERNAL_SERVER_ERROR, {})
+          return
+        }
+        // The error code stays out of the response: it is in the cause, and the log line carries it.
+        cleanup()
+        reject(unavailableException('connect', lastError, 'unavailable'))
       }
       const timer = setTimeout(() => {
         fail(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT, HttpStatus.SERVICE_UNAVAILABLE, { timeoutMs })
@@ -271,6 +280,32 @@ const WAITING_STATUSES: ReadonlySet<string> = new Set([
   'reconnecting',
   'close',
 ])
+
+/**
+ * The network errors Node reports on a connection that could not be made or was cut, in
+ * `error.code`: the set the sibling libraries read for a Redis outage.
+ */
+const NETWORK_CODES: ReadonlySet<string> = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'EPIPE',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+])
+
+/**
+ * Whether a startup error says Redis could not be reached, so a retry may help: a network error
+ * (an `AggregateError` from a host that resolves to several addresses carries the code too), or
+ * the command timeout ioredis raises when the ready check's `INFO` gets no answer. A reply error
+ * and the absence of any error are not outages.
+ */
+function isUnreachable(err: unknown): boolean {
+  const code = startupErrorCode(err)
+  return isCommandTimeout(err) || (code !== undefined && NETWORK_CODES.has(code))
+}
 
 /** True for an error the server answered with (`WRONGPASS`, `NOAUTH`, ...), as opposed to a socket fault. */
 function isReplyError(err: unknown): boolean {
