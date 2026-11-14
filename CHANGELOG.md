@@ -17,7 +17,7 @@ Against 1.2.15 the built declarations gain a fifth optional `FlowService` constr
 
 ### Fixed
 
-- **Timer-valued options that Node cannot honour are refused at startup.** `shutdown.drainTimeoutMs` and `connectionReadyTimeoutMs` accepted `NaN`, fractions and values above 2 147 483 647 ms, which Node reads as a 1 ms timer, so the drain or the startup wait ended at once. Both must now be whole numbers from 1 to 2 147 483 647, like `commandTimeoutMs` and `enqueueTimeoutMs`.
+- **Timer-valued options that Node cannot honour are refused at startup.** `shutdown.drainTimeoutMs` and `connectionReadyTimeoutMs` accepted `NaN`, fractions and values above 2 147 483 647 ms; Node reads `NaN` and anything above that limit as a 1 ms timer, so the drain or the startup wait ended at once. Both must now be whole numbers from 1 to 2 147 483 647, like `commandTimeoutMs` and `enqueueTimeoutMs`.
 - **Worker options are checked before BullMQ sees them.** `concurrency`, `limiter.max` and `limiter.duration` must be whole numbers (`NaN` passed the range check). `lockDuration` and `stalledInterval` must be whole numbers from 1000 to 2 147 483 647: BullMQ renews a lock at half of `lockDuration`, so under one second the renewal falls inside ordinary event-loop delay and a busy process loses locks it still holds.
 - **`getJobSchedulers` has the same window bound as `getJobs`.** BullMQ reads an end index of `-1` as "every scheduler"; the window is now at most 1000 entries and a malformed one is refused with `INVALID_OPTIONS`.
 - **`FlowService.add` and `addBulk` are bounded.** Each is held to `enqueueTimeoutMs` and rejects with `CONNECTION_TIMEOUT` (a flow that timed out may still have been added), and `addBulk` refuses more than 1000 flows with `BULK_ENQUEUE_FAILED`, as `enqueueBulk` does.
@@ -1060,7 +1060,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.15...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.16...HEAD
+[1.2.16]: https://github.com/bymaxone/nest-queue/compare/v1.2.15...v1.2.16
 [1.2.15]: https://github.com/bymaxone/nest-queue/compare/v1.2.14...v1.2.15
 [1.2.14]: https://github.com/bymaxone/nest-queue/compare/v1.2.13...v1.2.14
 [1.2.13]: https://github.com/bymaxone/nest-queue/compare/v1.2.12...v1.2.13
