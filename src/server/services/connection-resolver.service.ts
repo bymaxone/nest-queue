@@ -283,7 +283,7 @@ const WAITING_STATUSES: ReadonlySet<string> = new Set([
  * The network errors Node reports on a connection that could not be made or was cut, in
  * `error.code`: the set the sibling libraries read for a Redis outage.
  */
-const NETWORK_CODES: ReadonlySet<string | undefined> = new Set<string | undefined>([
+const NETWORK_CODES: ReadonlySet<unknown> = new Set<unknown>([
   'ECONNREFUSED',
   'ECONNRESET',
   'ETIMEDOUT',
@@ -301,7 +301,9 @@ const NETWORK_CODES: ReadonlySet<string | undefined> = new Set<string | undefine
  * and the absence of any error are not outages.
  */
 function isUnreachable(err: unknown): boolean {
-  return isCommandTimeout(err) || NETWORK_CODES.has(startupErrorCode(err))
+  return (
+    isCommandTimeout(err) || NETWORK_CODES.has((err as { code?: unknown } | null | undefined)?.code)
+  )
 }
 
 /** True for an error the server answered with (`WRONGPASS`, `NOAUTH`, ...), as opposed to a socket fault. */
@@ -309,11 +311,4 @@ function isReplyError(err: unknown): boolean {
   return (
     typeof err === 'object' && err !== null && (err as { name?: unknown }).name === 'ReplyError'
   )
-}
-
-/** The `code` of a startup error (`ECONNREFUSED`), when it carries one as a string. */
-function startupErrorCode(err: unknown): string | undefined {
-  if (typeof err !== 'object' || err === null) return undefined
-  const { code } = err as { code?: unknown }
-  return typeof code === 'string' ? code : undefined
 }

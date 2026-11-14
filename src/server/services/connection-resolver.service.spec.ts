@@ -519,6 +519,8 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     // No error was recorded, so nothing says Redis was unreachable: only our own disconnect ends a
     // client that way, and a retry cannot change it.
     expect((err as QueueException).getStatus()).toBe(500)
+    // There was no error to keep, so the exception has no cause at all.
+    expect('cause' in (err as QueueException)).toBe(false)
     expect(client.disconnect).toHaveBeenCalledTimes(1)
   })
 
@@ -579,6 +581,8 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     it.each([
       ['a code outside the network set', Object.assign(new Error('boom'), { code: 'EACCES' })],
       ['an error with no code and another message', new Error('Connection is closed.')],
+      ['an error event with no error object', null],
+      ['a thrown string', 'a thrown string'],
     ])('stays CONNECTION_INVALID (500) for %s', async (_label, error) => {
       const err = await endedAfter(error)
 

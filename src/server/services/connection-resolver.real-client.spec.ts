@@ -187,8 +187,8 @@ describe('ConnectionResolver Mode B startup, with real ioredis', () => {
   })
 
   // A server that refuses the password the way Redis does, so the error is a real ReplyError that
-  // ioredis raised. The client keeps retrying (the template's default), so the startup ends because
-  // the reply error cannot be waited out, not because the client gave up.
+  // ioredis raised. The client keeps retrying (the retry strategy of `ownedOptions`), so the startup
+  // ends because the reply error cannot be waited out, not because the client gave up.
   it('rejects a refused credential at once, with no keyword or text of the reply in the response', async () => {
     const server = createServer((socket) => {
       socket.on('error', () => undefined)
