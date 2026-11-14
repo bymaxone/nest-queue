@@ -7,9 +7,7 @@ import { HttpStatus } from '@nestjs/common'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
-
-/** The largest delay, in milliseconds, a Node timer honours. */
-const MAX_TIMER_DELAY_MS = 2_147_483_647
+import { isTimerDelayMs, MAX_TIMER_DELAY_MS } from '../utils/timer-delay'
 
 /** Throw a well-formed INVALID_OPTIONS exception carrying the failing reason. */
 function invalid(reason: string): never {
@@ -98,8 +96,8 @@ export function validateOptions(opts: BymaxQueueModuleOptions): void {
     const value = opts[key]
     // Node reads a timer delay above 2^31 - 1 ms as 1 ms, so a larger deadline would end every call
     // at once instead of waiting longer.
-    if (value !== undefined && !(value > 0 && value <= MAX_TIMER_DELAY_MS)) {
-      invalid(`${key} must be a number from 1 to ${String(MAX_TIMER_DELAY_MS)}`)
+    if (value !== undefined && !isTimerDelayMs(value)) {
+      invalid(`${key} must be a whole number from 1 to ${String(MAX_TIMER_DELAY_MS)}`)
     }
   }
 }

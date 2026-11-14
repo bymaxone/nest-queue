@@ -19,6 +19,7 @@ import { duplicateConnection } from '../utils/duplicate-connection'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { describeError } from '../utils/describe-error'
 import { withDeadline } from '../utils/with-deadline'
+import { isTimerDelayMs } from '../utils/timer-delay'
 import type { WorkerOptions } from '../interfaces/worker-options.interface'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
@@ -364,15 +365,12 @@ export class WorkerRegistry {
    * @throws {QueueException} `WORKER_REGISTRATION_FAILED` when the value is out of range.
    */
   private validateJobTimeout(opts?: WorkerOptions): void {
-    if (
-      opts?.jobTimeoutMs !== undefined &&
-      !(opts.jobTimeoutMs > 0 && opts.jobTimeoutMs <= 2_147_483_647)
-    ) {
+    if (opts?.jobTimeoutMs !== undefined && !isTimerDelayMs(opts.jobTimeoutMs)) {
       throw new QueueException(
         QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
         HttpStatus.INTERNAL_SERVER_ERROR,
         {
-          reason: 'jobTimeoutMs must be a number from 1 to 2147483647',
+          reason: 'jobTimeoutMs must be a whole number from 1 to 2147483647',
           actual: opts.jobTimeoutMs,
         },
       )
@@ -493,8 +491,7 @@ function toProcessor<TData, TResult>(
       own.abort(signal?.reason)
     }
     if (signal?.aborted === true) relay()
-    // Stryker disable next-line BooleanLiteral: equivalent — the `finally` below removes the listener whether or not it fired once, and an abort cannot fire twice
-    signal?.addEventListener('abort', relay, { once: true })
+    signal?.addEventListener('abort', relay)
     // Calling the handler inside a promise turns a throw before it returns one into a rejection,
     // so the cleanup below runs for it too.
     return withDeadline(

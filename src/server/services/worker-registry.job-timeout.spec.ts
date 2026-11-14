@@ -221,7 +221,7 @@ function thrownEnvelope(call: () => unknown): { error: { code: string; details: 
 }
 
 describe('WorkerRegistry — jobTimeoutMs validation', () => {
-  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648])(
+  it.each([0, -1, 0.5, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648])(
     'refuses %s when registering, and says why',
     (bad) => {
       const registry = new WorkerRegistry(fakeConnection(), makeOptions())
@@ -236,7 +236,7 @@ describe('WorkerRegistry — jobTimeoutMs validation', () => {
 
       expect(error.code).toBe('queue.worker_registration_failed')
       expect(error.details).toStrictEqual({
-        reason: 'jobTimeoutMs must be a number from 1 to 2147483647',
+        reason: 'jobTimeoutMs must be a whole number from 1 to 2147483647',
         actual: bad,
       })
     },

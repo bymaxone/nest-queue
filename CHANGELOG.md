@@ -37,7 +37,9 @@ enqueue that Redis answers and a job that completes behave as before.
 - **A producer call can no longer hang on a Redis that does not answer.** On the connection the
   library opens, every command now carries a 5 s deadline (`commandTimeoutMs`, or the ioredis
   `commandTimeout` you set), and `enqueue` and `enqueueBulk` reject with `CONNECTION_TIMEOUT` after
-  `enqueueTimeoutMs` (10 s) in either connection mode.
+  `enqueueTimeoutMs` (10 s) in either connection mode. A command that hits the connection's deadline
+  is reported the same way, as `CONNECTION_TIMEOUT` with `details.operation` and `timeoutMs` and the
+  original error as `cause`.
 - **The owned connection no longer buffers commands during an outage.** Its offline queue is off, so
   a call made while Redis is down fails at once instead of waiting in memory. Set `options.enableOfflineQueue: true` to keep the old
   behaviour. Worker and QueueEvents connections keep their offline queue and have no command deadline.
@@ -49,7 +51,8 @@ enqueue that Redis answers and a job that completes behave as before.
   for each.
 - **`unregister` releases the connection even when the worker's `close()` throws.** It then rethrows
   that error; the registry entry is dropped and the socket closed either way.
-- **`jobTimeoutMs` bounds a handler that never settles.** It is a new worker option with no default.
+- **`jobTimeoutMs` bounds a handler that never settles.** It is a new worker option with no default,
+  a whole number of milliseconds from 1 to 2 147 483 647, as are `commandTimeoutMs` and `enqueueTimeoutMs`.
   When it passes, the job fails with a `queue.job_timeout` error, retries under its `attempts` and
   `backoff`, and its concurrency slot is free again. Handlers receive an `AbortSignal` as a second
   argument, which aborts at that moment or when BullMQ cancels the job (`worker.cancelJob()`,
@@ -74,6 +77,8 @@ enqueue that Redis answers and a job that completes behave as before.
 
 #### Apply to a derived backend
 
+- If you matched ioredis's `Command timed out` error on a producer or inspection call, match
+  `CONNECTION_TIMEOUT` instead; the original error is its `cause`.
 - If you rely on an `enqueue` waiting out a Redis outage, it now rejects with `CONNECTION_TIMEOUT`
   after `enqueueTimeoutMs` (the add may still complete in Redis afterwards, so retry with a stable
   `jobId` or `deduplication`); raise the option to keep waiting longer.
