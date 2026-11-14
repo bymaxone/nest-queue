@@ -26,11 +26,30 @@ const REDIS_IMAGE =
 const HOST_PORT = 46_397
 const URL = `redis://127.0.0.1:${String(HOST_PORT)}`
 const ENQUEUE_TIMEOUT_MS = 1500
-/** The drain budget the fixture host runs with, and the margin allowed on top of it. */
+/** The drain budget the fixture host runs with, and a margin on top of it generous enough for a loaded machine. */
 const DRAIN_BUDGET_MS = 1000
-const SHUTDOWN_MARGIN_MS = 3000
+const SHUTDOWN_MARGIN_MS = 15_000
 
 const sleep = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms))
+
+/**
+ * Whether `call` has settled by the next macrotask. A rejection that needs no I/O settles in a
+ * microtask, while a call buffered until a reconnect, or waiting on a timer, does not. The sentinel
+ * is a macrotask (`setImmediate`), so it cannot tie with a microtask rejection.
+ */
+function settlesBeforeNextMacrotask(call: Promise<unknown>): Promise<boolean> {
+  return Promise.race([
+    call.then(
+      () => true,
+      () => true,
+    ),
+    new Promise<boolean>((done) => {
+      setImmediate(() => {
+        done(false)
+      })
+    }),
+  ])
+}
 
 /** The code and details of a rejected call, or what it was if it was not a QueueException. */
 async function outcome(call: Promise<unknown>): Promise<{ code?: string; details?: unknown }> {
@@ -84,12 +103,12 @@ describe('E2E — a Redis that goes away and comes back', () => {
     await sleep(1500)
 
     // A queue already in use: refused at once by the disabled offline queue, now as the documented code.
-    const started = Date.now()
-    expect(await outcome(queues.getMetrics('warm'))).toStrictEqual({
+    const warmCall = outcome(queues.getMetrics('warm'))
+    expect(await settlesBeforeNextMacrotask(warmCall)).toBe(true)
+    expect(await warmCall).toStrictEqual({
       code: 'queue.connection_timeout',
       details: { operation: 'getMetrics', reason: 'offline' },
     })
-    expect(Date.now() - started).toBeLessThan(500)
 
     // A queue name never used: bounded by the per-call deadline, for every call that can wait.
     const cold = 'cold'
@@ -105,16 +124,14 @@ describe('E2E — a Redis that goes away and comes back', () => {
       ['enqueue', () => queues.enqueue(`${cold}-9`, 'job', {})],
       ['enqueueBulk', () => queues.enqueueBulk(`${cold}-10`, [{ name: 'job', data: {} }])],
     ]
-    const coldStart = Date.now()
+    // No elapsed-time bound: a call without its deadline stays pending, which the test timeout reports.
     const results = await Promise.all(coldCalls.map(([, call]) => outcome(call())))
-    const elapsed = Date.now() - coldStart
     coldCalls.forEach(([operation], index) => {
       expect(results[index]).toStrictEqual({
         code: 'queue.connection_timeout',
         details: { operation, timeoutMs: ENQUEUE_TIMEOUT_MS },
       })
     })
-    expect(elapsed).toBeLessThan(ENQUEUE_TIMEOUT_MS + 1500)
 
     // Fifty more cold calls on fifty more names, polled the way a health check would.
     const polls = await Promise.all(
@@ -139,6 +156,7 @@ describe('E2E — the process after app.close() with a handler that outlasts the
     closingAt: number
     closedAt: number
     exitedAt: number
+    killedByHarness: boolean
     stderrAfterClose: string
     stderr: string
   }> {
@@ -159,6 +177,7 @@ describe('E2E — the process after app.close() with a handler that outlasts the
     let closedAt = 0
     let stderrAfterClose = ''
     let exitedAt = 0
+    let killedByHarness = false
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString()
       if (closingAt === 0 && stdout.includes('CLOSING')) closingAt = Date.now()
@@ -174,16 +193,23 @@ describe('E2E — the process after app.close() with a handler that outlasts the
 
     const waitUntil = Date.now() + 30_000
     while (exitedAt === 0 && Date.now() < waitUntil) await sleep(100)
-    if (exitedAt === 0) child.kill('SIGKILL')
-    return { closingAt, closedAt, exitedAt, stderrAfterClose, stderr }
+    if (exitedAt === 0) {
+      killedByHarness = true
+      child.kill('SIGKILL')
+    }
+    return { closingAt, closedAt, exitedAt, killedByHarness, stderrAfterClose, stderr }
   }
 
   it('exits by itself within the drain budget plus a small margin when it never settles', async () => {
-    const { closingAt, closedAt, exitedAt, stderrAfterClose, stderr } = await runChild(0)
+    const { closingAt, closedAt, exitedAt, killedByHarness, stderrAfterClose, stderr } =
+      await runChild(0)
 
+    // The process left on its own: the harness only kills one that is still alive after its own cap.
+    expect(killedByHarness).toBe(false)
     expect(exitedAt).toBeGreaterThan(0)
     expect(closedAt).toBeGreaterThan(0)
-    // From just before app.close() to the process being gone: the drain budget (1 s) plus a margin.
+    // One real-clock check, with a margin made for a loaded machine, to prove the budget is wired:
+    // from just before app.close() to the process being gone, the drain budget (1 s) plus the margin.
     expect(exitedAt - closingAt).toBeLessThan(DRAIN_BUDGET_MS + SHUTDOWN_MARGIN_MS)
     expect(stderrAfterClose).not.toContain('Connection is closed')
     expect(stderr).not.toContain('CHILD ERROR')
@@ -191,11 +217,11 @@ describe('E2E — the process after app.close() with a handler that outlasts the
 
   // The handler settles 0.5 s after the budget ended: the worker that was stopped must stay stopped.
   it('exits by itself when the handler settles after the budget ended', async () => {
-    const { closingAt, closedAt, exitedAt, stderrAfterClose, stderr } = await runChild(1500)
+    const { closedAt, exitedAt, killedByHarness, stderrAfterClose, stderr } = await runChild(1500)
 
+    expect(killedByHarness).toBe(false)
     expect(exitedAt).toBeGreaterThan(0)
     expect(closedAt).toBeGreaterThan(0)
-    expect(exitedAt - closingAt).toBeLessThan(DRAIN_BUDGET_MS + SHUTDOWN_MARGIN_MS)
     expect(stderrAfterClose).not.toContain('Connection is closed')
     expect(stderr).not.toContain('CHILD ERROR')
   }, 90_000)

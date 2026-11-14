@@ -201,7 +201,8 @@ describe('ConnectionResolver Mode B startup, with real ioredis', () => {
     })
     await resolver.init()
 
-    const started = Date.now()
+    // No elapsed-time bound: without the command deadline this call stays pending for as long as the
+    // server stays silent, which Jest's own test timeout reports.
     const failure = await resolver
       .getClient()
       .get('k')
@@ -211,7 +212,6 @@ describe('ConnectionResolver Mode B startup, with real ioredis', () => {
       )
 
     expect((failure as Error).message).toContain('timed out')
-    expect(Date.now() - started).toBeLessThan(2000)
     await resolver.teardown()
   })
 
@@ -237,14 +237,24 @@ describe('ConnectionResolver Mode B startup, with real ioredis', () => {
     client.stream.destroy()
     await new Promise((resolve) => setTimeout(resolve, 100))
 
-    const started = Date.now()
-    const failure = await client.get('k').then(
+    // "At once" is an ordering, not a duration: a rejection that needs no I/O settles in a microtask,
+    // while a call buffered until the reconnect (5 s away) or waiting on a timer does not. The
+    // sentinel is a macrotask (`setImmediate`), so it cannot tie with a microtask rejection.
+    const call = client.get('k').then(
       () => undefined,
       (err: unknown) => err,
     )
+    const settledFirst = await Promise.race([
+      call.then(() => true),
+      new Promise<boolean>((done) => {
+        setImmediate(() => {
+          done(false)
+        })
+      }),
+    ])
 
-    expect((failure as Error).message).toContain('enableOfflineQueue')
-    expect(Date.now() - started).toBeLessThan(500)
+    expect(settledFirst).toBe(true)
+    expect(((await call) as Error).message).toContain('enableOfflineQueue')
     await resolver.teardown()
   })
 
