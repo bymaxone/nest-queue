@@ -27,6 +27,21 @@ function checkTimerDelay(name: string, value: number | undefined): void {
 }
 
 /**
+ * Refuse a metrics cache TTL that is not a whole number of milliseconds `>= 0`. `NaN` is neither
+ * below 0 nor above anything, so a range check alone lets it through and silently turns the cache
+ * off; a fraction or an infinite TTL is not a duration anyone meant.
+ */
+function checkCacheTtl(cacheTtlMs: number | undefined): void {
+  if (cacheTtlMs !== undefined && !Number.isInteger(cacheTtlMs)) {
+    invalid('metrics.cacheTtlMs must be a whole number')
+  }
+  // Stryker disable next-line ConditionalExpression: equivalent — dropping the presence check leaves `undefined < 0`, which is false; same reasoning as the drain timeout above
+  if (cacheTtlMs !== undefined && cacheTtlMs < 0) {
+    invalid('metrics.cacheTtlMs must be >= 0')
+  }
+}
+
+/**
  * Whether ioredis can parse `url`. It reads a `redis://` or `rediss://` URL as it is and prefixes
  * every other string with a scheme (`redis:` for `//host`, `redis://` otherwise) before handing it
  * to the WHATWG parser, which rejects what it cannot read and makes the client constructor throw
@@ -97,16 +112,7 @@ export function validateOptions(opts: BymaxQueueModuleOptions): void {
   }
   checkTimerDelay('shutdown.drainTimeoutMs', drainTimeoutMs)
 
-  const cacheTtlMs = opts.metrics?.cacheTtlMs
-  // `NaN` is neither below 0 nor above anything, so it would pass a range check and silently turn
-  // the cache off; a fraction or an infinite TTL is not a duration anyone meant.
-  if (cacheTtlMs !== undefined && !Number.isInteger(cacheTtlMs)) {
-    invalid('metrics.cacheTtlMs must be a whole number')
-  }
-  // Stryker disable next-line ConditionalExpression: equivalent — dropping the presence check leaves `undefined < 0`, which is false; same reasoning as the drain timeout above
-  if (cacheTtlMs !== undefined && cacheTtlMs < 0) {
-    invalid('metrics.cacheTtlMs must be >= 0')
-  }
+  checkCacheTtl(opts.metrics?.cacheTtlMs)
 
   for (const key of ['commandTimeoutMs', 'enqueueTimeoutMs', 'connectionReadyTimeoutMs'] as const) {
     checkTimerDelay(key, opts[key])
