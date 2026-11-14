@@ -11,6 +11,25 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.18] — 2026-11-14
+
+Against 1.2.17 the public declarations do not change.
+
+### Fixed
+
+- **A failed Mode B startup no longer keeps the host process alive two seconds longer than needed.** When the connection ended before it became ready, the library called `disconnect()` on a client that had already ended. ioredis arms a 2 s teardown timer on `disconnect()` and clears it only when the stream emits `close`; the stream of an ended client had already closed, so the timer was left running. Every `disconnect()` of the library now goes through one guard that skips a client already in `end`, and a spec fails when a source file calls `.disconnect(` anywhere else. Measured against a port nothing listens on: the process exits 4 ms after the client ends, and 2004 ms when `disconnect()` is called after it.
+- **`metrics.cacheTtlMs` refuses what is not a whole number.** `NaN` passed the `>= 0` check and silently turned the cache off; fractions and an infinite value are refused too, with `INVALID_OPTIONS`.
+
+### Documentation
+
+- The `QueueException` example shows `CONNECTION_TIMEOUT` with the status 503 it carries since 1.2.17.
+
+#### Apply to a derived backend
+
+- If you pass `metrics.cacheTtlMs` as a fraction or `NaN`, startup now throws; use a whole number of milliseconds, `0` to disable caching.
+
+---
+
 ## [1.2.17] — 2026-11-14
 
 Against 1.2.16 the public declarations do not change; the HTTP status some errors carry does.
@@ -1083,7 +1102,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.17...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.18...HEAD
+[1.2.18]: https://github.com/bymaxone/nest-queue/compare/v1.2.17...v1.2.18
 [1.2.17]: https://github.com/bymaxone/nest-queue/compare/v1.2.16...v1.2.17
 [1.2.16]: https://github.com/bymaxone/nest-queue/compare/v1.2.15...v1.2.16
 [1.2.15]: https://github.com/bymaxone/nest-queue/compare/v1.2.14...v1.2.15

@@ -16,6 +16,7 @@ import type { ResolvedQueueOptions } from '../config/resolved-options'
 import { duplicateConnection } from '../utils/duplicate-connection'
 import { attachClientErrorListener } from '../utils/attach-client-error-listener'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
+import { disconnectUnlessEnded } from '../utils/disconnect-unless-ended'
 
 /**
  * Lazily creates and caches one BullMQ `QueueEvents` instance per queue.
@@ -64,7 +65,7 @@ export class QueueEventsRegistry {
       qe = new QueueEvents(queueName, { connection: conn, prefix: this.options.prefix })
     } catch (err) {
       // Disconnect the duplicated connection to prevent a Redis resource leak.
-      conn.disconnect()
+      disconnectUnlessEnded(conn)
       throw err
     }
     attachDefaultErrorListener(qe, this.logger, 'QueueEvents', queueName)

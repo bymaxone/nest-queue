@@ -200,7 +200,7 @@ describe('E2E — the process after app.close() with a handler that outlasts the
     return { closingAt, closedAt, exitedAt, killedByHarness, stderrAfterClose, stderr }
   }
 
-  it('exits by itself within the drain budget plus a small margin when it never settles', async () => {
+  it('exits by itself within the drain budget plus a margin made for a loaded machine when it never settles', async () => {
     const { closingAt, closedAt, exitedAt, killedByHarness, stderrAfterClose, stderr } =
       await runChild(0)
 
