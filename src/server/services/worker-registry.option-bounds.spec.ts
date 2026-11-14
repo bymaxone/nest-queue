@@ -79,6 +79,18 @@ describe('WorkerRegistry — counts must be whole numbers', () => {
   })
 })
 
+describe('WorkerRegistry — limiter.duration has no ceiling', () => {
+  // BullMQ sleeps a rate-limited worker for min(time left, maximumRateLimitDelay), 30 s by
+  // default, and only passes the duration to Redis as an expiry, so a window above 2^31 - 1 ms
+  // (about 24.8 days, e.g. "per month") is not a timer Node would cut to 1 ms.
+  it.each([2_147_483_648, 2_592_000_000, Number.MAX_SAFE_INTEGER])(
+    'accepts a limiter window of %s ms',
+    (duration) => {
+      expect(refusal({ limiter: { max: 1, duration } })).toBeUndefined()
+    },
+  )
+})
+
 describe('WorkerRegistry — lockDuration and stalledInterval', () => {
   it.each(['lockDuration', 'stalledInterval'] as const)(
     'refuses %s outside 1000..2147483647, and says why',
