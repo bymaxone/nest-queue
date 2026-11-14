@@ -45,6 +45,22 @@ const realDuplicate: (this: Redis, override?: Partial<RedisOptions>) => Redis =
 beforeEach(() => {
   duplicates.length = 0
   roots.length = 0
+  // The timers below belong to ioredis (a socket the client already closed leaves its 2 s
+  // teardown timer pending) and to BullMQ (a stalled-job check that was in flight when the worker
+  // closed arms one more). Neither can be cancelled from outside, and real ones would hold the
+  // process open for seconds after the last test. Faking only the timer functions lets the sockets
+  // and the event-loop primitives run for real while every pending timer is dropped below.
+  jest.useFakeTimers({
+    doNotFake: [
+      'nextTick',
+      'setImmediate',
+      'clearImmediate',
+      'queueMicrotask',
+      'Date',
+      'performance',
+      'hrtime',
+    ],
+  })
   jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
   jest.spyOn(Redis.prototype, 'duplicate').mockImplementation(function (
     this: Redis,
@@ -72,6 +88,8 @@ afterEach(async () => {
           ),
     ),
   )
+  jest.clearAllTimers()
+  jest.useRealTimers()
   jest.restoreAllMocks()
 })
 
@@ -211,6 +229,7 @@ describe('the client inventory — host-supplied connection (Mode A, nest-cache 
     expect(host.listenerCount('error')).toBe(before)
     expect(duplicates.length).toBeGreaterThanOrEqual(1)
     expect(unhandled(duplicates)).toEqual([])
-    host.disconnect()
+    // afterEach disconnects it and waits for its 'end', like every other client of this file.
+    roots.push(host)
   })
 })
