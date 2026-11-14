@@ -39,6 +39,14 @@ export const DEFAULT_CONNECTION_READY_TIMEOUT_MS = 10_000 as const
 export const DEFAULT_COMMAND_TIMEOUT_MS = 5_000 as const
 
 /**
+ * Teardown timer (ms) ioredis arms when `disconnect()` closes a client. Only the stream's `close`
+ * event clears it, and a client with no open stream (reconnecting, or ended) never emits one, so
+ * the default of 2 000 ms holds the process that long after shutdown. One millisecond is the
+ * shortest that ioredis accepts.
+ */
+export const DISCONNECT_TIMEOUT_MS = 1 as const
+
+/**
  * Default deadline (ms) for one `enqueue` or `enqueueBulk` call, whatever the connection mode. It
  * covers a shared client whose retries are unbounded, which the command timeout cannot reach.
  */

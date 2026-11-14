@@ -148,6 +148,7 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
       db: 1,
       lazyConnect: false,
       commandTimeout: 5000,
+      disconnectTimeout: 1,
       enableOfflineQueue: false,
     })
     expect(resolver.getMode()).toBe('mode-b-owned')
@@ -174,6 +175,7 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
       port: 6379,
       lazyConnect: false,
       commandTimeout: 5000,
+      disconnectTimeout: 1,
       enableOfflineQueue: false,
     })
   })
@@ -223,6 +225,7 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
     expect(redisConstructor).toHaveBeenCalledWith('redis://localhost:6379', {
       lazyConnect: false,
       commandTimeout: 5000,
+      disconnectTimeout: 1,
       enableOfflineQueue: false,
     })
   })
