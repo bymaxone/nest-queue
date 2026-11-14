@@ -11,6 +11,20 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.21] — 2026-11-14
+
+Against 1.2.20 the declared types change in one place: `ConnectionResolver.teardown` takes an optional `timeoutMs`.
+
+### Changed
+
+- **Shutdown no longer waits on a frozen Redis for as long as the command deadline.** The library-owned client's `quit()` was awaited with no bound of its own, so against a Redis that answers nothing it ended only at ioredis's command deadline (`commandTimeoutMs`, 5 s by default), and a host that raised that option lengthened every shutdown by the same amount. The quit is now bounded by what is left of the shutdown budget (`shutdown.drainTimeoutMs`, counted from the start of the drain), and never less than one second, so a healthy Redis still answers it; a quit that fails or is unanswered at the bound is followed by a disconnect, unless the client has already ended. With the defaults nothing changes (the budget is 30 s, longer than the command deadline).
+
+#### Apply to a derived backend
+
+- If you replace `ConnectionResolver`, give `teardown` an optional `timeoutMs` and honour it: the lifecycle now calls `teardown(timeoutMs)`.
+
+---
+
 ## [1.2.20] — 2026-11-14
 
 Against 1.2.19 the declared types do not change; one JSDoc comment in the declarations does (`waitReady`).
@@ -1144,7 +1158,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.20...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.21...HEAD
+[1.2.21]: https://github.com/bymaxone/nest-queue/compare/v1.2.20...v1.2.21
 [1.2.20]: https://github.com/bymaxone/nest-queue/compare/v1.2.19...v1.2.20
 [1.2.19]: https://github.com/bymaxone/nest-queue/compare/v1.2.18...v1.2.19
 [1.2.18]: https://github.com/bymaxone/nest-queue/compare/v1.2.17...v1.2.18

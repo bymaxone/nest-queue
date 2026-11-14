@@ -477,7 +477,9 @@ It implements a **bounded drain protocol** with at-least-once semantics:
 4. Queue-events and the connections the library opened for workers and queue-events are closed,
    each within what is left of the budget; a connection that has not quit by then is disconnected.
 5. Once NestJS has stopped the HTTP server (`onApplicationShutdown`), the flow producer, the
-   cached queues and, in Mode B, the library's own Redis connection are closed. NestJS runs
+   cached queues and, in Mode B, the library's own Redis connection are closed; its quit is bounded
+   by what is left of the same budget, and never by less than one second, and an unanswered quit
+   is followed by a disconnect. NestJS runs
    `onModuleDestroy` before it stops the HTTP server, so a request that is still being served can
    enqueue a job after step 4; those resources stay open until the server is down.
 

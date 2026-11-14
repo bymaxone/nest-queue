@@ -16,10 +16,12 @@ import { duplicateConnection } from '../utils/duplicate-connection'
 import {
   DEFAULT_COMMAND_TIMEOUT_MS,
   DEFAULT_CONNECTION_READY_TIMEOUT_MS,
+  DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS,
 } from '../constants/default-options'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { disconnectUnlessEnded } from '../utils/disconnect-unless-ended'
+import { quitWithin } from '../utils/quit-within'
 import { isCommandTimeout, unavailableException } from '../utils/command-timeout'
 
 /**
@@ -178,14 +180,15 @@ export class ConnectionResolver {
     return this.#pendingReady
   }
 
-  /** Close the library-owned connection on shutdown; never touch a BYO client. */
-  async teardown(): Promise<void> {
-    if (this.isOwned() && this.#client) {
-      const client = this.#client
-      await client.quit().catch(() => {
-        disconnectUnlessEnded(client)
-      })
-    }
+  /**
+   * Close the library-owned connection on shutdown; never touch a BYO client. The quit is bounded:
+   * against a frozen Redis it would otherwise wait for the client's own command deadline, which a
+   * derived backend may have raised.
+   *
+   * @param timeoutMs - The longest the quit may take. Default: the shutdown drain budget.
+   */
+  async teardown(timeoutMs: number = DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS): Promise<void> {
+    if (this.isOwned() && this.#client) await quitWithin(this.#client, timeoutMs)
   }
 
   /** Validate and adopt a bring-your-own client for the Queue role. */
