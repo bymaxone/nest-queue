@@ -222,8 +222,8 @@ export class ConnectionResolver {
    * for a moment first — so the budget does. The two exceptions are an answer from the server that
    * waiting cannot change (a refused credential) and a client that has stopped reconnecting; both
    * reject at once. No rejection carries an error code or message in its response, since both can
-   * name the backing service's state or host: the last error is the exception's `cause`, and the
-   * client's error listener has already logged it.
+   * name the backing service's state or host: the last error, when there was one, is the
+   * exception's `cause`.
    */
   private async waitReady(timeoutMs: number): Promise<void> {
     const client = this.getClient()
