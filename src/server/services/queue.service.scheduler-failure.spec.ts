@@ -43,6 +43,7 @@ const RedisReplyError = ReplyError as new (message: string) => Error
 function makeService(queueOptions: ResolvedQueueOptions['queueOptions'] = {}): QueueService {
   const connection = {
     getClient: jest.fn().mockReturnValue({ id: 'client' }),
+    awaitReady: jest.fn().mockResolvedValue(undefined),
   } as unknown as ConnectionResolver
   const options: ResolvedQueueOptions = {
     connection: { url: 'redis://localhost:6379' },

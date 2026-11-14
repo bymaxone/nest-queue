@@ -65,6 +65,9 @@ export class ConnectionResolver {
 
   private mode: QueueConnectionMode | undefined
 
+  /** The wait for `ready` that every caller shares while the client is not ready. */
+  #pendingReady: Promise<void> | undefined
+
   constructor(@Inject(BYMAX_QUEUE_OPTIONS) options: BymaxQueueModuleOptions) {
     this.#options = options
   }
@@ -146,6 +149,25 @@ export class ConnectionResolver {
   /** Whether the library owns (and must close) the connection. */
   isOwned(): boolean {
     return this.mode === 'mode-b-owned'
+  }
+
+  /**
+   * Settle when the client can take a command. While it is still connecting or reconnecting, every
+   * caller shares one wait on its `ready` event, so a health check that polls through a long outage
+   * adds one listener set to the client, not one per call, and gives it back when Redis returns. A
+   * lazy client (`wait`) connects on its first command and a finished one (`end`) never becomes
+   * ready, so both are left for the call itself.
+   */
+  awaitReady(): Promise<void> {
+    const client = this.getClient()
+    if (!WAITING_STATUSES.has(client.status)) return Promise.resolve()
+    this.#pendingReady ??= new Promise<void>((resolve) => {
+      client.once('ready', () => {
+        this.#pendingReady = undefined
+        resolve()
+      })
+    })
+    return this.#pendingReady
   }
 
   /** Close the library-owned connection on shutdown; never touch a BYO client. */
@@ -231,6 +253,14 @@ export class ConnectionResolver {
     })
   }
 }
+
+/** The client statuses in which a call would wait for the connection: it is not ready yet. */
+const WAITING_STATUSES: ReadonlySet<string> = new Set([
+  'connecting',
+  'connect',
+  'reconnecting',
+  'close',
+])
 
 /** True for an error the server answered with (`WRONGPASS`, `NOAUTH`, ...), as opposed to a socket fault. */
 function isReplyError(err: unknown): boolean {

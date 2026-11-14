@@ -44,7 +44,10 @@ jest.mock('bullmq', () => ({
 
 /** Build a ConnectionResolver stub returning a fixed client. */
 function makeConnection(): ConnectionResolver {
-  return { getClient: jest.fn().mockReturnValue({ id: 'client' }) } as unknown as ConnectionResolver
+  return {
+    getClient: jest.fn().mockReturnValue({ id: 'client' }),
+    awaitReady: jest.fn().mockResolvedValue(undefined),
+  } as unknown as ConnectionResolver
 }
 
 /** Build resolved options with metrics enabled. */

@@ -7,7 +7,13 @@ import { createServer } from 'node:net'
 import { Redis } from 'ioredis'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
-import { isCommandTimeout, timeoutException, withCommandTimeoutCode } from './command-timeout'
+import {
+  isCommandTimeout,
+  isOfflineRejection,
+  timeoutException,
+  unavailableException,
+  withCommandTimeoutCode,
+} from './command-timeout'
 
 /** The code, status and details of a QueueException. */
 function describeException(err: unknown): { code: string; details: unknown; status: number } {
@@ -63,6 +69,61 @@ describe('the installed ioredis', () => {
   })
 })
 
+describe('isOfflineRejection', () => {
+  it('recognises the rejection ioredis gives a call made while the connection is down', () => {
+    expect(
+      isOfflineRejection(
+        new Error("Stream isn't writeable and enableOfflineQueue options is false"),
+      ),
+    ).toBe(true)
+  })
+
+  it.each([
+    ['another message', new Error('Connection is closed.')],
+    ['the command timeout', new Error('Command timed out')],
+    ['extra text', new Error("Stream isn't writeable and enableOfflineQueue options is false.")],
+    ['a string with the message', "Stream isn't writeable and enableOfflineQueue options is false"],
+    ['null', null],
+  ])('leaves %s alone', (_label, err) => {
+    expect(isOfflineRejection(err)).toBe(false)
+  })
+})
+
+describe('the installed ioredis, connection down', () => {
+  // Pinned like the command timeout: a release that rewords the text must fail here.
+  it('rejects a call made while disconnected, with offline queue off, with the text matched', async () => {
+    const client = new Redis({
+      host: '127.0.0.1',
+      port: 1,
+      enableOfflineQueue: false,
+      lazyConnect: true,
+      retryStrategy: () => null,
+    })
+
+    const err = await client.get('key').catch((e: unknown) => e)
+
+    expect((err as Error).message).toBe(
+      "Stream isn't writeable and enableOfflineQueue options is false",
+    )
+    expect(isOfflineRejection(err)).toBe(true)
+    client.disconnect()
+  })
+})
+
+describe('unavailableException', () => {
+  it('is a CONNECTION_TIMEOUT naming the operation and that the connection is down', () => {
+    const cause = new Error("Stream isn't writeable and enableOfflineQueue options is false")
+    const exception = unavailableException('getJob', cause)
+
+    expect(describeException(exception)).toStrictEqual({
+      code: QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
+      details: { operation: 'getJob', reason: 'offline' },
+      status: 500,
+    })
+    expect(exception.cause).toBe(cause)
+  })
+})
+
 describe('timeoutException', () => {
   it('is a CONNECTION_TIMEOUT naming the operation and the deadline', () => {
     expect(describeException(timeoutException('enqueue', 5000))).toStrictEqual({
@@ -102,6 +163,21 @@ describe('withCommandTimeoutCode', () => {
     expect(describeException(err)).toStrictEqual({
       code: QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
       details: { operation: 'getJob', timeoutMs: 5000 },
+      status: 500,
+    })
+    expect((err as QueueException).cause).toBe(cause)
+  })
+
+  it('reports a rejection from a connection that is down as CONNECTION_TIMEOUT, reason offline', async () => {
+    const cause = new Error("Stream isn't writeable and enableOfflineQueue options is false")
+
+    const err = await withCommandTimeoutCode('enqueue', () => 5000, Promise.reject(cause)).catch(
+      (e: unknown) => e,
+    )
+
+    expect(describeException(err)).toStrictEqual({
+      code: QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
+      details: { operation: 'enqueue', reason: 'offline' },
       status: 500,
     })
     expect((err as QueueException).cause).toBe(cause)

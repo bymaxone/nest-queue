@@ -66,6 +66,7 @@ function makeService(commandTimeout?: number): { service: QueueService; queue: M
   const client = { options: commandTimeout === undefined ? {} : { commandTimeout } }
   const connection = {
     getClient: jest.fn().mockReturnValue(client),
+    awaitReady: jest.fn().mockResolvedValue(undefined),
   } as unknown as ConnectionResolver
   const service = new QueueService(connection, makeOptions(7000, 10_000))
   service.getOrCreateQueue('email')
