@@ -419,25 +419,18 @@ describe('QueueService — inspection', () => {
     expect(queueInstances[0]?.getJobs).not.toHaveBeenCalled()
   })
 
-  it('accepts a window of exactly 1000 jobs', async () => {
-    const { service } = makeService()
-    service.getOrCreateQueue('email')
-    queueInstances[0]?.getJobs.mockResolvedValue([])
-
-    await service.getJobs('email', 'waiting', 500, 1499)
-
-    expect(queueInstances[0]?.getJobs).toHaveBeenCalledWith(['waiting'], 500, 1499)
-  })
-
-  it('forwards an explicit pagination window', async () => {
+  it.each([
+    [10, 20],
+    [500, 1499],
+  ])('forwards the window %i to %i, a full 1000-job page included', async (start, end) => {
     // Custom start/end values reach BullMQ unchanged.
     const { service } = makeService()
     service.getOrCreateQueue('email')
     queueInstances[0]?.getJobs.mockResolvedValue([])
 
-    await service.getJobs('email', 'failed', 10, 20)
+    await service.getJobs('email', 'failed', start, end)
 
-    expect(queueInstances[0]?.getJobs).toHaveBeenCalledWith(['failed'], 10, 20)
+    expect(queueInstances[0]?.getJobs).toHaveBeenCalledWith(['failed'], start, end)
   })
 })
 

@@ -607,6 +607,26 @@ consumed from another. It is **not** an access control: anything that can reach 
 instance can read every namespace on it. Cross-tenant isolation that must survive a
 compromised client belongs in Redis ACLs or separate instances.
 
+### Reading more than 1 000 jobs
+
+`getJobs` reads at most 1 000 jobs per call, and refuses BullMQ's `-1` ("everything") with `INVALID_OPTIONS`, because that reads a status list of any size into memory in one reply. Page through it instead:
+
+```typescript
+import type { QueueService } from '@bymax-one/nest-queue'
+
+async function inspectFailed(
+  queueService: QueueService,
+  inspect: (job: unknown) => Promise<void>,
+): Promise<void> {
+  const PAGE = 500
+  for (let start = 0; ; start += PAGE) {
+    const page = await queueService.getJobs('reports', 'failed', start, start + PAGE - 1)
+    for (const job of page) await inspect(job)
+    if (page.length < PAGE) break
+  }
+}
+```
+
 ### Queue names are keys, not user input
 
 Every queue name used with `QueueService` keeps a `Queue` object and its Redis resources for the life of the process, and names are never evicted. A name built from request data (a tenant id, a URL segment) lets whoever controls it grow memory without limit and create keys in your Redis. Take queue names from a fixed set in code or validate them against an allowlist before use.

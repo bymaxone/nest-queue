@@ -84,8 +84,10 @@ and `enqueueTimeoutMs` on `BymaxQueueModuleOptions` and change the documentation
   `jobId` or `deduplication`); raise the option to keep waiting longer.
 - If you assert exact retry delays, expect them between 50% and 100% of the computed value; set
   `defaultJobOptions.backoff` without `jitter` to keep exact delays.
-- If you call `getJobs` with an `end` of `-1` or a window over 1 000 jobs, page through it with
-  several calls of at most 1 000; those calls now throw `INVALID_OPTIONS`.
+- If you call `getJobs` with an `end` of `-1` or a window over 1 000 jobs, those calls now throw
+  `INVALID_OPTIONS`. Page through the list with several calls of at most 1 000 jobs, for example
+  `getJobs(queue, status, start, start + 499)` in a loop until a page comes back short; the README
+  has the loop.
 - Nothing changes until you set `jobTimeoutMs`. If you do, a handler that runs longer than it is
   failed and retried while its own promise keeps running unless it honours the `AbortSignal`, so keep
   handlers idempotent. If you wrap `ProgrammaticWorkerConfig.handler`, accept the new optional second
