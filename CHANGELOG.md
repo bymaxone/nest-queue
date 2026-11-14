@@ -11,6 +11,29 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.2.15] — 2026-11-14
+
+Against 1.2.14 the built declarations gain `ConnectionResolver.awaitReady()`; nothing else in the public API changes.
+
+### Fixed
+
+- **A call made while the connection is down now reports the documented error.** With the owned connection's offline queue off, a call on a queue already in use during a refused-connection outage rejected at once with ioredis's plain `Stream isn't writeable and enableOfflineQueue options is false`, so a host retrying on `CONNECTION_TIMEOUT` as documented never retried. It is now `CONNECTION_TIMEOUT` with `details.operation` and `details.reason: 'offline'`, and the ioredis error as `cause`.
+- **The first call on a queue no longer waits for Redis without a deadline.** `getMetrics`, `getJob`, `getJobs`, the scheduler calls, `pauseQueue`, `resumeQueue` and `cleanQueue` on a queue name not yet used waited in BullMQ for the client to be ready, with no bound, for as long as the outage lasted. Every `QueueService` call is now bounded by `enqueueTimeoutMs` and rejects with `CONNECTION_TIMEOUT`.
+- **Shutdown no longer leaves a worker running after its drain budget.** A handler that never settled kept the worker's lock-renewal timer alive after `app.close()`: the process did not exit by itself and logged `Connection is closed.` repeatedly. BullMQ ignores a forced close once a graceful one has started, so the worker is now paused first and closed with `close(true)` as its first close when the budget runs out. What the abandoned handler produces after the budget, a result or a failure, is dropped, so BullMQ cannot resume the stopped worker and reopen its connection. The handler's own promise still keeps running, since user code cannot be cancelled. A sandboxed worker is the exception: its job runs in a child process the registry cannot wrap, and in a measured run the host process did not exit by itself after the budget ended with such a job still running.
+
+### Documentation
+
+- `enqueueTimeoutMs` is documented as the per-call deadline of every `QueueService` call, and `queue.connection_timeout` as covering a connection that is down.
+
+#### Apply to a derived backend
+
+- If you match the ioredis error `Stream isn't writeable and enableOfflineQueue options is false` on a call, match `CONNECTION_TIMEOUT` instead; `details.reason` is `'offline'` and the original error is its `cause`.
+- If a `getMetrics`, `getJob`, `getJobs`, scheduler, pause, resume or clean call relied on waiting out an outage on a queue's first use, it now rejects with `CONNECTION_TIMEOUT` after `enqueueTimeoutMs`; raise the option to wait longer.
+- If you replace `ConnectionResolver` with your own implementation, add `awaitReady(): Promise<void>`: `QueueService` calls it before the first call on each queue name.
+- If you parse the shutdown log lines, the wording changed: `forcing close` is gone and the summary reads `N worker(s) stopped without draining`.
+
+---
+
 ## [1.2.14] — 2026-11-14
 
 Several defaults change in this release, so read the Apply note below. A boot that succeeds, an
@@ -1013,7 +1036,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.14...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.15...HEAD
+[1.2.15]: https://github.com/bymaxone/nest-queue/compare/v1.2.14...v1.2.15
 [1.2.14]: https://github.com/bymaxone/nest-queue/compare/v1.2.13...v1.2.14
 [1.2.13]: https://github.com/bymaxone/nest-queue/compare/v1.2.12...v1.2.13
 [1.2.12]: https://github.com/bymaxone/nest-queue/compare/v1.2.11...v1.2.12

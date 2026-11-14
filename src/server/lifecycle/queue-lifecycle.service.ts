@@ -7,9 +7,9 @@
  * HTTP server has stopped, it releases what a request can still be using: the
  * flow producer, the cached queues, and finally the Queue-role connection.
  *
- * Delivery is at-least-once: when a worker exceeds the drain budget it is
- * force-closed and its in-flight job becomes `stalled` and is retried by another
- * worker. Handlers must therefore be idempotent, and `lockDuration` should
+ * Delivery is at-least-once: when a worker exceeds the drain budget it is stopped
+ * without waiting for its job, whose lock then expires so the job becomes `stalled`
+ * and is retried by another worker. Handlers must therefore be idempotent, and `lockDuration` should
  * comfortably exceed the worst-case handler runtime so healthy long jobs are
  * never treated as stalled.
  * @layer server/lifecycle
@@ -26,12 +26,16 @@ import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import { describeError } from '../utils/describe-error'
 import { withDeadline } from '../utils/with-deadline'
+import { abandonWorker } from '../utils/abandoned-workers'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { ConnectionResolver } from '../services/connection-resolver.service'
 import { FlowService } from '../services/flow.service'
 import { QueueService } from '../services/queue.service'
 import { WorkerRegistry } from '../services/worker-registry.service'
 import { QueueEventsRegistry } from '../services/queue-events-registry.service'
+
+/** How long a worker's forced close may take, in milliseconds, once the drain budget has ended. */
+const FORCE_CLOSE_GRACE_MS = 1000
 
 /** The rejection of a graceful worker close that ran out of the drain budget. */
 class DrainTimeoutError extends Error {}
@@ -97,40 +101,52 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
     await this.teardownConnection()
     this.logger.log(
       `Queue shutdown complete in ${String(Date.now() - (this.startedAt ?? Date.now()))}ms ` +
-        `(forced ${String(this.forcedWorkers)} worker(s))`,
+        `(${String(this.forcedWorkers)} worker(s) stopped without draining)`,
     )
   }
 
   /**
-   * Close every worker in parallel, each bounded by what is left of the shutdown budget, and
-   * force-close any that exceed it. Returns the number of workers that had to be force-closed.
+   * Stop every worker in parallel, each bounded by what is left of the shutdown budget. A worker
+   * is paused first (it stops fetching and waits for its active jobs) and then closed. One that is
+   * still busy when the budget ends is closed with `close(true)`: because `pause` does not start a
+   * close, that is the worker's FIRST close, so it does not wait for the job and stops the lock
+   * renewal that would otherwise keep running and keep the process alive. The job's lock then
+   * expires, and it stalls and is retried elsewhere. Returns how many workers were stopped
+   * without draining.
    *
    * @param deadline - The epoch millisecond at which the shutdown budget ends.
-   * @returns The count of force-closed workers.
+   * @returns The count of workers stopped without draining.
    */
   private async closeWorkers(deadline: number): Promise<number> {
-    let forced = 0
+    let undrained = 0
     await Promise.all(
       Array.from(this.workers.getAll(), async ([name, worker]) => {
         try {
-          await bounded(worker.close(), deadline)
+          await bounded(
+            worker.pause().then(() => worker.close()),
+            deadline,
+          )
         } catch (cause) {
-          forced++
+          undrained++
+          abandonWorker(worker)
+          const stopped =
+            'it is stopped without waiting for its in-flight job, which becomes stalled and is retried'
           this.logger.warn(
             cause instanceof DrainTimeoutError
-              ? `Worker "${name}" exceeded the ${String(this.resolved.shutdown.drainTimeoutMs)}ms drain budget — ` +
-                  `forcing close (${QUEUE_ERROR_CODES.SHUTDOWN_TIMEOUT_EXCEEDED}); ` +
-                  'the in-flight job becomes stalled and is retried'
-              : `Worker "${name}" failed to close gracefully (${describeError(cause)}) — ` +
-                  'forcing close; the in-flight job becomes stalled and is retried',
+              ? `Worker "${name}" exceeded the ${String(this.resolved.shutdown.drainTimeoutMs)}ms drain budget ` +
+                  `(${QUEUE_ERROR_CODES.SHUTDOWN_TIMEOUT_EXCEEDED}); ${stopped}`
+              : `Worker "${name}" failed to close gracefully (${describeError(cause)}); ${stopped}`,
           )
-          // Best-effort force-close, never awaited: a genuinely stuck worker must
-          // not block the remaining teardown steps. A rejection is swallowed.
-          void worker.close(true).catch(() => undefined)
+          // Bounded: a close that never settles must not hold the rest of the teardown.
+          // Stryker disable next-line ArrowFunction: equivalent — the deadline error is swallowed by the catch below, so no caller can observe its value
+          const deadlineError = (): DrainTimeoutError => new DrainTimeoutError()
+          await withDeadline(worker.close(true), FORCE_CLOSE_GRACE_MS, deadlineError).catch(
+            () => undefined,
+          )
         }
       }),
     )
-    return forced
+    return undrained
   }
 
   /** Close every cached `QueueEvents` in parallel within the budget, swallowing failures. */

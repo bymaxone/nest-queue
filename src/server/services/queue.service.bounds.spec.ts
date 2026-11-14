@@ -35,6 +35,7 @@ jest.mock('bullmq', () => ({
 function makeService(): { service: QueueService; queue: (typeof queues)[number] } {
   const connection = {
     getClient: jest.fn().mockReturnValue({ id: 'client' }),
+    awaitReady: jest.fn().mockResolvedValue(undefined),
   } as unknown as ConnectionResolver
   const options: ResolvedQueueOptions = {
     connection: { url: 'redis://localhost:6379' },

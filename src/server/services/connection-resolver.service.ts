@@ -65,6 +65,9 @@ export class ConnectionResolver {
 
   private mode: QueueConnectionMode | undefined
 
+  /** The wait for `ready` that every caller shares while the client is not ready. */
+  #pendingReady: Promise<void> | undefined
+
   constructor(@Inject(BYMAX_QUEUE_OPTIONS) options: BymaxQueueModuleOptions) {
     this.#options = options
   }
@@ -148,6 +151,25 @@ export class ConnectionResolver {
     return this.mode === 'mode-b-owned'
   }
 
+  /**
+   * Settle when the client can take a command. While it is still connecting or reconnecting, every
+   * caller shares one wait on its `ready` event, so a health check that polls through a long outage
+   * adds one listener set to the client, not one per call, and gives it back when Redis returns. A
+   * lazy client (`wait`) connects on its first command and a finished one (`end`) never becomes
+   * ready, so both are left for the call itself.
+   */
+  awaitReady(): Promise<void> {
+    const client = this.getClient()
+    if (!WAITING_STATUSES.has(client.status)) return Promise.resolve()
+    this.#pendingReady ??= new Promise<void>((resolve) => {
+      client.once('ready', () => {
+        this.#pendingReady = undefined
+        resolve()
+      })
+    })
+    return this.#pendingReady
+  }
+
   /** Close the library-owned connection on shutdown; never touch a BYO client. */
   async teardown(): Promise<void> {
     if (this.isOwned() && this.#client) {
@@ -171,10 +193,10 @@ export class ConnectionResolver {
     }
     if (client.options.maxRetriesPerRequest === null) {
       this.#logger.warn(
-        'The shared client has maxRetriesPerRequest: null, so a producer call made while Redis is ' +
-          'unreachable waits for as long as the outage lasts; enqueue is bounded by ' +
-          'enqueueTimeoutMs, other QueueService calls are not. Give the client a finite limit to ' +
-          'fail fast.',
+        'The shared client has maxRetriesPerRequest: null, so a command issued while Redis is ' +
+          'unreachable stays queued in the client for as long as the outage lasts. QueueService calls ' +
+          'are bounded by enqueueTimeoutMs and the caller is released, but the command is not ' +
+          'cancelled. Give the client a finite limit to fail fast.',
       )
     }
     const probe = duplicateConnection(client)
@@ -231,6 +253,14 @@ export class ConnectionResolver {
     })
   }
 }
+
+/** The client statuses in which a call would wait for the connection: it is not ready yet. */
+const WAITING_STATUSES: ReadonlySet<string> = new Set([
+  'connecting',
+  'connect',
+  'reconnecting',
+  'close',
+])
 
 /** True for an error the server answered with (`WRONGPASS`, `NOAUTH`, ...), as opposed to a socket fault. */
 function isReplyError(err: unknown): boolean {

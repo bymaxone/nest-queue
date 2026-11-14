@@ -60,7 +60,10 @@ const fakeClient = { id: 'queue-client' }
 
 /** Build a ConnectionResolver stub returning a fixed client. */
 function makeConnection(): ConnectionResolver {
-  return { getClient: jest.fn().mockReturnValue(fakeClient) } as unknown as ConnectionResolver
+  return {
+    getClient: jest.fn().mockReturnValue(fakeClient),
+    awaitReady: jest.fn().mockResolvedValue(undefined),
+  } as unknown as ConnectionResolver
 }
 
 /** Build resolved options for the service under test. */

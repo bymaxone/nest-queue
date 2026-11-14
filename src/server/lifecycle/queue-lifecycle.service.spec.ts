@@ -10,6 +10,7 @@ import { Logger } from '@nestjs/common'
 import type { Queue, QueueEvents, Worker } from 'bullmq'
 import type { Redis } from 'ioredis'
 import { QueueLifecycle } from './queue-lifecycle.service'
+import { isAbandoned } from '../utils/abandoned-workers'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import type { ConnectionResolver } from '../services/connection-resolver.service'
@@ -37,9 +38,15 @@ function makeResolved(shutdown?: Partial<ResolvedQueueOptions['shutdown']>): Res
   }
 }
 
-/** A worker mock whose `close` distinguishes graceful (`close()`) from force (`close(true)`). */
-function makeWorker(close: jest.Mock): Worker {
-  return { close } as unknown as Worker
+/**
+ * A worker mock whose `close` distinguishes graceful (`close()`) from force (`close(true)`), and
+ * whose `pause` (stop fetching and wait for the active jobs) settles at once unless given.
+ */
+function makeWorker(
+  close: jest.Mock,
+  pause: jest.Mock = jest.fn().mockResolvedValue(undefined),
+): Worker {
+  return { close, pause } as unknown as Worker
 }
 
 /** A queue-events mock with a controllable `close`. */
@@ -180,7 +187,9 @@ describe('QueueLifecycle shutdown — happy path', () => {
     expect(workerClose).toHaveBeenCalledWith()
     expect(queueDrain).not.toHaveBeenCalled()
     expect(logSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/Queue shutdown complete in .* \(forced 0 worker\(s\)\)/),
+      expect.stringMatching(
+        /Queue shutdown complete in .* \(0 worker\(s\) stopped without draining\)/,
+      ),
     )
   })
 
@@ -200,7 +209,9 @@ describe('QueueLifecycle shutdown — happy path', () => {
 
     await closeApp(lifecycle)
 
-    expect(logSpy).toHaveBeenCalledWith('Queue shutdown complete in 0ms (forced 0 worker(s))')
+    expect(logSpy).toHaveBeenCalledWith(
+      'Queue shutdown complete in 0ms (0 worker(s) stopped without draining)',
+    )
     jest.useRealTimers()
   })
 })
@@ -240,7 +251,9 @@ describe('QueueLifecycle shutdown — bounded drain', () => {
     // …and explain the at-least-once consequence (the job stalls and is retried).
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('stalled and is retried'))
     expect(connectionDestroy).toHaveBeenCalledTimes(1)
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('forced 1 worker(s)'))
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining('1 worker(s) stopped without draining'),
+    )
     jest.useRealTimers()
   })
 
@@ -277,6 +290,130 @@ describe('QueueLifecycle shutdown — bounded drain', () => {
 
     await expect(closeApp(lifecycle)).resolves.toBeUndefined()
     expect(close).toHaveBeenCalledWith(true)
+  })
+})
+
+describe('QueueLifecycle shutdown — stopping a worker', () => {
+  afterEach(() => {
+    jest.useRealTimers()
+  })
+
+  // BullMQ ignores a force close once a graceful one has started: the second call returns the
+  // first, still-pending close, and the lock-renewal timer keeps running. The first close the
+  // worker sees must therefore be the forced one, which is why the wait for active jobs is `pause`.
+  it('pauses, then closes gracefully, and forces nothing when the worker drains in time', async () => {
+    const order: string[] = []
+    const pause = jest.fn().mockImplementation(() => {
+      order.push('pause')
+      return Promise.resolve()
+    })
+    const close = jest.fn().mockImplementation((force?: boolean) => {
+      order.push(force === true ? 'close(true)' : 'close()')
+      return Promise.resolve()
+    })
+    const { lifecycle } = makeLifecycle({
+      workers: new Map([['email', makeWorker(close, pause)]]),
+    })
+
+    await lifecycle.onModuleDestroy()
+
+    expect(order).toEqual(['pause', 'close()'])
+    expect(warnSpy).not.toHaveBeenCalled()
+  })
+
+  it('makes close(true) the FIRST and only close when the active job outlives the budget', async () => {
+    jest.useFakeTimers()
+    const pause = jest.fn().mockReturnValue(new Promise(() => undefined))
+    const close = jest.fn().mockResolvedValue(undefined)
+    const { lifecycle } = makeLifecycle({
+      workers: new Map([['stuck', makeWorker(close, pause)]]),
+      resolved: makeResolved({ drainTimeoutMs: 3000 }),
+    })
+
+    const pending = lifecycle.onModuleDestroy()
+    await jest.advanceTimersByTimeAsync(2999)
+    expect(close).not.toHaveBeenCalled()
+    await jest.advanceTimersByTimeAsync(1)
+    await pending
+
+    expect(close.mock.calls).toEqual([[true]])
+  })
+
+  // A handler that settles after the budget would let BullMQ's pause reopen the blocking connection.
+  it('marks a worker it stops without draining as abandoned, and no other', async () => {
+    jest.useFakeTimers()
+    const stuck = makeWorker(
+      jest.fn().mockResolvedValue(undefined),
+      jest.fn().mockReturnValue(new Promise(() => undefined)),
+    )
+    const drained = makeWorker(jest.fn().mockResolvedValue(undefined))
+    const { lifecycle } = makeLifecycle({
+      workers: new Map([
+        ['stuck', stuck],
+        ['drained', drained],
+      ]),
+      resolved: makeResolved({ drainTimeoutMs: 1000 }),
+    })
+
+    const pending = lifecycle.onModuleDestroy()
+    await jest.advanceTimersByTimeAsync(1000)
+    await pending
+
+    expect(isAbandoned(stuck)).toBe(true)
+    expect(isAbandoned(drained)).toBe(false)
+  })
+
+  it('stops a worker whose pause fails the same way, with the real cause in the log', async () => {
+    const pause = jest.fn().mockRejectedValue(new Error('Connection is closed.'))
+    const close = jest.fn().mockResolvedValue(undefined)
+    const { lifecycle } = makeLifecycle({
+      workers: new Map([['email', makeWorker(close, pause)]]),
+    })
+
+    await lifecycle.onModuleDestroy()
+
+    expect(close.mock.calls).toEqual([[true]])
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Connection is closed.'))
+  })
+
+  it('does not let a forced close that never settles hold the shutdown for more than a second', async () => {
+    jest.useFakeTimers()
+    const pause = jest.fn().mockReturnValue(new Promise(() => undefined))
+    const close = jest.fn().mockReturnValue(new Promise(() => undefined))
+    const { lifecycle } = makeLifecycle({
+      workers: new Map([['stuck', makeWorker(close, pause)]]),
+      resolved: makeResolved({ drainTimeoutMs: 2000 }),
+    })
+
+    let done = false
+    const pending = lifecycle.onModuleDestroy().then(() => {
+      done = true
+    })
+    await jest.advanceTimersByTimeAsync(2000)
+    expect(done).toBe(false)
+    await jest.advanceTimersByTimeAsync(1000)
+    await pending
+
+    expect(done).toBe(true)
+  })
+
+  it('names what was stopped without claiming a force that BullMQ would ignore', async () => {
+    jest.useFakeTimers()
+    const pause = jest.fn().mockReturnValue(new Promise(() => undefined))
+    const { lifecycle } = makeLifecycle({
+      workers: new Map([['stuck', makeWorker(jest.fn().mockResolvedValue(undefined), pause)]]),
+      resolved: makeResolved({ drainTimeoutMs: 1000 }),
+    })
+
+    const pending = lifecycle.onModuleDestroy()
+    await jest.advanceTimersByTimeAsync(1000)
+    await pending
+
+    const lines = warnSpy.mock.calls.map(([line]) => String(line))
+    expect(lines.some((line) => line.includes('forcing close'))).toBe(false)
+    expect(
+      lines.some((line) => line.includes('is stopped without waiting for its in-flight job')),
+    ).toBe(true)
   })
 })
 
@@ -443,11 +580,15 @@ describe('QueueLifecycle shutdown — why a worker was forced', () => {
     expect(lines.some((line) => line.includes('failed to close'))).toBe(true)
     expect(
       lines.some((line) =>
-        line.includes('forcing close; the in-flight job becomes stalled and is retried'),
+        line.includes(
+          'it is stopped without waiting for its in-flight job, which becomes stalled and is retried',
+        ),
       ),
     ).toBe(true)
     expect(lines.some((line) => line.includes('drain budget'))).toBe(false)
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('forced 1 worker(s)'))
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining('1 worker(s) stopped without draining'),
+    )
   })
 })
 
@@ -606,7 +747,9 @@ describe('QueueLifecycle shutdown — the two hooks', () => {
     await lifecycle.onApplicationShutdown()
 
     expect(logSpy).toHaveBeenCalledTimes(1)
-    expect(logSpy).toHaveBeenCalledWith('Queue shutdown complete in 500ms (forced 1 worker(s))')
+    expect(logSpy).toHaveBeenCalledWith(
+      'Queue shutdown complete in 500ms (1 worker(s) stopped without draining)',
+    )
     jest.useRealTimers()
   })
 
@@ -622,7 +765,9 @@ describe('QueueLifecycle shutdown — the two hooks', () => {
     expect(flowDestroy).toHaveBeenCalledTimes(1)
     expect(queuesCloseAll).toHaveBeenCalledTimes(1)
     expect(connectionDestroy).toHaveBeenCalledTimes(1)
-    expect(logSpy).toHaveBeenCalledWith('Queue shutdown complete in 0ms (forced 0 worker(s))')
+    expect(logSpy).toHaveBeenCalledWith(
+      'Queue shutdown complete in 0ms (0 worker(s) stopped without draining)',
+    )
     jest.useRealTimers()
   })
 })

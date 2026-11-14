@@ -41,7 +41,7 @@ export type WorkerEventName =
  * overwriting each other.
  *
  * Delivery is at-least-once. A `'stalled'` job — for example after a shutdown
- * force-close or a lock expiry — is re-run by another worker: this is the
+ * that outlasts the drain budget, or a lock expiry — is re-run by another worker: this is the
  * visible at-least-once path, so handlers must be idempotent. Set `lockDuration`
  * comfortably above the worst-case handler runtime to avoid false stalls.
  *

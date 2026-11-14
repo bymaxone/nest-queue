@@ -57,9 +57,11 @@ export interface BymaxQueueModuleOptions {
    */
   commandTimeoutMs?: number
   /**
-   * The deadline, in milliseconds, for one `enqueue` or `enqueueBulk` call in either connection mode.
-   * When it passes, the call rejects with `CONNECTION_TIMEOUT`; the add may still complete in Redis
-   * afterwards, so retry with a stable `jobId` or `deduplication`. Default: 10_000.
+   * The deadline, in milliseconds, for one `QueueService` call that reaches Redis (`enqueue`,
+   * `getJob`, `getMetrics`, the scheduler, pause and clean calls, and the rest) in either connection
+   * mode, including the wait for the client to be ready on a queue's first call. When it passes, the
+   * call rejects with `CONNECTION_TIMEOUT`; an `enqueue` may still complete in Redis afterwards, so
+   * retry with a stable `jobId` or `deduplication`. Default: 10_000.
    */
   enqueueTimeoutMs?: number
 }

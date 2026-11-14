@@ -66,7 +66,7 @@ peer dependencies, so you control exact versions and the supply-chain surface st
 - ✅ **Dual-mode connection** — bring your own `ioredis` client, or let the library open its own from a URL or an options object
 - ✅ **Per-role retry policy** — `maxRetriesPerRequest: null` reaches only the duplicated Worker and QueueEvents connections; the producer keeps a finite retry limit, a 5 s command deadline and no offline queue on the connection the library opens, and `enqueue` has its own 10 s deadline, so a Redis outage rejects a call in seconds instead of holding the request; a shared client with `maxRetriesPerRequest: null` is the exception, and the library warns about it at boot
 - ✅ **One namespace, four objects** — the configured `prefix` reaches `Queue`, `Worker`, `QueueEvents` **and** `FlowProducer`, so producers and consumers can never end up on separate keyspaces
-- ✅ **Bounded graceful shutdown** — a single ordered sequence drains every worker under a deadline and then force-closes; delivery is at-least-once by design, so handlers must be idempotent
+- ✅ **Bounded graceful shutdown** — a single ordered sequence drains every worker under one deadline and then stops any that are still busy, whose jobs stall and are retried; delivery is at-least-once by design, so handlers must be idempotent
 - ✅ **No unlistened emitter** — every `Queue`, `Worker`, `QueueEvents` and `FlowProducer` the library creates carries a fallback `error` listener, so a transient Redis fault cannot become an uncaught exception in your process; your own `@OnWorkerEvent('error')` or `@OnQueueEvent('error')` still runs alongside it
 
 ### 🧩 Developer Experience
@@ -243,7 +243,7 @@ Every option passed to `forRoot` / `forRootAsync`. Only `connection` is required
 | `shutdown.drainOnShutdown` | `boolean`                                        | `false`                                                                                                                                                    | Development and test only: once the HTTP server has stopped, call `drain()` on every cached queue, which **removes** its waiting jobs (delayed and active jobs are left alone). Leave it `false` in production.                                                                                                                            |
 | `connectionReadyTimeoutMs` | `number`                                         | `10_000`                                                                                                                                                   | Mode B only: the budget for Redis to reach `ready`. A connection error while the client is still reconnecting does not end the wait; when the budget ends, startup fails with `CONNECTION_TIMEOUT` carrying `lastErrorCode` (a code such as `ECONNREFUSED`, never the message) and the client the library opened is closed.                |
 | `commandTimeoutMs`         | `number`                                         | `5_000`                                                                                                                                                    | Mode B only: the deadline for one Redis command on the connection the library opened (ioredis `commandTimeout`); an `options.commandTimeout` wins. A call that hits it rejects with `CONNECTION_TIMEOUT` (`details` carries `operation` and `timeoutMs`), as when `enqueueTimeoutMs` passes. Worker and QueueEvents connections have none. |
-| `enqueueTimeoutMs`         | `number`                                         | `10_000`                                                                                                                                                   | The deadline for one `enqueue` or `enqueueBulk`, in either mode; it rejects with `CONNECTION_TIMEOUT`, and the add may still complete in Redis, so retry with a stable `jobId` or `deduplication`.                                                                                                                                         |
+| `enqueueTimeoutMs`         | `number`                                         | `10_000`                                                                                                                                                   | The deadline for one `QueueService` call that reaches Redis, in either mode, including the wait for the client to be ready on a queue's first call; it rejects with `CONNECTION_TIMEOUT`, and an `enqueue` may still complete in Redis, so retry with a stable `jobId` or `deduplication`.                                                 |
 | `isGlobal`                 | `boolean`                                        | `true`                                                                                                                                                     | Register the module globally, so `QueueService` is injectable without re-importing.                                                                                                                                                                                                                                                        |
 
 > [!WARNING]
@@ -440,7 +440,7 @@ When a custom `jobId` already exists, or a `deduplication` rule keeps the job th
 
 ### A timed-out `enqueue` may still have been added
 
-When Redis does not answer in time, whether within `commandTimeoutMs` on the connection the library opened or within `enqueueTimeoutMs`, `enqueue` and `enqueueBulk` reject with `CONNECTION_TIMEOUT`, but the library cannot cancel the command: if Redis applies it late, the job exists anyway. Retrying a call that timed out can therefore add the job twice. For anything that must not run twice, pass a deterministic `jobId` (for example one derived from the business key): BullMQ ignores a second add with the same `jobId` for as long as the first job is still stored, so a retry inside that window is safe. A completed job is removed by `removeOnComplete`, and from then on the same `jobId` adds a new job, so keep the retry inside that window or keep the handler idempotent. A `deduplication` rule gives the same guarantee for work that is allowed to repeat after a window.
+When Redis does not answer in time, whether within `commandTimeoutMs` on the connection the library opened or within `enqueueTimeoutMs`, or the connection is down, `enqueue` and `enqueueBulk` reject with `CONNECTION_TIMEOUT`, but the library cannot cancel the command: if Redis applies it late, the job exists anyway. Retrying a call that timed out can therefore add the job twice. For anything that must not run twice, pass a deterministic `jobId` (for example one derived from the business key): BullMQ ignores a second add with the same `jobId` for as long as the first job is still stored, so a retry inside that window is safe. A completed job is removed by `removeOnComplete`, and from then on the same `jobId` adds a new job, so keep the retry inside that window or keep the handler idempotent. A `deduplication` rule gives the same guarantee for work that is allowed to repeat after a window.
 
 ### OpenTelemetry
 
@@ -465,10 +465,15 @@ It implements a **bounded drain protocol** with at-least-once semantics:
 1. All workers are closed **in parallel**, within one budget (`drainTimeoutMs`, default 30 s) that
    covers steps 1 to 4 together: however many workers are stuck, consumption stops after one budget,
    not one per worker.
-2. A worker resolves either when it drains normally or when the budget runs out — whichever comes
-   first.
-3. On timeout, the worker is force-closed (`worker.close(true)`), preserving stalled
-   jobs for reprocessing by the next instance.
+2. Each worker is paused (it stops fetching and waits for its active jobs) and then closed, or the
+   budget runs out — whichever comes first.
+3. On timeout, the worker is stopped with `worker.close(true)` as its first close, so it does not
+   wait for the job and its lock renewal ends; the lock expires and the job stalls and is retried
+   by the next instance. What the abandoned handler produces afterwards, a result or a failure, is
+   dropped, so the stopped worker cannot restart its connection. The handler's own promise keeps
+   running, because user code cannot be cancelled. A sandboxed (file-based) worker is the
+   exception: its job runs in a child process the registry cannot wrap, and in a measured run the
+   host process did not exit by itself after the budget ended with such a job still running.
 4. Queue-events and the connections the library opened for workers and queue-events are closed,
    each within what is left of the budget; a connection that has not quit by then is disconnected.
 5. Once NestJS has stopped the HTTP server (`onApplicationShutdown`), the flow producer, the
@@ -478,7 +483,7 @@ It implements a **bounded drain protocol** with at-least-once semantics:
 
 **Handlers must be idempotent.** Use `jobId`, `deduplication`, or application-level
 idempotency keys to guard against reprocessing a job that was partially handled before
-a crash or force-close.
+a crash or a shutdown that outlasts the drain budget.
 
 **DLQ pattern.** When a job exhausts its `attempts`, move it to a dead-letter queue:
 
@@ -506,14 +511,14 @@ BymaxQueueModule.forRoot({
 
 ## 🤔 Why over `@nestjs/bullmq`
 
-| Concern       | `@nestjs/bullmq` (official)                          | `@bymax-one/nest-queue`                                                          |
-| ------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Module setup  | `BullModule.forRoot()` + `registerQueue()` per queue | Single `forRoot`/`forRootAsync`; queues created on demand by name                |
-| Connection    | Manual ioredis + `maxRetriesPerRequest` wiring       | Dual mode (BYO / lib-owned); correct per-role retry policy applied automatically |
-| Job defaults  | Per `registerQueue`                                  | Centralized opinionated defaults with per-queue/per-job overrides                |
-| Producer API  | `@InjectQueue` + raw `queue.add`                     | Typed `enqueue<TData, TResult>()`, `enqueueBulk`, `upsertJobScheduler`           |
-| Shutdown      | Framework closes workers                             | Explicit bounded-drain protocol; force-close + stalled accounting                |
-| Observability | Manual                                               | `telemetry` passthrough (OpenTelemetry) + `MetricsService`                       |
+| Concern       | `@nestjs/bullmq` (official)                          | `@bymax-one/nest-queue`                                                                  |
+| ------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Module setup  | `BullModule.forRoot()` + `registerQueue()` per queue | Single `forRoot`/`forRootAsync`; queues created on demand by name                        |
+| Connection    | Manual ioredis + `maxRetriesPerRequest` wiring       | Dual mode (BYO / lib-owned); correct per-role retry policy applied automatically         |
+| Job defaults  | Per `registerQueue`                                  | Centralized opinionated defaults with per-queue/per-job overrides                        |
+| Producer API  | `@InjectQueue` + raw `queue.add`                     | Typed `enqueue<TData, TResult>()`, `enqueueBulk`, `upsertJobScheduler`                   |
+| Shutdown      | Framework closes workers                             | Explicit bounded-drain protocol; stops a busy worker at the deadline; stalled accounting |
+| Observability | Manual                                               | `telemetry` passthrough (OpenTelemetry) + `MetricsService`                               |
 
 **Choose this library** when you want a single opinionated setup, the `@bymax-one/nest-cache`
 connection-sharing story, enforced defaults, and a tested bounded-shutdown protocol.
@@ -552,7 +557,7 @@ wire connection and defaults yourself.
                         (@Processor / @Process / @OnWorkerEvent)
                                         │
                                  QueueLifecycle
-                     (bounded drain → force close → disconnect)
+                     (bounded drain → stop → disconnect)
 ```
 
 ### Design Principles
@@ -850,18 +855,18 @@ try {
 }
 ```
 
-| Code                                     | HTTP | When thrown                                                                                                                                                                                                                                                                                                                                                                             |
-| ---------------------------------------- | :--: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `queue.invalid_options`                  | 500  | Module options failed bootstrap validation — missing `connection`, mutually exclusive connection arms, non-positive `shutdown.drainTimeoutMs`, or negative `metrics.cacheTtlMs`                                                                                                                                                                                                         |
-| `queue.connection_invalid`               | 500  | The resolver has no usable client: not yet initialized, Mode A's injected client is in an unusable `status`, or a Mode B client was refused by the server (`WRONGPASS`, `NOAUTH`) or stopped reconnecting during startup                                                                                                                                                                |
-| `queue.connection_requires_null_retries` | 500  | A consumer connection could not be coerced to `maxRetriesPerRequest: null`                                                                                                                                                                                                                                                                                                              |
-| `queue.connection_timeout`               | 500  | Mode B: Redis did not reach `ready` within `connectionReadyTimeoutMs` (`details` carries `timeoutMs` and the last error's `lastErrorCode`), or a `QueueService`/`FlowService` call got no answer within the connection's `commandTimeoutMs`, or `enqueue`/`enqueueBulk` within `enqueueTimeoutMs` (`details` carries `operation` and `timeoutMs`; an enqueue may still have been added) |
-| `queue.invalid_repeat_options`           | 400  | A Job Scheduler schedule was rejected — invalid cron pattern, or neither `pattern` nor `every`                                                                                                                                                                                                                                                                                          |
-| `queue.duplicate_processor`              | 500  | Two `@Processor` classes claim the same queue name                                                                                                                                                                                                                                                                                                                                      |
-| `queue.flow_disabled`                    | 503  | `FlowService` used without `flows.enabled`                                                                                                                                                                                                                                                                                                                                              |
-| `queue.metrics_disabled`                 | 503  | `MetricsService` used without `metrics.enabled`                                                                                                                                                                                                                                                                                                                                         |
-| `queue.bulk_enqueue_failed`              | 500  | `enqueueBulk` exceeded the 1 000-job cap, or the underlying `addBulk` failed                                                                                                                                                                                                                                                                                                            |
-| `queue.worker_registration_failed`       | 500  | A worker could not be constructed, started, or closed                                                                                                                                                                                                                                                                                                                                   |
+| Code                                     | HTTP | When thrown                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------------- | :--: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `queue.invalid_options`                  | 500  | Module options failed bootstrap validation — missing `connection`, mutually exclusive connection arms, non-positive `shutdown.drainTimeoutMs`, or negative `metrics.cacheTtlMs`                                                                                                                                                                                                                                                                                                                |
+| `queue.connection_invalid`               | 500  | The resolver has no usable client: not yet initialized, Mode A's injected client is in an unusable `status`, or a Mode B client was refused by the server (`WRONGPASS`, `NOAUTH`) or stopped reconnecting during startup                                                                                                                                                                                                                                                                       |
+| `queue.connection_requires_null_retries` | 500  | A consumer connection could not be coerced to `maxRetriesPerRequest: null`                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `queue.connection_timeout`               | 500  | Mode B: Redis did not reach `ready` within `connectionReadyTimeoutMs` (`details` carries `timeoutMs` and the last error's `lastErrorCode`), or a `QueueService`/`FlowService` call got no answer from Redis: it timed out (`commandTimeoutMs` on the owned connection, or `enqueueTimeoutMs` for a `QueueService` call; `details` carries `operation` and `timeoutMs`) or the connection is down (`details` carries `operation` and `reason: 'offline'`); an enqueue may still have been added |
+| `queue.invalid_repeat_options`           | 400  | A Job Scheduler schedule was rejected — invalid cron pattern, or neither `pattern` nor `every`                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `queue.duplicate_processor`              | 500  | Two `@Processor` classes claim the same queue name                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `queue.flow_disabled`                    | 503  | `FlowService` used without `flows.enabled`                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `queue.metrics_disabled`                 | 503  | `MetricsService` used without `metrics.enabled`                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `queue.bulk_enqueue_failed`              | 500  | `enqueueBulk` exceeded the 1 000-job cap, or the underlying `addBulk` failed                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `queue.worker_registration_failed`       | 500  | A worker could not be constructed, started, or closed                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 ### Reserved codes
 
@@ -869,12 +874,12 @@ These are part of the published catalog and stable, but nothing currently throws
 They are listed so a consumer writing an exhaustive `switch` over `QueueErrorCode`
 compiles today and keeps compiling when a future release starts emitting them.
 
-| Code                              | Why it is not thrown today                                            |
-| --------------------------------- | --------------------------------------------------------------------- |
-| `queue.queue_not_found`           | Queues are created on demand by name, so a lookup never misses        |
-| `queue.job_not_found`             | `getJob` resolves to `null` rather than throwing                      |
-| `queue.invalid_job_data`          | Payloads are opaque; the library does not validate them               |
-| `queue.shutdown_timeout_exceeded` | Exceeding the drain deadline force-closes workers rather than raising |
+| Code                              | Why it is not thrown today                                                    |
+| --------------------------------- | ----------------------------------------------------------------------------- |
+| `queue.queue_not_found`           | Queues are created on demand by name, so a lookup never misses                |
+| `queue.job_not_found`             | `getJob` resolves to `null` rather than throwing                              |
+| `queue.invalid_job_data`          | Payloads are opaque; the library does not validate them                       |
+| `queue.shutdown_timeout_exceeded` | Exceeding the drain deadline stops the workers still busy rather than raising |
 
 The same catalog is exported from `@bymax-one/nest-queue/shared` with no dependencies,
 so a frontend can map codes to messages without importing the server surface.
@@ -908,7 +913,7 @@ If you see it, the client you passed is not a plain ioredis client (a wrapper or
 double whose `duplicate()` ignores its options). Pass the ioredis client itself, or let the
 library open its own connection with Mode B. The producer keeps the client's own retry
 policy; with a finite `maxRetriesPerRequest` that is what lets it fail fast during an outage, and
-`enqueue` is bounded by `enqueueTimeoutMs` whatever the client does.
+every `QueueService` call is bounded by `enqueueTimeoutMs` whatever the client does.
 
 ### A handler never settles (the queue stops moving)
 

@@ -68,6 +68,8 @@ function assertValidCron(
 export class QueueService {
   private readonly logger = new Logger(QueueService.name)
   readonly #queues = new Map<string, Queue>()
+  /** Queues whose first call has already got past the client's ready-wait. */
+  readonly #warm = new Set<string>()
 
   constructor(
     @Inject(ConnectionResolver) private readonly connection: ConnectionResolver,
@@ -106,21 +108,43 @@ export class QueueService {
     return queue as unknown as Queue<TData, TResult>
   }
 
-  /** The error a producer call receives when Redis does not answer within `enqueueTimeoutMs`. */
-  private enqueueTimeout(operation: string): QueueException {
-    return timeoutException(operation, this.options.enqueueTimeoutMs)
-  }
-
   /**
-   * Await a Redis call, reporting an ioredis command timeout as `CONNECTION_TIMEOUT` with the
-   * operation and the command deadline of the connection in force.
+   * Run one Redis call under the per-call deadline (`enqueueTimeoutMs`), reporting every way Redis
+   * can fail to answer as the documented `CONNECTION_TIMEOUT`: the deadline passing, an ioredis
+   * command timeout, or a call refused because the connection is down.
+   *
+   * The first call on a queue name waits for the client to be ready through ONE wait shared by all
+   * callers, instead of letting BullMQ start its own unbounded wait per call, so a caller that
+   * polls through an outage does not pile up listeners. The call runs only if it is still within
+   * its deadline when the client is ready; a caller that was told it timed out never has its call
+   * run later, which would turn its retry into a duplicate.
    */
-  private call<T>(operation: string, work: Promise<T>): Promise<T> {
+  private call<T>(operation: string, queueName: string, run: () => Promise<T>): Promise<T> {
+    let expired = false
+    const guarded = withDeadline(
+      this.afterReady(queueName).then(() => {
+        // Stryker disable next-line StringLiteral: equivalent — the deadline already rejected the caller, so this error is absorbed and never read
+        if (expired) throw new Error('the call had already timed out')
+        return run()
+      }),
+      this.options.enqueueTimeoutMs,
+      () => {
+        expired = true
+        return timeoutException(operation, this.options.enqueueTimeoutMs)
+      },
+    )
     return withCommandTimeoutCode(
       operation,
       () => this.connection.getClient().options.commandTimeout ?? this.options.commandTimeoutMs,
-      work,
+      guarded,
     )
+  }
+
+  /** Settle when a call on `queueName` may start: at once for a queue that has been used before. */
+  private async afterReady(queueName: string): Promise<void> {
+    if (this.#warm.has(queueName)) return
+    await this.connection.awaitReady()
+    this.#warm.add(queueName)
   }
 
   /** Resolve the raw cached queue (default generics) for internal delegation. */
@@ -132,7 +156,7 @@ export class QueueService {
    * Add a single job to a queue. The queue is created lazily if needed.
    *
    * Delivery is **at-least-once** — a handler may run more than once for the same
-   * job (worker crash, lock expiry, or a shutdown force-close). Make handlers
+   * job (worker crash, lock expiry, or a shutdown that outlasts the drain budget). Make handlers
    * idempotent: use an idempotency key on writes, prefer upserts over inserts, or
    * keep an "already-processed" marker keyed by `job.id`.
    *
@@ -185,13 +209,8 @@ export class QueueService {
     data: TData,
     options?: JobsOptions,
   ): Promise<TypedJob<TData, TResult>> {
-    const job = await this.call(
-      'enqueue',
-      withDeadline(
-        this.queueFor(queueName).add(jobName, data, options),
-        this.options.enqueueTimeoutMs,
-        () => this.enqueueTimeout('enqueue'),
-      ),
+    const job = await this.call('enqueue', queueName, () =>
+      this.queueFor(queueName).add(jobName, data, options),
     )
     return job
   }
@@ -224,18 +243,13 @@ export class QueueService {
       )
     }
     try {
-      const created = await this.call(
-        'enqueueBulk',
-        withDeadline(
-          this.queueFor(queueName).addBulk(
-            jobs.map((job) => ({
-              name: job.name,
-              data: job.data,
-              ...(job.options === undefined ? {} : { opts: job.options }),
-            })),
-          ),
-          this.options.enqueueTimeoutMs,
-          () => this.enqueueTimeout('enqueueBulk'),
+      const created = await this.call('enqueueBulk', queueName, () =>
+        this.queueFor(queueName).addBulk(
+          jobs.map((job) => ({
+            name: job.name,
+            data: job.data,
+            ...(job.options === undefined ? {} : { opts: job.options }),
+          })),
         ),
       )
       return created
@@ -266,7 +280,7 @@ export class QueueService {
     queueName: string,
     jobId: string,
   ): Promise<TypedJob<TData, TResult> | null> {
-    const job = await this.call('getJob', this.queueFor(queueName).getJob(jobId))
+    const job = await this.call('getJob', queueName, () => this.queueFor(queueName).getJob(jobId))
     return (job as TypedJob<TData, TResult> | undefined) ?? null
   }
 
@@ -297,7 +311,9 @@ export class QueueService {
         reason: `getJobs needs integers with 0 <= start <= end and at most ${String(MAX_JOBS_PAGE_SIZE)} jobs per call`,
       })
     }
-    const jobs = await this.call('getJobs', this.queueFor(queueName).getJobs([status], start, end))
+    const jobs = await this.call('getJobs', queueName, () =>
+      this.queueFor(queueName).getJobs([status], start, end),
+    )
     return jobs
   }
 
@@ -307,8 +323,7 @@ export class QueueService {
    * @param queueName - Target queue.
    */
   async getMetrics(queueName: string): Promise<QueueMetrics> {
-    const counts = await this.call(
-      'getMetrics',
+    const counts = await this.call('getMetrics', queueName, () =>
       this.queueFor(queueName).getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed'),
     )
     return {
@@ -353,8 +368,7 @@ export class QueueService {
       ...(template?.opts === undefined ? {} : { opts: template.opts }),
     }
     if ('pattern' in repeat) assertValidCron(repeat, this.options.queueOptions)
-    const job = await this.call(
-      'upsertJobScheduler',
+    const job = await this.call('upsertJobScheduler', queueName, () =>
       queue.upsertJobScheduler(schedulerId, repeat, jobTemplate),
     )
     return job as Job<TData, TResult>
@@ -368,7 +382,9 @@ export class QueueService {
    * @returns `true` when a scheduler was removed, `false` otherwise.
    */
   async removeJobScheduler(queueName: string, schedulerId: string): Promise<boolean> {
-    return this.call('removeJobScheduler', this.queueFor(queueName).removeJobScheduler(schedulerId))
+    return this.call('removeJobScheduler', queueName, () =>
+      this.queueFor(queueName).removeJobScheduler(schedulerId),
+    )
   }
 
   /**
@@ -386,17 +402,19 @@ export class QueueService {
     end = 50,
     asc = true,
   ): Promise<Awaited<ReturnType<Queue['getJobSchedulers']>>> {
-    return this.call('getJobSchedulers', this.queueFor(queueName).getJobSchedulers(start, end, asc))
+    return this.call('getJobSchedulers', queueName, () =>
+      this.queueFor(queueName).getJobSchedulers(start, end, asc),
+    )
   }
 
   /** Pause a queue, halting the processing of new jobs. */
   async pauseQueue(queueName: string): Promise<void> {
-    await this.call('pauseQueue', this.queueFor(queueName).pause())
+    await this.call('pauseQueue', queueName, () => this.queueFor(queueName).pause())
   }
 
   /** Resume a previously paused queue. */
   async resumeQueue(queueName: string): Promise<void> {
-    await this.call('resumeQueue', this.queueFor(queueName).resume())
+    await this.call('resumeQueue', queueName, () => this.queueFor(queueName).resume())
   }
 
   /**
@@ -415,7 +433,9 @@ export class QueueService {
     limit: number,
     status?: CleanableStatus,
   ): Promise<string[]> {
-    return this.call('cleanQueue', this.queueFor(queueName).clean(gracePeriodMs, limit, status))
+    return this.call('cleanQueue', queueName, () =>
+      this.queueFor(queueName).clean(gracePeriodMs, limit, status),
+    )
   }
 
   /** Return a read-only view of the cached queues. */
@@ -437,6 +457,7 @@ export class QueueService {
       await queue.close().catch(() => undefined)
     }
     this.#queues.clear()
+    this.#warm.clear()
   }
 }
 
