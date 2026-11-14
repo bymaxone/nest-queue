@@ -21,7 +21,7 @@ Against 1.2.18 the declared types do not change.
 
 ### Changed
 
-- **A Mode B client that ends because Redis could not be reached is now `CONNECTION_TIMEOUT` with status 503, not `CONNECTION_INVALID` with 500.** With `retryStrategy` returning `null` the first failure ends the client before it is ready. When the last error it raised is a network error (`ECONNREFUSED`, `ECONNRESET`, `ETIMEDOUT`, `EPIPE`, `ENOTFOUND`, `EAI_AGAIN`, `EHOSTUNREACH` or `ENETUNREACH`, including the `AggregateError` a host with several addresses raises) or the command timeout of the ready check, a retry may help, which 503 says. `details` carries `operation: 'connect'` and `reason: 'unavailable'`; the error code is in the exception's `cause`, not in the response. A refused credential, an error that is not one of these, and an end with no error recorded stay `CONNECTION_INVALID` with 500.
+- **A Mode B client that ends because Redis could not be reached is now `CONNECTION_TIMEOUT` with status 503, not `CONNECTION_INVALID` with 500.** With `retryStrategy` returning `null` the first failure ends the client before it is ready. When the last error it raised is a network error (including the `AggregateError` a host with several addresses raises) or the command timeout of the ready check, a retry may help, which 503 says. `details` carries `operation: 'connect'` and `reason: 'unavailable'`; the error code is in the exception's `cause`, not in the response. A refused credential, an error that is not one of these, and an end with no error recorded stay `CONNECTION_INVALID` with 500.
 
 ### Documentation
 
