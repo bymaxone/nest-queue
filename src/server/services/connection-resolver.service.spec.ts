@@ -422,36 +422,51 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
         refused(),
         'budget',
         { timeoutMs: 1000 },
+        503,
+        QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
       ],
-      ['the server refuses the credentials', reply(), 'end', {}],
+      [
+        'the server refuses the credentials',
+        reply(),
+        'end',
+        {},
+        500,
+        QUEUE_ERROR_CODES.CONNECTION_INVALID,
+      ],
       [
         'the client ends after a refused connection',
         refused(),
         'end',
         { operation: 'connect', reason: 'unavailable' },
+        503,
+        QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
       ],
       [
         'the client ends after the ready check timed out',
         new Error('Command timed out'),
         'end',
         { operation: 'connect', reason: 'unavailable' },
+        503,
+        QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
       ],
       [
         'the client ends after a code outside the network set',
         Object.assign(new Error('boom'), { code: 'EACCES' }),
         'end',
         {},
+        500,
+        QUEUE_ERROR_CODES.CONNECTION_INVALID,
       ],
     ] as const)(
-      'when %s: exact details, no code in the body, the error as cause',
-      async (_label, error, how, details) => {
+      'when %s: the status, the exact details, no code in the body, the error as cause',
+      async (_label, error, how, details, status, code) => {
         const err = await failure(error, how)
 
-        const body = JSON.stringify(err.getResponse())
-        expect(body).not.toMatch(CODES)
-        expect((err.getResponse() as { error: { details: unknown } }).error.details).toStrictEqual(
-          details,
-        )
+        const response = err.getResponse() as { error: { code: string; details: unknown } }
+        expect(err.getStatus()).toBe(status)
+        expect(response.error.code).toBe(code)
+        expect(response.error.details).toStrictEqual(details)
+        expect(JSON.stringify(response)).not.toMatch(CODES)
         expect(err.cause).toBe(error)
       },
     )
