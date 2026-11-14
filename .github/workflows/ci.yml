@@ -67,11 +67,22 @@ jobs:
       - name: Source files stay within the length limit
         env:
           BASE_REF: ${{ github.base_ref }}
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
-          # A pull request is also checked against the baseline on its base branch, so the
-          # baseline it carries cannot admit the offender it adds.
+          # The baseline is compared with the one it replaces, so the baseline a change carries
+          # cannot admit the offender it adds: for a pull request that is the base branch, for a
+          # push the commit the push replaced. A manual run, a first push (an all-zero `before`) and
+          # a force push whose old tip is not in the checkout have nothing to compare with and
+          # check only the baseline itself.
+          base=""
           if [ -n "$BASE_REF" ]; then
-            pnpm check:file-length --base "origin/$BASE_REF"
+            base="origin/$BASE_REF"
+          elif [ "$EVENT_NAME" = "push" ] && [ -n "$BEFORE_SHA" ] && git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+            base="$BEFORE_SHA"
+          fi
+          if [ -n "$base" ]; then
+            pnpm check:file-length --base "$base"
           else
             pnpm check:file-length
           fi
