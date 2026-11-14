@@ -229,6 +229,7 @@ describe('the client inventory — host-supplied connection (Mode A, nest-cache 
     expect(host.listenerCount('error')).toBe(before)
     expect(duplicates.length).toBeGreaterThanOrEqual(1)
     expect(unhandled(duplicates)).toEqual([])
-    host.disconnect()
+    // afterEach disconnects it and waits for its 'end', like every other client of this file.
+    roots.push(host)
   })
 })
