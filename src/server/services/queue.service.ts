@@ -20,6 +20,7 @@ import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { MAX_JOBS_PAGE_SIZE } from '../constants/default-options'
 import { describeError } from '../utils/describe-error'
 import { withDeadline } from '../utils/with-deadline'
+import { timeoutException, withCommandTimeoutCode } from '../utils/command-timeout'
 
 /** Maximum number of jobs accepted by a single `enqueueBulk` call. */
 const MAX_BULK_SIZE = 1000
@@ -107,10 +108,18 @@ export class QueueService {
 
   /** The error a producer call receives when Redis does not answer within `enqueueTimeoutMs`. */
   private enqueueTimeout(operation: string): QueueException {
-    return new QueueException(
-      QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
-      HttpStatus.INTERNAL_SERVER_ERROR,
-      { operation, timeoutMs: this.options.enqueueTimeoutMs },
+    return timeoutException(operation, this.options.enqueueTimeoutMs)
+  }
+
+  /**
+   * Await a Redis call, reporting an ioredis command timeout as `CONNECTION_TIMEOUT` with the
+   * operation and the command deadline of the connection in force.
+   */
+  private call<T>(operation: string, work: Promise<T>): Promise<T> {
+    return withCommandTimeoutCode(
+      operation,
+      () => this.connection.getClient().options.commandTimeout ?? this.options.commandTimeoutMs,
+      work,
     )
   }
 
@@ -176,10 +185,13 @@ export class QueueService {
     data: TData,
     options?: JobsOptions,
   ): Promise<TypedJob<TData, TResult>> {
-    const job = await withDeadline(
-      this.queueFor(queueName).add(jobName, data, options),
-      this.options.enqueueTimeoutMs,
-      () => this.enqueueTimeout('enqueue'),
+    const job = await this.call(
+      'enqueue',
+      withDeadline(
+        this.queueFor(queueName).add(jobName, data, options),
+        this.options.enqueueTimeoutMs,
+        () => this.enqueueTimeout('enqueue'),
+      ),
     )
     return job
   }
@@ -212,16 +224,19 @@ export class QueueService {
       )
     }
     try {
-      const created = await withDeadline(
-        this.queueFor(queueName).addBulk(
-          jobs.map((job) => ({
-            name: job.name,
-            data: job.data,
-            ...(job.options === undefined ? {} : { opts: job.options }),
-          })),
+      const created = await this.call(
+        'enqueueBulk',
+        withDeadline(
+          this.queueFor(queueName).addBulk(
+            jobs.map((job) => ({
+              name: job.name,
+              data: job.data,
+              ...(job.options === undefined ? {} : { opts: job.options }),
+            })),
+          ),
+          this.options.enqueueTimeoutMs,
+          () => this.enqueueTimeout('enqueueBulk'),
         ),
-        this.options.enqueueTimeoutMs,
-        () => this.enqueueTimeout('enqueueBulk'),
       )
       return created
     } catch (err) {
@@ -251,7 +266,7 @@ export class QueueService {
     queueName: string,
     jobId: string,
   ): Promise<TypedJob<TData, TResult> | null> {
-    const job = await this.queueFor(queueName).getJob(jobId)
+    const job = await this.call('getJob', this.queueFor(queueName).getJob(jobId))
     return (job as TypedJob<TData, TResult> | undefined) ?? null
   }
 
@@ -282,7 +297,7 @@ export class QueueService {
         reason: `getJobs needs integers with 0 <= start <= end and at most ${String(MAX_JOBS_PAGE_SIZE)} jobs per call`,
       })
     }
-    const jobs = await this.queueFor(queueName).getJobs([status], start, end)
+    const jobs = await this.call('getJobs', this.queueFor(queueName).getJobs([status], start, end))
     return jobs
   }
 
@@ -292,12 +307,9 @@ export class QueueService {
    * @param queueName - Target queue.
    */
   async getMetrics(queueName: string): Promise<QueueMetrics> {
-    const counts = await this.queueFor(queueName).getJobCounts(
-      'waiting',
-      'active',
-      'completed',
-      'failed',
-      'delayed',
+    const counts = await this.call(
+      'getMetrics',
+      this.queueFor(queueName).getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed'),
     )
     return {
       queue: queueName,
@@ -341,7 +353,10 @@ export class QueueService {
       ...(template?.opts === undefined ? {} : { opts: template.opts }),
     }
     if ('pattern' in repeat) assertValidCron(repeat, this.options.queueOptions)
-    const job = await queue.upsertJobScheduler(schedulerId, repeat, jobTemplate)
+    const job = await this.call(
+      'upsertJobScheduler',
+      queue.upsertJobScheduler(schedulerId, repeat, jobTemplate),
+    )
     return job as Job<TData, TResult>
   }
 
@@ -353,7 +368,7 @@ export class QueueService {
    * @returns `true` when a scheduler was removed, `false` otherwise.
    */
   async removeJobScheduler(queueName: string, schedulerId: string): Promise<boolean> {
-    return this.queueFor(queueName).removeJobScheduler(schedulerId)
+    return this.call('removeJobScheduler', this.queueFor(queueName).removeJobScheduler(schedulerId))
   }
 
   /**
@@ -371,17 +386,17 @@ export class QueueService {
     end = 50,
     asc = true,
   ): Promise<Awaited<ReturnType<Queue['getJobSchedulers']>>> {
-    return this.queueFor(queueName).getJobSchedulers(start, end, asc)
+    return this.call('getJobSchedulers', this.queueFor(queueName).getJobSchedulers(start, end, asc))
   }
 
   /** Pause a queue, halting the processing of new jobs. */
   async pauseQueue(queueName: string): Promise<void> {
-    await this.queueFor(queueName).pause()
+    await this.call('pauseQueue', this.queueFor(queueName).pause())
   }
 
   /** Resume a previously paused queue. */
   async resumeQueue(queueName: string): Promise<void> {
-    await this.queueFor(queueName).resume()
+    await this.call('resumeQueue', this.queueFor(queueName).resume())
   }
 
   /**
@@ -400,7 +415,7 @@ export class QueueService {
     limit: number,
     status?: CleanableStatus,
   ): Promise<string[]> {
-    return this.queueFor(queueName).clean(gracePeriodMs, limit, status)
+    return this.call('cleanQueue', this.queueFor(queueName).clean(gracePeriodMs, limit, status))
   }
 
   /** Return a read-only view of the cached queues. */

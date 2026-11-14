@@ -12,6 +12,7 @@ import type { ConnectionResolver } from './connection-resolver.service'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
+import { withCommandTimeoutCode } from '../utils/command-timeout'
 
 /**
  * Wrapper over the BullMQ `FlowProducer` for hierarchical (parent/child) job
@@ -34,6 +35,7 @@ import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 export class FlowService {
   private readonly logger = new Logger(FlowService.name)
   private readonly producer?: FlowProducer
+  readonly #connection: ConnectionResolver
 
   constructor(
     connection: ConnectionResolver,
@@ -41,6 +43,7 @@ export class FlowService {
     prefix: string,
     telemetry?: Telemetry,
   ) {
+    this.#connection = connection
     if (enabled) {
       this.producer = new FlowProducer({
         connection: connection.getClient(),
@@ -73,7 +76,11 @@ export class FlowService {
    * @throws {QueueException} `FLOW_DISABLED` (503) when flows are not enabled.
    */
   async add(flow: FlowJob): Promise<JobNode> {
-    return this.requireProducer().add(flow)
+    return withCommandTimeoutCode(
+      'addFlow',
+      () => this.commandTimeout(),
+      this.requireProducer().add(flow),
+    )
   }
 
   /**
@@ -85,7 +92,16 @@ export class FlowService {
    * @throws {QueueException} `FLOW_DISABLED` (503) when flows are not enabled.
    */
   async addBulk(flows: readonly FlowJob[]): Promise<JobNode[]> {
-    return this.requireProducer().addBulk([...flows])
+    return withCommandTimeoutCode(
+      'addFlowBulk',
+      () => this.commandTimeout(),
+      this.requireProducer().addBulk([...flows]),
+    )
+  }
+
+  /** The command deadline of the producer connection, read when a command has timed out. */
+  private commandTimeout(): number {
+    return this.#connection.getClient().options.commandTimeout ?? 0
   }
 
   /**

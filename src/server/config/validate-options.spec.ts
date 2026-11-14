@@ -229,16 +229,16 @@ describe('validateOptions', () => {
   })
 
   it.each(['commandTimeoutMs', 'enqueueTimeoutMs'] as const)(
-    'refuses a %s that is not a number from 1 to 2147483647',
+    'refuses a %s that is not a whole number from 1 to 2147483647',
     (key) => {
       // Node's timers read a delay above 2^31 - 1 ms as 1 ms, which would end every call at once.
-      for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648]) {
+      for (const bad of [0, -1, 0.5, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648]) {
         const opts: BymaxQueueModuleOptions = { connection: { url: 'redis://x' }, [key]: bad }
         expect(
           reasonOf(() => {
             validateOptions(opts)
           }),
-        ).toBe(`${key} must be a number from 1 to 2147483647`)
+        ).toBe(`${key} must be a whole number from 1 to 2147483647`)
       }
       for (const good of [1500, 2_147_483_647]) {
         expect(() => {
