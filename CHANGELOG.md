@@ -13,13 +13,8 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.2.14] — 2026-11-13
 
-Several defaults change in this release, so read the Apply note below. Against 1.2.13 the built
-declarations gain `commandTimeoutMs` and `enqueueTimeoutMs` on `BymaxQueueModuleOptions`,
-`jobTimeoutMs` on `WorkerOptions`, and an optional second `signal` parameter on
-`ProgrammaticWorkerConfig.handler`; the resolved options and `DEFAULT_JOB_OPTIONS.backoff` (`jitter`)
-gain matching fields, and the documentation comments of `connectionReadyTimeoutMs` and `prefix`
-change. A boot that succeeds, an enqueue that Redis answers and a job that completes behave
-as before.
+Several defaults change in this release, so read the Apply note below. A boot that succeeds, an
+enqueue that Redis answers and a job that completes behave as before.
 
 ### Fixed
 
