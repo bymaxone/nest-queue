@@ -285,7 +285,7 @@ const WAITING_STATUSES: ReadonlySet<string> = new Set([
  * The network errors Node reports on a connection that could not be made or was cut, in
  * `error.code`: the set the sibling libraries read for a Redis outage.
  */
-const NETWORK_CODES: ReadonlySet<string> = new Set([
+const NETWORK_CODES: ReadonlySet<string | undefined> = new Set<string | undefined>([
   'ECONNREFUSED',
   'ECONNRESET',
   'ETIMEDOUT',
@@ -303,8 +303,7 @@ const NETWORK_CODES: ReadonlySet<string> = new Set([
  * and the absence of any error are not outages.
  */
 function isUnreachable(err: unknown): boolean {
-  const code = startupErrorCode(err)
-  return isCommandTimeout(err) || (code !== undefined && NETWORK_CODES.has(code))
+  return isCommandTimeout(err) || NETWORK_CODES.has(startupErrorCode(err))
 }
 
 /** True for an error the server answered with (`WRONGPASS`, `NOAUTH`, ...), as opposed to a socket fault. */
