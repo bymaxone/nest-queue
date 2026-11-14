@@ -100,6 +100,14 @@ overrides:
   # type confusion in `compile`) and its two siblings. Reaches the tree through
   # ts-jest, a dev dependency; remove once ts-jest's own range requires 4.7.10.
   'handlebars': '^4.7.10'
+  # Floors at the fixes for GHSA-3g3m-2fjr-6pw4 (glob >= 9 < 14.0.2) and GHSA-g3hv-75wg-m249
+  # (minimatch >= 7 < 11.0.1). Both are reached only through test, mutation and lint tooling
+  # (`pnpm why --prod` is empty). Scoped by major so a transitive on another line is not forced
+  # onto an API it cannot use; drop each pair once its parents' own ranges are above the floor.
+  'glob@10': '^14.0.2'
+  'glob@13': '^14.0.2'
+  'minimatch@9': '^11.0.1'
+  'minimatch@10': '^11.0.1'
   # Floor at the fix for GHSA-m9gg-hp2v-232j (CVSS 7.4, `getAuthContext` can return
   # an unauthorised context) and GHSA-f596-whhp-79r4. Reaches the tree through
   # testcontainers -> dockerode; remove once dockerode's own range requires 1.14.5.
