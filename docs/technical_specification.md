@@ -2542,11 +2542,11 @@ Enqueue + process + typed result; bounded graceful shutdown (finish in-flight, f
 
 ## 20. Versioning and Migration Policy
 
-### 20.1 Library semver
+### 20.1 Library versioning
 
-- **SemVer**, strictly. Pre-1.0 (`0.x`) may break minor; from `1.0.0`, breaking changes bump major.
+- Versioning is **not** strict SemVer while this API is pre-stable: breaking changes ship in minor and patch releases by explicit `@bymax-one` policy, so a version number carries no compatibility information. The `Apply to a derived backend` note in a changelog entry is the compatibility contract.
 - The public surface is exactly what `src/server/index.ts` and `src/shared/index.ts` export. Re-exported BullMQ types are passthroughs and follow BullMQ.
-- **Deprecation policy:** a public symbol is marked `@deprecated` for at least one minor before removal in the next major, with a documented replacement.
+- **Deprecation policy:** a public symbol is marked `@deprecated` for at least one release before it is removed, with a documented replacement.
 
 ### 20.2 BullMQ engine compatibility
 
