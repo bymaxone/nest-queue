@@ -211,11 +211,11 @@ describe('WorkerRegistry — the processor BullMQ is given', () => {
 })
 
 /** The `{ error: { code, details } }` envelope of the QueueException a call throws. */
-function thrownEnvelope(call: () => unknown): { code: string; details: unknown } {
+function thrownEnvelope(call: () => unknown): { error: { code: string; details: unknown } } {
   try {
     call()
   } catch (err) {
-    return (err as QueueException).getResponse() as { code: string; details: unknown }
+    return (err as QueueException).getResponse() as { error: { code: string; details: unknown } }
   }
   throw new Error('the call did not throw')
 }
@@ -232,7 +232,7 @@ describe('WorkerRegistry — jobTimeoutMs validation', () => {
           handler: () => Promise.resolve(),
           options: { jobTimeoutMs: bad },
         })
-      }) as unknown as { error: { code: string; details: unknown } }
+      })
 
       expect(error.code).toBe('queue.worker_registration_failed')
       expect(error.details).toStrictEqual({
@@ -263,7 +263,7 @@ describe('WorkerRegistry — jobTimeoutMs validation', () => {
         processorFile: '/abs/processor.js',
         options: { jobTimeoutMs: 1000 },
       })
-    }) as unknown as { error: { details: unknown } }
+    })
 
     expect(error.details).toStrictEqual({
       reason: 'jobTimeoutMs is not available for sandboxed workers',
