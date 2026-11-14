@@ -177,7 +177,11 @@ try {
       .filter((l) => Boolean(l) && !l.startsWith('npm notice') && !/^sha\d+:/i.test(l))
   } else {
     // The listing of the file itself: every entry sits under `package/`.
-    const listing = execSync(`tar -tzf "${TARBALL}"`, { encoding: 'utf8' })
+    // `tar` gets the path as an argument, never through a shell, so no character in it is interpreted.
+    const list = spawnSync('tar', ['-tzf', TARBALL], { encoding: 'utf8' })
+    if (list.status !== 0)
+      throw new Error(`tar could not list the tarball\n${describeFailure(list)}`)
+    const listing = list.stdout
     contentLines = listing
       .split('\n')
       .filter((l) => l.startsWith('package/') && !l.endsWith('/'))
