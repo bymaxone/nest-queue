@@ -13,10 +13,8 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.2.14] — 2026-11-13
 
-The connection the library opens now has a command deadline and no offline
-queue, so read the Apply note below. Against 1.2.13 the built declarations gain `commandTimeoutMs`
-and `enqueueTimeoutMs` on `BymaxQueueModuleOptions` and change the documentation comment of
-`connectionReadyTimeoutMs`. A boot that succeeds, and an enqueue that Redis answers, behave as before.
+Several defaults change in this release, so read the Apply note below. A boot that succeeds, an
+enqueue that Redis answers and a job that completes behave as before.
 
 ### Fixed
 
@@ -45,21 +43,18 @@ and `enqueueTimeoutMs` on `BymaxQueueModuleOptions` and change the documentation
   behaviour. Worker and QueueEvents connections keep their offline queue and have no command deadline.
 - **A shared client with `maxRetriesPerRequest: null` is reported at boot.** Calls other than `enqueue` and
   `enqueueBulk` then wait for as long as an outage lasts; the library warns and does not refuse.
-
 - **Shutdown is bounded by one budget, not one per worker.** Workers are closed in parallel and the
   queue-events and connection steps share what is left of `drainTimeoutMs`; a connection that has not
   quit by then is disconnected. With several stuck workers the previous sequence took the budget once
   for each.
 - **`unregister` releases the connection even when the worker's `close()` throws.** It then rethrows
   that error; the registry entry is dropped and the socket closed either way.
-
 - **`jobTimeoutMs` bounds a handler that never settles.** It is a new worker option with no default.
   When it passes, the job fails with a `queue.job_timeout` error, retries under its `attempts` and
   `backoff`, and its concurrency slot is free again. Handlers receive an `AbortSignal` as a second
   argument, which aborts at that moment or when BullMQ cancels the job (`worker.cancelJob()`,
   `worker.cancelAllJobs()`); closing the worker does not abort it. Before, a hung handler held its
   slot for good and the rest of the queue waited.
-
 - **Retries are spread by default.** The default backoff now carries 50% jitter: a retry waits between
   half of its exponential delay and the whole of it, so jobs that failed together no longer retry in
   the same instant after an outage. A `backoff` you set yourself is used as given.
