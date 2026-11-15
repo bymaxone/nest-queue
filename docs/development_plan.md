@@ -55,7 +55,7 @@ The phase order respects the dependency graph (Appendix A): connection before qu
 | **Official docs first — never from memory**  | Before coding against any library/SDK/CLI (BullMQ, ioredis, NestJS), re-verify the current official docs (`context7` → official site). Trained memory goes stale; BullMQ's API moves fast.                                                                                                                |
 | **Layered architecture & reuse**             | Every source file carries an `@fileoverview` + `@layer` header; reuse `@bymax-one/*` libs and BullMQ rather than reimplementing; DRY.                                                                                                                                                                     |
 | **BullMQ floor `^5.16.0`**                   | The peer dep floor is `bullmq ^5.16.0` (where the Job Schedulers API landed; current release `5.79.1`). Because the lib uses Job Schedulers (not the removed `addRepeatable` API), it is forward-compatible with v6; promotion to `^5.16.0 \|\| ^6` happens once the E2E suite is green on v6 (see §6.5). |
-| **Conventional Commits**                     | `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`. Drives the semver bump on release.                                                                                                                                                                                                              |
+| **Conventional Commits**                     | `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`. Do not drive a version bump: the number carries no compatibility information while the API is pre-stable.                                                                                                                                       |
 
 ### 1.3 Phase dashboard
 
@@ -3172,7 +3172,7 @@ commitlint.config.cjs
 
 **`CLAUDE.md` / `AGENTS.md`:** point to `docs/technical_specification.md` + `docs/development_plan.md` + `docs/tasks/` as required reading; reinforce universal rules (TypeScript strict, English, JSDoc, no `any`, no eslint-disable).
 
-**Copilot review files:** `.github/copilot-instructions.md` (repo-wide review config), `.github/instructions/code.instructions.md`, `.github/instructions/tests.instructions.md`, `.github/agents/agent-code-reviewer.agent.md`. **`commitlint.config.cjs`:** Conventional Commits, drives the changelog/semver bump.
+**Copilot review files:** `.github/copilot-instructions.md` (repo-wide review config), `.github/instructions/code.instructions.md`, `.github/instructions/tests.instructions.md`, `.github/agents/agent-code-reviewer.agent.md`. **`commitlint.config.cjs`:** Conventional Commits, enforced at commit time; it does not drive a version bump.
 
 **Acceptance criteria:**
 

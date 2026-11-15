@@ -2,12 +2,26 @@
 
 All notable changes to `@bymax-one/nest-queue` are documented in this file.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/);
-versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+Versioning is **not** strict [SemVer](https://semver.org/spec/v2.0.0.html) while this API is
+pre-stable: breaking changes ship in minor and patch releases by explicit `@bymax-one` policy, so a
+version number carries no compatibility information. The **Apply to a derived backend** note, on the
+entries that carry one, is the compatibility contract — read it, not the number.
 
 ---
 
 ## [Unreleased]
+
+---
+
+## [1.2.23] — 2026-11-14
+
+Documentation only. Against 1.2.22 the published package differs in `CHANGELOG.md` and `package.json`; `dist/` and the declared types do not change.
+
+### Changed
+
+- **The changelog preamble no longer says that the package follows Semantic Versioning.** It now states the policy that applies: versioning is not strict SemVer while the API is pre-stable, breaking changes ship in minor and patch releases, and the `Apply to a derived backend` note on an entry is the compatibility contract, so read it and not the version number.
 
 ---
 
@@ -1172,7 +1186,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.22...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.23...HEAD
+[1.2.23]: https://github.com/bymaxone/nest-queue/compare/v1.2.22...v1.2.23
 [1.2.22]: https://github.com/bymaxone/nest-queue/compare/v1.2.21...v1.2.22
 [1.2.21]: https://github.com/bymaxone/nest-queue/compare/v1.2.20...v1.2.21
 [1.2.20]: https://github.com/bymaxone/nest-queue/compare/v1.2.19...v1.2.20
