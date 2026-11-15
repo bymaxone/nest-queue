@@ -2546,7 +2546,7 @@ Enqueue + process + typed result; bounded graceful shutdown (finish in-flight, f
 
 - Versioning is **not** strict SemVer while this API is pre-stable: breaking changes ship in minor and patch releases by explicit `@bymax-one` policy, so a version number carries no compatibility information. The `Apply to a derived backend` note in a changelog entry is the compatibility contract.
 - The public surface is exactly what `src/server/index.ts` and `src/shared/index.ts` export. Re-exported BullMQ types are passthroughs and follow BullMQ.
-- **Deprecation policy:** a public symbol is marked `@deprecated` for at least one release before it is removed, with a documented replacement. The release that removes it carries an `Apply to a derived backend` note naming the replacement, so a consumer gets the signal a major version would have given.
+- **Deprecation policy:** a public symbol is marked `@deprecated` for at least one release before it is removed. The release that removes it carries an `Apply to a derived backend` note that names the replacement where there is one, so a consumer gets the signal a major version would have given.
 
 ### 20.2 BullMQ engine compatibility
 
