@@ -14,6 +14,7 @@ import type { ConnectionResolver } from './connection-resolver.service'
 const producers: { add: jest.Mock; addBulk: jest.Mock }[] = []
 
 jest.mock('bullmq', () => ({
+  QueueKeys: jest.requireActual<{ QueueKeys: unknown }>('bullmq').QueueKeys,
   FlowProducer: jest.fn().mockImplementation(() => {
     const instance = Object.assign(new EventEmitter(), {
       add: jest.fn(),

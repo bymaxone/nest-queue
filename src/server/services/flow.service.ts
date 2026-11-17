@@ -14,6 +14,7 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { timeoutException, withCommandTimeoutCode } from '../utils/command-timeout'
 import { withDeadline } from '../utils/with-deadline'
+import { assertFlowJobIds } from '../utils/reserved-job-ids'
 import { DEFAULT_ENQUEUE_TIMEOUT_MS, MAX_BULK_SIZE } from '../constants/default-options'
 
 /**
@@ -82,7 +83,9 @@ export class FlowService {
    *   when Redis does not answer within `enqueueTimeoutMs` (the flow may still have been added).
    */
   async add(flow: FlowJob): Promise<JobNode> {
-    return this.bounded('addFlow', this.requireProducer().add(flow))
+    const producer = this.requireProducer()
+    assertFlowJobIds(flow)
+    return this.bounded('addFlow', producer.add(flow))
   }
 
   /**
@@ -97,6 +100,7 @@ export class FlowService {
    */
   async addBulk(flows: readonly FlowJob[]): Promise<JobNode[]> {
     const producer = this.requireProducer()
+    for (const flow of flows) assertFlowJobIds(flow)
     if (flows.length > MAX_BULK_SIZE) {
       throw new QueueException(QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED, HttpStatus.BAD_REQUEST, {
         reason: 'batch size exceeds limit',

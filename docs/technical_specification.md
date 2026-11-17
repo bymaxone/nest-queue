@@ -1738,20 +1738,21 @@ export class QueueException extends HttpException {
 
 ### 12.2 Complete catalog
 
-| Code                                     | HTTP | Message                                               | Context                                                                                                                                                                 |
-| ---------------------------------------- | ---- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `queue.connection_invalid`               | 500  | Invalid Redis connection configuration                | Mode B with malformed URL, or mode A with client in `end`/`close` status                                                                                                |
-| `queue.connection_requires_null_retries` | 500  | Worker connection must have maxRetriesPerRequest=null | Mode A: the duplicated worker/QueueEvents connection could not be coerced to `null` (e.g. a client wrapper that ignores the `duplicate()` override) — fail-fast at init |
-| `queue.connection_timeout`               | 500  | Redis connection timeout                              | Mode B: did not reach `ready` within the timeout (default 10s)                                                                                                          |
-| `queue.queue_not_found`                  | 404  | Queue not found                                       | Attempt to get metrics/jobs from an unregistered queue                                                                                                                  |
-| `queue.job_not_found`                    | 404  | Job not found                                         | `getJob()` with a non-existent id                                                                                                                                       |
-| `queue.invalid_job_data`                 | 400  | Invalid job data                                      | `enqueue()` with `data` that fails schema validation (if the consumer enables it)                                                                                       |
-| `queue.invalid_repeat_options`           | 400  | Invalid repeat options                                | `upsertJobScheduler()` with both/neither of `pattern`/`every`, `every <= 0`, an unparseable cron, or a past `endDate`                                                   |
-| `queue.duplicate_processor`              | 500  | Multiple @Processor decorators target the same queue  | Two classes annotated with `@Processor('foo')` — only one per queue is allowed                                                                                          |
-| `queue.shutdown_timeout_exceeded`        | 500  | Shutdown timeout exceeded                             | Workers did not finish within `drainTimeoutMs` — log warning, force close                                                                                               |
-| `queue.bulk_enqueue_failed`              | 500  | Bulk enqueue failed                                   | `enqueueBulk()` failed — thrown with the per-job errors in `details.errors`                                                                                             |
-| `queue.worker_registration_failed`       | 500  | Failed to register worker                             | Error instantiating BullMQ Worker (connection problem, invalid option)                                                                                                  |
-| `queue.invalid_options`                  | 500  | Invalid module options                                | `forRoot()` with `connection` absent or ambiguous (client + URL at the same time)                                                                                       |
+| Code                                     | HTTP | Message                                               | Context                                                                                                                                                                            |
+| ---------------------------------------- | ---- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `queue.connection_invalid`               | 500  | Invalid Redis connection configuration                | Mode B with malformed URL, or mode A with client in `end`/`close` status                                                                                                           |
+| `queue.connection_requires_null_retries` | 500  | Worker connection must have maxRetriesPerRequest=null | Mode A: the duplicated worker/QueueEvents connection could not be coerced to `null` (e.g. a client wrapper that ignores the `duplicate()` override) — fail-fast at init            |
+| `queue.connection_timeout`               | 500  | Redis connection timeout                              | Mode B: did not reach `ready` within the timeout (default 10s)                                                                                                                     |
+| `queue.queue_not_found`                  | 404  | Queue not found                                       | Attempt to get metrics/jobs from an unregistered queue                                                                                                                             |
+| `queue.job_not_found`                    | 404  | Job not found                                         | `getJob()` with a non-existent id                                                                                                                                                  |
+| `queue.invalid_job_data`                 | 400  | Invalid job data                                      | `enqueue()` with `data` that fails schema validation (if the consumer enables it)                                                                                                  |
+| `queue.invalid_repeat_options`           | 400  | Invalid repeat options                                | `upsertJobScheduler()` with both/neither of `pattern`/`every`, `every <= 0`, an unparseable cron, or a past `endDate`                                                              |
+| `queue.duplicate_processor`              | 500  | Multiple @Processor decorators target the same queue  | Two classes annotated with `@Processor('foo')` — only one per queue is allowed                                                                                                     |
+| `queue.shutdown_timeout_exceeded`        | 500  | Shutdown timeout exceeded                             | Workers did not finish within `drainTimeoutMs` — log warning, force close                                                                                                          |
+| `queue.bulk_enqueue_failed`              | 500  | Bulk enqueue failed                                   | `enqueueBulk()` failed — thrown with the per-job errors in `details.errors`                                                                                                        |
+| `queue.worker_registration_failed`       | 500  | Failed to register worker                             | Error instantiating BullMQ Worker (connection problem, invalid option)                                                                                                             |
+| `queue.invalid_options`                  | 500  | Invalid module options                                | `forRoot()` with `connection` absent or ambiguous (client + URL at the same time)                                                                                                  |
+| `queue.invalid_job_id`                   | 400  | Invalid job id                                        | A custom `jobId` equal to one of the queue's own Redis key names (`active`, `wait`, `failed`, …) in `enqueue`, `enqueueBulk` or a flow — thrown with `details: { field: 'jobId' }` |
 
 ### 12.3 Code constants
 
@@ -1769,6 +1770,7 @@ export const QUEUE_ERROR_CODES = {
   BULK_ENQUEUE_FAILED: 'queue.bulk_enqueue_failed',
   WORKER_REGISTRATION_FAILED: 'queue.worker_registration_failed',
   INVALID_OPTIONS: 'queue.invalid_options',
+  INVALID_JOB_ID: 'queue.invalid_job_id',
 } as const
 ```
 

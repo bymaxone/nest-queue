@@ -15,6 +15,22 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
+## [1.2.25] — 2026-11-17
+
+Against 1.2.24 the declared types change: `QUEUE_ERROR_CODES` and the `QueueErrorCode` union gain a member (see the note below).
+
+### Fixed
+
+- **A custom `jobId` equal to one of a queue's own Redis key names no longer corrupts the queue.** BullMQ stores a job at `<prefix>:<queue>:<jobId>` and checks neither the name nor the key's type, so the id `active`, `completed`, `failed` or `delayed` was added but overwrote the structure of that name (`getMetrics` then threw `WRONGTYPE` for the whole queue), `wait`, `events`, `id` and `marker` made the add itself throw it, and `meta` left a job that was never queued. The other names are keys BullMQ writes and reads as well, so they are refused too. `enqueue`, `enqueueBulk`, `FlowService.add` and `FlowService.addBulk` (the root and every descendant) now refuse such an id with the new code `queue.invalid_job_id` (400, `details: { field: 'jobId' }`, never the value, which often comes from request data), before BullMQ is called. `QueueService.getJob` answers `null` for such an id without a Redis call, as for any id that is not stored. The names are read from BullMQ's `QueueKeys` of the installed version, not listed by hand, and ids BullMQ already refuses (one with a `:` other than the three-part form, or one that is a whole number) are left to it.
+
+#### Apply to a derived backend
+
+- `QUEUE_ERROR_CODES` gains `INVALID_JOB_ID` (`'queue.invalid_job_id'`), so the `QueueErrorCode` union has one more member: a `switch` over it that must be exhaustive needs a case, and a host that maps codes to statuses should map this one to 400.
+- `enqueue`, `enqueueBulk`, `FlowService.add` and `FlowService.addBulk` now throw `INVALID_JOB_ID` for a reserved id where they used to throw a raw Redis error or return a job that was never queued. A host that builds job ids from request data gets a 400 for such an id instead of a 500 or a silent loss; the names are BullMQ's own queue key names, read from the installed version.
+- `QueueService.getJob` returns `null` for such an id instead of reading the key.
+
+---
+
 ## [1.2.24] — 2026-11-17
 
 Documentation only. Against 1.2.23 the published package differs in `README.md`, `CHANGELOG.md` and `package.json`; `dist/` and the declared types do not change.
@@ -1200,7 +1216,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.24...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.25...HEAD
+[1.2.25]: https://github.com/bymaxone/nest-queue/compare/v1.2.24...v1.2.25
 [1.2.24]: https://github.com/bymaxone/nest-queue/compare/v1.2.23...v1.2.24
 [1.2.23]: https://github.com/bymaxone/nest-queue/compare/v1.2.22...v1.2.23
 [1.2.22]: https://github.com/bymaxone/nest-queue/compare/v1.2.21...v1.2.22

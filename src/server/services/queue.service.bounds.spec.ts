@@ -17,6 +17,7 @@ import type { ResolvedQueueOptions } from '../config/resolved-options'
 const queues: { add: jest.Mock; addBulk: jest.Mock; getJobs: jest.Mock }[] = []
 
 jest.mock('bullmq', () => ({
+  QueueKeys: jest.requireActual<{ QueueKeys: unknown }>('bullmq').QueueKeys,
   defaultRepeatStrategy: jest.requireActual<{ defaultRepeatStrategy: unknown }>('bullmq')
     .defaultRepeatStrategy,
   Queue: jest.fn().mockImplementation(() => {

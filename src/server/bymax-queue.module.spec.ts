@@ -33,6 +33,7 @@ import type { ResolvedQueueOptions } from './config/resolved-options'
 // when a mutated default flips a flag (e.g. enabling flows). BullMQ and ioredis
 // are mocked so the provider graph instantiates against inert doubles.
 jest.mock('bullmq', () => ({
+  QueueKeys: jest.requireActual<{ QueueKeys: unknown }>('bullmq').QueueKeys,
   Queue: jest.fn().mockImplementation(() =>
     Object.assign(new EventEmitter(), {
       close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),

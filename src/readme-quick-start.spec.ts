@@ -48,6 +48,7 @@ jest.mock('ioredis', () => {
 })
 
 jest.mock('bullmq', () => ({
+  QueueKeys: jest.requireActual<{ QueueKeys: unknown }>('bullmq').QueueKeys,
   Queue: jest.fn().mockImplementation((queueName: string) =>
     Object.assign(new EventEmitter(), {
       add: (name: string, data: unknown) => {

@@ -20,6 +20,7 @@ interface MockFlowProducer {
 const producers: MockFlowProducer[] = []
 
 jest.mock('bullmq', () => ({
+  QueueKeys: jest.requireActual<{ QueueKeys: unknown }>('bullmq').QueueKeys,
   FlowProducer: jest.fn().mockImplementation(() => {
     const instance = Object.assign(new EventEmitter(), {
       add: jest.fn(),

@@ -23,6 +23,7 @@ const producerInstances: MockFlowProducer[] = []
 const producerConstructorArgs: unknown[][] = []
 
 jest.mock('bullmq', () => ({
+  QueueKeys: jest.requireActual<{ QueueKeys: unknown }>('bullmq').QueueKeys,
   FlowProducer: jest.fn().mockImplementation((...args: unknown[]) => {
     producerConstructorArgs.push(args)
     const instance = Object.assign(new EventEmitter(), {

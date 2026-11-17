@@ -29,6 +29,7 @@ const ALLOWED: Readonly<Record<string, readonly number[]>> = {
   BULK_ENQUEUE_FAILED: [BAD, SERVER],
   WORKER_REGISTRATION_FAILED: [SERVER],
   INVALID_OPTIONS: [SERVER, BAD],
+  INVALID_JOB_ID: [BAD],
 }
 
 /** Sites whose code or status is a variable, each pinned by a behaviour test instead of this scan. */
