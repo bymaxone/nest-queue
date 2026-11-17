@@ -1,7 +1,7 @@
 /**
  * @fileoverview Finds what is wrong with the `defaultJobOptions` of a module, at setup, where the
  * mistake costs nothing. BullMQ takes these values as they come: `NaN` or `Infinity` in a count or
- * a delay fails with a raw Redis error on the first job, and a `count` of `-1` or `1.5` on
+ * a delay fails with a raw serialisation error on the first job, and a `count` of `-1` or `1.5` on
  * `removeOnComplete` or `removeOnFail` keeps every job, which removes the cap that keeps Redis
  * bounded without a word.
  * @layer server/utils
