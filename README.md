@@ -499,7 +499,8 @@ removed it, which `getState()` reports as `unknown`. That covers every way a job
 `UnrecoverableError` (which ends a job before its attempts are used), and a removed job. Comparing `attemptsMade`
 with `attempts` misses the `UnrecoverableError`, and testing `instanceof UnrecoverableError` misses an error
 BullMQ recognizes by its name alone. The id uses a hyphen because BullMQ refuses a custom job id that contains a
-colon.
+colon. A job whose keys are removed from Redis while it runs never reaches this listener: BullMQ reports an error
+on the worker and emits no `failed` event.
 
 ```typescript
 @OnWorkerEvent('failed')

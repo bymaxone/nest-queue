@@ -144,4 +144,24 @@ describe('E2E — the README dead-letter recipe', () => {
     expect(attempts.get('named')).toBe(1)
     expect(attempts.get('flaky')).toBe(2)
   }, 30_000)
+  it('never runs for a job whose keys were removed while it ran', async () => {
+    const queues = app.get(QueueService)
+    const listener = jest.fn(buildListener(queues))
+    const name = 'dlq-recipe-removed'
+    const worker = app.get(WorkerRegistry).register({
+      queueName: name,
+      handler: async () => {
+        await new Promise<void>((resolve) => setTimeout(resolve, 600))
+        throw new Error('late')
+      },
+    })
+    worker.on('failed', (job, err) => void listener(job, err))
+    await queues.enqueue(name, 'j', {}, { jobId: 'active', attempts: 1 })
+    await waitFor(async () => (await queues.getMetrics(name)).counts.active === 1, 10_000)
+    // An active job is locked, so `job.remove()` refuses it; obliterating the queue is what removes it.
+    await queues.getCachedQueues().get(name)?.obliterate({ force: true })
+    await new Promise<void>((resolve) => setTimeout(resolve, 1_500))
+    expect(listener).not.toHaveBeenCalled()
+    expect((await queues.getMetrics(`${name}-dlq`)).counts.waiting).toBe(0)
+  }, 30_000)
 })
