@@ -17,7 +17,7 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ## [1.2.25] — 2026-11-17
 
-Against 1.2.24 the declared types change: `QUEUE_ERROR_CODES` and the `QueueErrorCode` union gain two members (see the note below).
+Against 1.2.24 the declared types change: `QUEUE_ERROR_CODES` and the `QueueErrorCode` union gain members (see the note below).
 
 ### Fixed
 
@@ -30,7 +30,7 @@ Against 1.2.24 the declared types change: `QUEUE_ERROR_CODES` and the `QueueErro
 - `QUEUE_ERROR_CODES` also gains `STORAGE_FULL` (`'queue.storage_full'`, 503): map it as an unavailable backing store, and consider alerting on it; it means an operator has to free memory.
 - `FlowService.addBulk` now rejects when any tree fails, where it used to resolve, and a failure is `STORAGE_FULL`, `CONNECTION_TIMEOUT` or `BULK_ENQUEUE_FAILED` (500) with `details: { operation, landed, failed, notStarted, unknown }`. A host that retried the whole call on error must retry only `notStarted` (and `unknown` with a stable `jobId`). It also now makes one BullMQ call per tree, so a host that counted calls on the producer sees one per tree.
 - `enqueueBulk` passes `STORAGE_FULL` through instead of wrapping it in `BULK_ENQUEUE_FAILED`, as it already did for `CONNECTION_TIMEOUT`; `upsertJobScheduler` reports an out-of-memory refusal as `STORAGE_FULL` where it used to propagate the raw reply.
-- `QUEUE_ERROR_CODES` gains `INVALID_JOB_ID` (`'queue.invalid_job_id'`), so the `QueueErrorCode` union gains a member (`STORAGE_FULL` below is the other): a `switch` over it that must be exhaustive needs a case, and a host that maps codes to statuses should map this one to 400.
+- `QUEUE_ERROR_CODES` gains `INVALID_JOB_ID` (`'queue.invalid_job_id'`), so the `QueueErrorCode` union gains a member: a `switch` over it that must be exhaustive needs a case, and a host that maps codes to statuses should map this one to 400.
 - `enqueue`, `enqueueBulk`, `FlowService.add` and `FlowService.addBulk` now throw `INVALID_JOB_ID` for a reserved id where they used to throw a raw Redis error or return a job that was never queued. A host that builds job ids from request data gets a 400 for such an id instead of a 500 or a silent loss; the names are BullMQ's own queue key names, read from the installed version.
 - `QueueService.getJob` returns `null` for such an id instead of reading the key.
 
