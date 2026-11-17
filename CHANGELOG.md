@@ -1249,7 +1249,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.25...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.26...HEAD
+[1.2.26]: https://github.com/bymaxone/nest-queue/compare/v1.2.25...v1.2.26
 [1.2.25]: https://github.com/bymaxone/nest-queue/compare/v1.2.24...v1.2.25
 [1.2.24]: https://github.com/bymaxone/nest-queue/compare/v1.2.23...v1.2.24
 [1.2.23]: https://github.com/bymaxone/nest-queue/compare/v1.2.22...v1.2.23

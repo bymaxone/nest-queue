@@ -70,12 +70,7 @@ function setValuesOf<T>(group: T, known: readonly string[]): T {
  * @returns A plain copy that validation and the defaults can both read without a second look.
  */
 export function snapshotOptions(opts: BymaxQueueModuleOptions): BymaxQueueModuleOptions {
-  const source = opts as unknown as Record<string, unknown>
-  const copy: Record<string, unknown> = {}
-  for (const key of new Set([...Object.keys(source), ...TOP_LEVEL_KEYS])) {
-    const value = source[key]
-    if (value !== undefined && value !== null) copy[key] = value
-  }
+  const copy = setValuesOf(opts, TOP_LEVEL_KEYS) as unknown as Record<string, unknown>
   const groups: [string, readonly string[]][] = [
     ['defaultJobOptions', JOB_OPTION_KEYS],
     ['flows', FLOWS_KEYS],
