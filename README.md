@@ -497,9 +497,13 @@ a crash or a shutdown that outlasts the drain budget.
 ```typescript
 @OnWorkerEvent('failed')
 async onFailed(job: Job | undefined, err: Error): Promise<void> {
-  if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+  // `failed` also fires for an attempt that will be retried; only a job BullMQ has given up on is in
+  // the `failed` state. This also covers a job that fails with `UnrecoverableError` on its first
+  // attempt, which a comparison of `attemptsMade` with `attempts` would miss.
+  if (job && (await job.getState()) === 'failed') {
     await this.queue.enqueue(`${job.queueName}-dlq`, job.name, job.data, {
-      jobId: `dlq:${job.id}`,
+      // BullMQ refuses a custom job id that contains a colon.
+      jobId: `dlq-${job.id}`,
     })
   }
 }
@@ -663,6 +667,9 @@ check re-queues it and it runs again. **Every handler must be idempotent** — s
       Redis indefinitely.
 - [ ] `shutdown.drainTimeoutMs` exceeds your worst-case job runtime, so a normal deploy
       does not force-close work that was about to finish.
+- [ ] Redis runs with `maxmemory-policy noeviction`: under any other policy Redis can evict queue keys
+      and BullMQ prints a warning when a worker starts. Enable persistence (AOF) if queued jobs must
+      survive a Redis restart; without it they are lost.
 
 ---
 
@@ -952,7 +959,8 @@ do not pick them up:
    the handler execution time — a worker that runs longer than `lockDuration` will have its
    lock stolen, marking the job as stalled.
 3. BullMQ re-queues a stalled job up to its `maxStalledCount` times (default `1`) and then
-   fails it; this library does not expose that setting.
+   fails it; this library does not expose that setting. A stalled re-run does not count against the
+   job's `attempts`.
 
 ---
 
