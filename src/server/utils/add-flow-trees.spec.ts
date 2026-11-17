@@ -8,7 +8,7 @@
 import type { FlowJob, JobNode } from 'bullmq'
 import type { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
-import { storageFullException } from './command-timeout'
+import { storageFullException, timeoutException, unavailableException } from './command-timeout'
 import { runFlowBulk } from './add-flow-trees'
 
 /** A flow whose only identity is its position. */
@@ -177,5 +177,34 @@ describe('runFlowBulk', () => {
     expect(run.outcome()).toEqual({ landed: [0], failed: [], notStarted: [2, 3, 4], unknown: [1] })
     expect(add).toHaveBeenCalledTimes(2)
     gates[1]?.reject(new Error('late'))
+  })
+  it('reports a tree whose command timed out as unknown, since Redis may still apply it', async () => {
+    const timedOut = timeoutException('addFlow', 5000, new Error('Command timed out'))
+    const run = runFlowBulk(
+      flows(3),
+      (flow) => (flow.name === 'f1' ? Promise.reject(timedOut) : Promise.resolve(nodeOf(flow))),
+      'addFlowBulk',
+      3,
+    )
+
+    const { code, details } = await failureOf(run.done)
+
+    expect(code).toBe(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT)
+    expect(details).toMatchObject({ landed: [0, 2], failed: [], notStarted: [], unknown: [1] })
+  })
+
+  it('reports a tree refused because the connection was down as failed, since nothing was sent', async () => {
+    const offline = unavailableException('addFlow', new Error("Stream isn't writeable"))
+    const run = runFlowBulk(
+      flows(2),
+      (flow) => (flow.name === 'f0' ? Promise.reject(offline) : Promise.resolve(nodeOf(flow))),
+      'addFlowBulk',
+      2,
+    )
+
+    const { code, details } = await failureOf(run.done)
+
+    expect(code).toBe(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT)
+    expect(details).toMatchObject({ landed: [1], failed: [0], notStarted: [], unknown: [] })
   })
 })

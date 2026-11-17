@@ -16,11 +16,11 @@ import { timeoutException } from './command-timeout'
 export interface FlowBulkOutcome {
   /** Trees whose add resolved. */
   landed: number[]
-  /** Trees whose add rejected; one may have left child jobs behind. */
+  /** Trees Redis refused, or that were never sent; one may have left child jobs behind. */
   failed: number[]
   /** Trees never handed to BullMQ; nothing of them was written, so they are safe to resend. */
   notStarted: number[]
-  /** Trees in flight when the outcome was read; they may still land. */
+  /** Trees in flight when the outcome was read, or whose command timed out; they may still land. */
   unknown: number[]
 }
 
@@ -40,7 +40,7 @@ const KEEP_CODES: ReadonlySet<string> = new Set([
   QUEUE_ERROR_CODES.STORAGE_FULL,
 ])
 
-type TreeState = 'pending' | 'running' | 'landed' | 'failed'
+type TreeState = 'pending' | 'running' | 'landed' | 'failed' | 'timedOut'
 
 /** The error a batch rejects with: the first failure's code and status when it has a kept code. */
 function batchFailure(operation: string, first: unknown, outcome: FlowBulkOutcome): QueueException {
@@ -72,6 +72,17 @@ function envelopeOf(err: QueueException): {
   return error
 }
 
+/**
+ * Whether a tree's failure is a command timeout: Redis may apply the command after the caller was
+ * told, so the tree is `unknown`, not `failed`. A call refused because the connection was down
+ * sent nothing and carries no deadline, so it stays `failed`.
+ */
+function answeredLate(error: unknown): boolean {
+  if (!(error instanceof QueueException)) return false
+  const { code, details } = envelopeOf(error)
+  return code === QUEUE_ERROR_CODES.CONNECTION_TIMEOUT && details !== null && 'timeoutMs' in details
+}
+
 /** The partition of a batch from the state of each tree. */
 function outcomeOf(state: readonly TreeState[]): FlowBulkOutcome {
   const indexes = (wanted: TreeState): number[] =>
@@ -80,7 +91,7 @@ function outcomeOf(state: readonly TreeState[]): FlowBulkOutcome {
     landed: indexes('landed'),
     failed: indexes('failed'),
     notStarted: indexes('pending'),
-    unknown: indexes('running'),
+    unknown: [...indexes('running'), ...indexes('timedOut')].sort((a, b) => a - b),
   }
 }
 
@@ -121,7 +132,7 @@ export function runFlowBulk(
         nodes[index] = await add(flow)
         state[index] = 'landed'
       } catch (error) {
-        state[index] = 'failed'
+        state[index] = answeredLate(error) ? 'timedOut' : 'failed'
         firstFailure ??= { error }
       }
     }

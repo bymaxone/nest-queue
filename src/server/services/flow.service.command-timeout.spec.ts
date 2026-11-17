@@ -76,9 +76,10 @@ describe('FlowService — a command timeout is reported as CONNECTION_TIMEOUT', 
     },
   )
 
-  it('addFlowBulk names itself and the connection deadline, and says which trees failed', async () => {
+  it('addFlowBulk names itself and the connection deadline, and reports the timed-out trees as unknown', async () => {
     // A bulk adds one tree per producer call; the timeout it reports keeps its code and carries the
-    // partition of the batch, with the first tree's error as the cause.
+    // partition of the batch, with the first tree's error as the cause. A tree whose command timed
+    // out may still be applied by Redis, so it is unknown and not failed.
     const { service, producer } = makeFlow(5000)
     const cause = new Error('Command timed out')
     producer.add.mockRejectedValue(cause)
@@ -91,9 +92,9 @@ describe('FlowService — a command timeout is reported as CONNECTION_TIMEOUT', 
         operation: 'addFlowBulk',
         timeoutMs: 5000,
         landed: [],
-        failed: [0, 1],
+        failed: [],
         notStarted: [],
-        unknown: [],
+        unknown: [0, 1],
       },
     })
     expect(((err as QueueException).cause as QueueException).cause).toBe(cause)
