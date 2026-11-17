@@ -6,7 +6,8 @@
  */
 
 import type { FlowJob, JobNode } from 'bullmq'
-import type { QueueException } from '../errors/queue-exception'
+import { HttpStatus } from '@nestjs/common'
+import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { storageFullException, timeoutException, unavailableException } from './command-timeout'
 import { runFlowBulk } from './add-flow-trees'
@@ -207,6 +208,44 @@ describe('runFlowBulk', () => {
     expect(code).toBe(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT)
     expect(details).toMatchObject({ landed: [1], failed: [0], notStarted: [], unknown: [] })
   })
+  it.each([
+    [
+      'a timeout code with no details',
+      new QueueException(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT, HttpStatus.SERVICE_UNAVAILABLE),
+    ],
+    [
+      'another code that carries a timeoutMs',
+      new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, HttpStatus.BAD_REQUEST, {
+        timeoutMs: 1,
+      }),
+    ],
+    ['a full Redis', storageFullException('addFlow', new Error('OOM command not allowed'))],
+    ['a plain error with a timeoutMs property', Object.assign(new Error('x'), { timeoutMs: 1 })],
+  ])('reports a tree that failed with %s as failed, not unknown', async (_kind, error) => {
+    const run = runFlowBulk(flows(1), () => Promise.reject(error), 'addFlowBulk', 1)
+
+    await run.done.catch(() => undefined)
+
+    expect(run.outcome()).toEqual({ landed: [], failed: [0], notStarted: [], unknown: [] })
+  })
+
+  it('lists the unknown trees in index order, whether they are in flight or timed out', async () => {
+    const timedOut = timeoutException('addFlow', 5000)
+    const never = new Promise<JobNode>(() => undefined)
+    const run = runFlowBulk(
+      flows(3),
+      (flow) => (flow.name === 'f2' ? never : Promise.reject(timedOut)),
+      'addFlowBulk',
+      3,
+    )
+
+    // The tree that never answers keeps the batch open, so let the two rejections settle instead.
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    run.stop()
+
+    expect(run.outcome()).toEqual({ landed: [], failed: [], notStarted: [], unknown: [0, 1, 2] })
+  })
+
   it('puts every tree in exactly one list, and hands to add exactly the trees that are not notStarted', async () => {
     // The invariant over many shapes: batch size, limit, which tree fails and how it fails.
     const failures: [string, () => unknown][] = [

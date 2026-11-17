@@ -43,6 +43,9 @@ describe('isOutOfMemory', () => {
 
     expect(isOutOfMemory(abort([oom]))).toBe(true)
     expect(isOutOfMemory(abort([replyError('ERR syntax error')]))).toBe(false)
+    // One OOM reply among others is enough, and the abort text has to be the abort's.
+    expect(isOutOfMemory(abort([replyError('ERR syntax error'), oom]))).toBe(true)
+    expect(isOutOfMemory(replyError('ERR something else', { previousErrors: [oom] }))).toBe(false)
     expect(isOutOfMemory(abort(undefined))).toBe(false)
     expect(isOutOfMemory(abort('OOM command not allowed'))).toBe(false)
   })

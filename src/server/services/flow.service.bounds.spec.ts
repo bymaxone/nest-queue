@@ -107,6 +107,25 @@ describe('FlowService — the enqueue deadline', () => {
   })
 })
 
+describe('FlowService — addBulk after its deadline', () => {
+  it('starts no further tree once the deadline has passed, whatever settles later', async () => {
+    const { service, producer } = makeFlow()
+    const answers: ((node: unknown) => void)[] = []
+    producer.add.mockImplementation(() => new Promise((resolve) => answers.push(resolve)))
+
+    const outcome = service.addBulk(Array.from({ length: 60 }, () => flow)).catch((e: unknown) => e)
+    await jest.advanceTimersByTimeAsync(3000)
+    await outcome
+    const started = producer.add.mock.calls.length
+    // A tree that settles after the deadline would make the batch start the next one if it ran on.
+    answers[0]?.({ job: { id: '1' } })
+    await jest.advanceTimersByTimeAsync(10)
+
+    expect(started).toBe(50)
+    expect(producer.add).toHaveBeenCalledTimes(50)
+  })
+})
+
 describe('FlowService — the addBulk count cap', () => {
   it('accepts 1000 trees and refuses 1001 with BULK_ENQUEUE_FAILED, without calling the producer', async () => {
     const { service, producer } = makeFlow()

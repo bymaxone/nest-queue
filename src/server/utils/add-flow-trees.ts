@@ -112,7 +112,7 @@ export function runFlowBulk(
   limit: number,
 ): FlowBulkRun {
   const state: TreeState[] = flows.map(() => 'pending')
-  const nodes: (JobNode | undefined)[] = flows.map(() => undefined)
+  const nodes = new Array<JobNode>(flows.length)
   let next = 0
   let stopped = false
   let firstFailure: { error: unknown } | undefined
@@ -143,7 +143,7 @@ export function runFlowBulk(
       if (firstFailure !== undefined) {
         throw batchFailure(operation, firstFailure.error, outcome())
       }
-      return nodes.filter((node): node is JobNode => node !== undefined)
+      return nodes
     },
   )
 

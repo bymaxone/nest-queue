@@ -98,6 +98,10 @@ describe('FlowService — a command timeout is reported as CONNECTION_TIMEOUT', 
       },
     })
     expect(((err as QueueException).cause as QueueException).cause).toBe(cause)
+    // The first tree's own error names the call it came from.
+    expect(describeException((err as QueueException).cause).details).toMatchObject({
+      operation: 'addFlowBulk',
+    })
   })
 
   it('reports a zero deadline when the client carries none, and leaves other failures alone', async () => {

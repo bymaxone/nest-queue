@@ -42,6 +42,7 @@ export function isReservedJobId(jobId: string): boolean {
  * @throws {QueueException} `INVALID_JOB_ID` (400) with `{ field: 'jobId' }` for a reserved id.
  */
 export function assertJobIdAllowed(jobId: string | undefined): void {
+  // Stryker disable next-line ConditionalExpression: equivalent — `Set.has(undefined)` is false, so dropping the presence check changes nothing observable; it states that an absent id passes and narrows the type
   if (jobId !== undefined && isReservedJobId(jobId)) {
     throw new QueueException(QUEUE_ERROR_CODES.INVALID_JOB_ID, HttpStatus.BAD_REQUEST, {
       field: 'jobId',
