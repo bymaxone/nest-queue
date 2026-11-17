@@ -122,7 +122,7 @@ function replySummary(reply: unknown): Error {
  * operation and the reason only, never Redis's text, which names the server's setting and script.
  *
  * @param operation - The public call that was refused.
- * @param cause - The Redis reply, kept for diagnosis.
+ * @param cause - The Redis reply; only its name and message are kept, as the `cause`.
  */
 export function storageFullException(operation: string, cause: unknown): QueueException {
   const exception = new QueueException(
