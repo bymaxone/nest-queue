@@ -104,7 +104,8 @@ describe('QueueService.upsertJobScheduler — failure classification', () => {
     expect(err?.getResponse()).toMatchObject({
       error: { code: 'queue.storage_full', details: { operation: 'upsertJobScheduler' } },
     })
-    expect(err?.cause).toBe(refused)
+    expect(err?.cause).toMatchObject({ name: refused.name, message: refused.message })
+    expect(err?.cause).not.toBe(refused)
   })
 
   it.each(['not a cron', '60 * * * *', '*/0 * * * *', '1-0 * * * *', '* * * * * * *', '@bogus'])(

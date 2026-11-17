@@ -103,6 +103,20 @@ export function isOutOfMemory(err: unknown): boolean {
 }
 
 /**
+ * What is kept of the error Redis answered with: its name and message, and nothing else. An ioredis
+ * reply error carries the command that failed, whose arguments hold the job's data, so keeping the
+ * error itself would let `JSON.stringify` or a logger print a payload.
+ *
+ * @param reply - The error Redis answered with.
+ */
+function replySummary(reply: unknown): Error {
+  const { name, message } = reply as Error
+  const summary = new Error(message)
+  summary.name = name
+  return summary
+}
+
+/**
  * Build the `STORAGE_FULL` error a write reports when Redis has no memory left for it. The request
  * is valid and a retry can succeed once memory is freed, so it is a 503; the details carry the
  * operation and the reason only, never Redis's text, which names the server's setting and script.
@@ -116,7 +130,7 @@ export function storageFullException(operation: string, cause: unknown): QueueEx
     HttpStatus.SERVICE_UNAVAILABLE,
     { operation, reason: 'out_of_memory' },
   )
-  exception.cause = cause
+  exception.cause = replySummary(cause)
   return exception
 }
 

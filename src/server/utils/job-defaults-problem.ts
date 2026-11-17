@@ -73,22 +73,23 @@ function backoffProblem(path: string, value: unknown): string | undefined {
 }
 
 /**
- * The first problem in `defaultJobOptions`, as a reason that names the option and what it received (a
- * finite number as it is, `null`, or only the type of anything else), or `undefined` when there is none. Options
- * this does not know are BullMQ's to judge.
+ * The first problem in a set of job options, as a reason that names the option by `path` and what it
+ * received (a finite number as it is, `null`, or only the type of anything else), or `undefined` when
+ * there is none. The module's `defaultJobOptions` and the options of one job go through the same
+ * check. Options this does not know are BullMQ's to judge.
  *
- * @param defaults - The `defaultJobOptions` of the module options, as given.
+ * @param options - The job options, as given.
+ * @param path - What to call them in a reason, such as `defaultJobOptions` or `flow.children[0].opts`.
  */
-export function jobDefaultsProblem(defaults: unknown): string | undefined {
-  if (typeof defaults !== 'object' || defaults === null) return undefined
-  const o = defaults as Record<string, unknown>
-  const base = 'defaultJobOptions'
+export function jobOptionsProblem(options: unknown, path: string): string | undefined {
+  if (typeof options !== 'object' || options === null) return undefined
+  const o = options as Record<string, unknown>
   return (
-    wholeNumberProblem(`${base}.attempts`, o.attempts) ??
-    wholeNumberProblem(`${base}.delay`, o.delay) ??
-    priorityProblem(`${base}.priority`, o.priority) ??
-    backoffProblem(`${base}.backoff`, o.backoff) ??
-    retentionProblem(`${base}.removeOnComplete`, o.removeOnComplete) ??
-    retentionProblem(`${base}.removeOnFail`, o.removeOnFail)
+    wholeNumberProblem(`${path}.attempts`, o.attempts) ??
+    wholeNumberProblem(`${path}.delay`, o.delay) ??
+    priorityProblem(`${path}.priority`, o.priority) ??
+    backoffProblem(`${path}.backoff`, o.backoff) ??
+    retentionProblem(`${path}.removeOnComplete`, o.removeOnComplete) ??
+    retentionProblem(`${path}.removeOnFail`, o.removeOnFail)
   )
 }

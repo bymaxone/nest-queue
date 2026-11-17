@@ -7,7 +7,7 @@ import { HttpStatus } from '@nestjs/common'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
-import { jobDefaultsProblem } from '../utils/job-defaults-problem'
+import { jobOptionsProblem } from '../utils/job-defaults-problem'
 import { isTimerDelayMs, MAX_TIMER_DELAY_MS } from '../utils/timer-delay'
 
 /** Throw a well-formed INVALID_OPTIONS exception carrying the failing reason. */
@@ -115,7 +115,7 @@ export function validateOptions(opts: BymaxQueueModuleOptions): void {
 
   checkCacheTtl(opts.metrics?.cacheTtlMs)
 
-  const jobDefaults = jobDefaultsProblem(opts.defaultJobOptions)
+  const jobDefaults = jobOptionsProblem(opts.defaultJobOptions, 'defaultJobOptions')
   if (jobDefaults !== undefined) invalid(jobDefaults)
 
   for (const key of ['commandTimeoutMs', 'enqueueTimeoutMs', 'connectionReadyTimeoutMs'] as const) {

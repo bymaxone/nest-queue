@@ -134,6 +134,7 @@ describe('E2E — the README dead-letter recipe', () => {
     expect(snippet).toContain("@OnWorkerEvent('failed')")
     expect(snippet).toContain('async onFailed(job: Job | undefined, err: Error)')
     expect(snippet).toContain('-dlq')
+    expect(snippet).toContain('failedReason: job.failedReason')
   })
 
   it('dead-letters a job that exhausted its attempts and one that failed for good at once, removed or not', async () => {
@@ -159,6 +160,14 @@ describe('E2E — the README dead-letter recipe', () => {
       'dlq-gone-fatal',
       'dlq-named',
     ])
+    // Each dead-letter job carries the original data and why the job failed.
+    const dataOf = (id: string): unknown => dead.find((j) => j.id === id)?.data
+    expect(dataOf('dlq-exhausted')).toEqual({
+      original: { orderId: 'exhausted' },
+      failedReason: 'always',
+    })
+    expect(dataOf('dlq-fatal')).toEqual({ original: { orderId: 'fatal' }, failedReason: 'final' })
+    expect(dataOf('dlq-named')).toEqual({ original: { orderId: 'named' }, failedReason: 'final' })
     // Every failed attempt reached the listener (3 + 1 + 1 + 1 + 3 + 1 at least), so the spy works.
     expect(listener.mock.calls.length).toBeGreaterThanOrEqual(9)
     // The retried attempts of `exhausted` and the single failure of `flaky` did not dead-letter.
