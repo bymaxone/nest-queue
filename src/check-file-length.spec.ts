@@ -1,9 +1,8 @@
 /**
- * Pins `scripts/check-file-length.mjs`, the gate for the 800-line rule. It is plain Node, so each
+ * @fileoverview Pins `scripts/check-file-length.mjs`, the gate for the 800-line rule. It is plain Node, so each
  * case runs it the way CI does, as a child process against a throwaway git repository, and asserts
  * the exit code and the printed problems.
- *
- * Layer: repository tooling, tests.
+ * @layer repository tooling, tests
  */
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
