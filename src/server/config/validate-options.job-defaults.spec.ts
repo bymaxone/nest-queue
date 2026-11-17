@@ -1,9 +1,10 @@
 /**
  * @fileoverview Unit tests for the validation of `defaultJobOptions` at module setup. BullMQ takes
- * these values as they come: `NaN` or `Infinity` in a count or a delay fails with a raw Redis error
- * on the first job, and a `count` of `-1` or `1.5` on `removeOnComplete` or `removeOnFail` keeps every
+ * these values as they come: `NaN` or `Infinity` in a count or a delay fails with a raw serialisation
+ * error on the first job, and a `count` of `-1` or `1.5` on `removeOnComplete` or `removeOnFail` keeps every
  * job, which removes the retention cap silently. Each field is tried with the six values that
- * matter, and the refusal names the option and never the value.
+ * matter, and the refusal names the option and what it received: a finite number as it is, only the
+ * type of anything else.
  * @layer server/config
  */
 
