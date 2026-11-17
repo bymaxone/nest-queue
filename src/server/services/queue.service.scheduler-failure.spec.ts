@@ -71,7 +71,6 @@ describe('QueueService.upsertJobScheduler — failure classification', () => {
       'READONLY (a replica refused the write)',
       "READONLY You can't write against a read only replica.",
     ],
-    ['OOM (the server is out of memory)', 'OOM command not allowed when used memory > maxmemory.'],
     ['NOAUTH (the connection is not authenticated)', 'NOAUTH Authentication required.'],
   ])('propagates a Redis reply error without a code untouched: %s', async (_label, message) => {
     // A reply error carries no string `code`, so it used to be relabelled "invalid cron" (400)
@@ -84,6 +83,28 @@ describe('QueueService.upsertJobScheduler — failure classification', () => {
     await expect(
       service.upsertJobScheduler('cleanup', 'nightly', { pattern: '0 3 * * *' }),
     ).rejects.toBe(refused)
+  })
+
+  it('reports an out-of-memory refusal as STORAGE_FULL (503), keeping the reply as the cause', async () => {
+    // Out of memory is the one reply error the library names: the request is valid and a retry can
+    // succeed once Redis has room, which the caller learns from the code and the status.
+    const service = makeService()
+    service.getOrCreateQueue('cleanup')
+    const refused = new RedisReplyError('OOM command not allowed when used memory > maxmemory.')
+    queueInstances[0]?.upsertJobScheduler.mockRejectedValue(refused)
+
+    let err: QueueException | undefined
+    try {
+      await service.upsertJobScheduler('cleanup', 'nightly', { pattern: '0 3 * * *' })
+    } catch (e) {
+      err = e as QueueException
+    }
+
+    expect(err?.getStatus()).toBe(503)
+    expect(err?.getResponse()).toMatchObject({
+      error: { code: 'queue.storage_full', details: { operation: 'upsertJobScheduler' } },
+    })
+    expect(err?.cause).toBe(refused)
   })
 
   it.each(['not a cron', '60 * * * *', '*/0 * * * *', '1-0 * * * *', '* * * * * * *', '@bogus'])(

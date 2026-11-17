@@ -66,7 +66,7 @@ describe('FlowService — the enqueue deadline', () => {
     'releases the caller of %s with CONNECTION_TIMEOUT when the producer never answers',
     async (method) => {
       const { service, producer } = makeFlow()
-      producer[method].mockReturnValue(new Promise(() => undefined))
+      producer.add.mockReturnValue(new Promise(() => undefined))
 
       const outcome = (method === 'add' ? service.add(flow) : service.addBulk([flow])).catch(
         (e: unknown) => e,
@@ -83,10 +83,17 @@ describe('FlowService — the enqueue deadline', () => {
       expect(statusOf(await outcome)).toBe(503)
       expect(describeException(await outcome)).toStrictEqual({
         code: 'queue.connection_timeout',
-        details: {
-          operation: method === 'add' ? 'addFlow' : 'addFlowBulk',
-          timeoutMs: 3000,
-        },
+        details:
+          method === 'add'
+            ? { operation: 'addFlow', timeoutMs: 3000 }
+            : {
+                operation: 'addFlowBulk',
+                timeoutMs: 3000,
+                landed: [],
+                failed: [],
+                notStarted: [],
+                unknown: [0],
+              },
       })
     },
   )
@@ -103,14 +110,15 @@ describe('FlowService — the enqueue deadline', () => {
 describe('FlowService — the addBulk count cap', () => {
   it('accepts 1000 trees and refuses 1001 with BULK_ENQUEUE_FAILED, without calling the producer', async () => {
     const { service, producer } = makeFlow()
-    producer.addBulk.mockResolvedValue([])
+    producer.add.mockResolvedValue({ job: { id: '1' } })
 
     await service.addBulk(Array.from({ length: 1000 }, () => flow))
     const err = await service
       .addBulk(Array.from({ length: 1001 }, () => flow))
       .catch((e: unknown) => e)
 
-    expect(producer.addBulk).toHaveBeenCalledTimes(1)
+    // One add per tree for the accepted batch, none for the refused one.
+    expect(producer.add).toHaveBeenCalledTimes(1000)
     expect(statusOf(err)).toBe(400)
     expect(describeException(err)).toStrictEqual({
       code: 'queue.bulk_enqueue_failed',

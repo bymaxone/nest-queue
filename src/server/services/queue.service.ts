@@ -250,10 +250,8 @@ export class QueueService {
       )
       return created
     } catch (err) {
-      if (
-        err instanceof QueueException &&
-        errorCodeOf(err) === QUEUE_ERROR_CODES.CONNECTION_TIMEOUT
-      ) {
+      // A timeout and a full Redis already carry their own code and status; only the rest is wrapped.
+      if (err instanceof QueueException && PASSED_THROUGH.has(errorCodeOf(err))) {
         throw err
       }
       // The text of the failure can name the host or the server: it is the cause, never the response.
@@ -455,6 +453,12 @@ export class QueueService {
     this.#warm.clear()
   }
 }
+
+/** The codes `enqueueBulk` reports as they are instead of wrapping them in `BULK_ENQUEUE_FAILED`. */
+const PASSED_THROUGH: ReadonlySet<string> = new Set([
+  QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
+  QUEUE_ERROR_CODES.STORAGE_FULL,
+])
 
 /** The stable code a `QueueException` carries in its response envelope. */
 function errorCodeOf(err: QueueException): string {
