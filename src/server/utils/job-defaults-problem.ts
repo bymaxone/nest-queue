@@ -15,7 +15,7 @@ import { MAX_JOB_PRIORITY } from '../constants/default-options'
  * not carry faithfully.
  */
 function isWholeNumber(value: unknown): boolean {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+  return Number.isSafeInteger(value) && Number(value) >= 0
 }
 
 /** The reason a priority is wrong: a whole number from 0 up to what BullMQ accepts. */
@@ -34,7 +34,7 @@ function wholeNumberProblem(path: string, value: unknown): string | undefined {
 
 /** The reason a `removeOn*` value is wrong: `true`, `false`, a count, or `{ age?, count? }`. */
 function retentionProblem(path: string, value: unknown): string | undefined {
-  if (value === undefined || typeof value === 'boolean') return undefined
+  if (typeof value === 'boolean') return undefined
   if (typeof value !== 'object' || value === null) return wholeNumberProblem(path, value)
   const { age, count } = value as { age?: unknown; count?: unknown }
   return wholeNumberProblem(`${path}.age`, age) ?? wholeNumberProblem(`${path}.count`, count)
@@ -42,7 +42,7 @@ function retentionProblem(path: string, value: unknown): string | undefined {
 
 /** The reason a `backoff` is wrong: a delay in milliseconds, or `{ type, delay?, jitter? }`. */
 function backoffProblem(path: string, value: unknown): string | undefined {
-  if (value === undefined || typeof value !== 'object' || value === null) {
+  if (typeof value !== 'object' || value === null) {
     return wholeNumberProblem(path, value)
   }
   const { delay, jitter } = value as { delay?: unknown; jitter?: unknown }

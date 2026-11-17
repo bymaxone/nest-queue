@@ -114,6 +114,7 @@ describe('validateOptions — defaultJobOptions', () => {
 
   it('accepts options that set none of them, and the library defaults', () => {
     expect(refusal(undefined)).toBeUndefined()
+    expect(refusal(null)).toBeUndefined()
     expect(refusal({})).toBeUndefined()
     expect(
       refusal({
