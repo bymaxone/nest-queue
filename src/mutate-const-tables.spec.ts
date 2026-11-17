@@ -1,10 +1,9 @@
 /**
- * Pins `scripts/mutate-const-tables.mjs`, the development tool that mutates `as const` tables one
+ * @fileoverview Pins `scripts/mutate-const-tables.mjs`, the development tool that mutates `as const` tables one
  * entry at a time. It is plain Node, so each case runs it as a child process against a throwaway
  * git repository whose test command is a small checker script, and asserts the exit code, what
  * is printed, the exact text of each mutant, and that the mutated file is restored.
- *
- * Layer: repository tooling, tests.
+ * @layer repository tooling, tests
  */
 import { spawn, spawnSync } from 'node:child_process'
 import {

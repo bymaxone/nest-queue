@@ -1,10 +1,10 @@
 /**
- * Pins `scripts/strip-bundle-comments.mjs`, the post-build step that removes the comments from
+ * @fileoverview Pins `scripts/strip-bundle-comments.mjs`, the post-build step that removes the comments from
  * the shipped JavaScript bundles.
- *
- * Layer: repository tooling, tests. The script is plain Node and is run here the way the build
+ * The script is plain Node and is run here the way the build
  * runs it, as a child process over a small `dist/` directory, so the files it leaves behind and
  * its exit code are what the cases assert.
+ * @layer repository tooling, tests
  */
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
