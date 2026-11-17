@@ -77,7 +77,7 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
     const snapshot = snapshotOptions(options)
     validateOptions(snapshot)
     const resolved = applyDefaults(snapshot)
-    const base = super.forRoot(options)
+    const base = super.forRoot(snapshot)
 
     return {
       ...base,
@@ -121,7 +121,11 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
    * @returns The configured dynamic module.
    */
   static forRootAsync(options: typeof ASYNC_OPTIONS_TYPE): DynamicModule {
-    const base = super.forRootAsync(options)
+    // An `isGlobal` that holds `undefined` or `null` is not given, so the module keeps its default.
+    const { isGlobal, ...rest } = options
+    const base = super.forRootAsync(
+      isGlobal === undefined || (isGlobal as boolean | null) === null ? rest : options,
+    )
 
     return {
       ...base,
