@@ -66,7 +66,7 @@ describe('E2E — a job id that is one of the queue keys', () => {
       expect(err.code).toBe('queue.invalid_job_id')
     }
 
-    // Before the refusal existed, enqueueing `active` made the next metrics call throw WRONGTYPE.
+    // A refused id leaves the queue's own structures intact, so its metrics stay readable.
     await expect(queues.getMetrics('healthy')).resolves.toMatchObject({
       counts: { waiting: 0, active: 0 },
     })
