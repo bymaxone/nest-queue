@@ -494,7 +494,7 @@ a crash or a shutdown that outlasts the drain budget.
 
 **DLQ pattern.** When BullMQ has given up on a job, move it to a dead-letter queue. The predicate is the job's
 state, not a comparison of `attemptsMade` with `attempts`: the `failed` event also fires for an attempt that
-will be retried (the job is then `delayed`), and a job that fails with `UnrecoverableError` is final after its first attempt, so the comparison would never
+will be retried, and a job that fails with `UnrecoverableError` is final after its first attempt, so the comparison would never
 dead-letter it. The id uses a
 hyphen because BullMQ refuses a custom job id that contains a colon.
 
@@ -672,7 +672,7 @@ check re-queues it and it runs again. **Every handler must be idempotent** — s
 - [ ] `shutdown.drainTimeoutMs` exceeds your worst-case job runtime, so a normal deploy
       does not force-close work that was about to finish.
 - [ ] Redis runs with `maxmemory-policy noeviction`: under any other policy Redis can evict queue keys
-      and BullMQ prints `IMPORTANT! Eviction policy is allkeys-lru. It should be "noeviction"` (with the policy your server has) when a worker starts. Enable persistence (AOF) if queued jobs must
+      and BullMQ prints `IMPORTANT! Eviction policy is allkeys-lru. It should be "noeviction"` (with the policy your server has) when it connects. Enable persistence (AOF) if queued jobs must
       survive a Redis restart; without it they are lost.
 
 ---
