@@ -12,6 +12,10 @@
     "reason": "Runs scripts/mutate-const-tables.mjs against fixture trees; executes no code under src."
   },
   {
+    "file": "src/spec-headers.spec.ts",
+    "reason": "Reads the tracked spec files and their leading comments to require a header tag; it executes no code under src, so it can kill no mutant."
+  },
+  {
     "file": "src/strip-bundle-comments.spec.ts",
     "reason": "Runs the bundle comment-stripping script on fixture directories; executes no code under src."
   },
