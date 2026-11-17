@@ -49,9 +49,9 @@ function loadRecipe(): RecipeClass {
     compilerOptions: { target: ts.ScriptTarget.ES2022, experimentalDecorators: true },
   }).outputText
   const build = runInThisContext(
-    `(function (Injectable, Inject, Processor, Process, OnWorkerEvent) {\n${js}\nreturn OrdersProcessor })`,
+    `(function (Injectable, Inject, Processor, Process, OnWorkerEvent, QueueService) {\n${js}\nreturn OrdersProcessor })`,
   ) as (...decorators: unknown[]) => RecipeClass
-  return build(Injectable, Inject, Processor, Process, OnWorkerEvent)
+  return build(Injectable, Inject, Processor, Process, OnWorkerEvent, QueueService)
 }
 
 /** Poll `predicate` until it is truthy or the timeout elapses. */
