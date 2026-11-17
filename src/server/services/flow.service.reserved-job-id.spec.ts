@@ -113,4 +113,23 @@ describe('FlowService — a job id that is one of the queue keys', () => {
     expect(producer.add).toHaveBeenCalledTimes(1)
     expect(producer.addBulk).toHaveBeenCalledTimes(1)
   })
+  it.each(['add', 'addBulk'] as const)(
+    'answers FLOW_DISABLED (503) from %s, whatever the ids, when flows are not enabled',
+    async (method) => {
+      // The disabled guard comes first, so the answer never depends on what was submitted.
+      const connection = {
+        getClient: jest.fn().mockReturnValue({ options: {} }),
+      } as unknown as ConnectionResolver
+      const service = new FlowService(connection, false, 'bull')
+      const flow = tree('active', 'failed', 'id')
+
+      const err = await rejection(() =>
+        method === 'add' ? service.add(flow) : service.addBulk([flow]),
+      )
+
+      expect(err.getStatus()).toBe(503)
+      const { error } = err.getResponse() as { error: { code: string } }
+      expect(error.code).toBe(QUEUE_ERROR_CODES.FLOW_DISABLED)
+    },
+  )
 })

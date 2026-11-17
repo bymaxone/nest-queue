@@ -83,8 +83,9 @@ export class FlowService {
    *   when Redis does not answer within `enqueueTimeoutMs` (the flow may still have been added).
    */
   async add(flow: FlowJob): Promise<JobNode> {
+    const producer = this.requireProducer()
     assertFlowJobIds(flow)
-    return this.bounded('addFlow', this.requireProducer().add(flow))
+    return this.bounded('addFlow', producer.add(flow))
   }
 
   /**
