@@ -1,22 +1,30 @@
 /**
- * @fileoverview Runs the README dead-letter recipe as written, against a real BullMQ `Worker` and a
- * real Redis. The snippet gate only type-checks the README, and a type-correct recipe can still do
- * nothing: BullMQ refuses a job id with a colon, and a comparison of `attemptsMade` with `attempts`
- * never matches a job that fails with `UnrecoverableError`. The method below is taken from the
- * README text itself, so the recipe and what is tested cannot drift apart.
+ * @fileoverview Runs the README dead-letter recipe as written: the class is taken from the README
+ * text, compiled, and registered as a provider, so Nest builds it with its real constructor
+ * injection, the library discovers its `@Processor`, and its `@OnWorkerEvent('failed')` listener is
+ * bound to a real BullMQ `Worker` on a real Redis. The snippet gate only type-checks the README, and
+ * a type-correct recipe can still do nothing: BullMQ refuses a job id with a colon, and a comparison
+ * of `attemptsMade` with `attempts` never matches a job that fails with `UnrecoverableError`.
  * @layer test/e2e
  */
 
 import 'reflect-metadata'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { runInNewContext } from 'node:vm'
+import { runInThisContext } from 'node:vm'
 import { NestFactory } from '@nestjs/core'
-import { Module } from '@nestjs/common'
+import { Inject, Injectable, Module } from '@nestjs/common'
 import type { INestApplicationContext } from '@nestjs/common'
-import { UnrecoverableError, type Job } from 'bullmq'
+import { UnrecoverableError } from 'bullmq'
+import { Redis } from 'ioredis'
 import * as ts from 'typescript'
-import { BymaxQueueModule, QueueService, WorkerRegistry } from '@bymax-one/nest-queue'
+import {
+  BymaxQueueModule,
+  OnWorkerEvent,
+  Process,
+  Processor,
+  QueueService,
+} from '@bymax-one/nest-queue'
 import { startRedisContainer, type RedisContainer } from './setup/testcontainers'
 
 /** The dead-letter snippet of the README, as the README writes it. */
@@ -26,26 +34,27 @@ function readmeDlqSnippet(): string {
   return /```typescript\n([\s\S]*?)```/.exec(readme.slice(start))?.[1] ?? ''
 }
 
-/** The recipe's listener type: a method that takes the job and the error. */
-type FailedListener = (job: Job | undefined, err: Error) => Promise<void>
+/** The class of the recipe: built by Nest, with the one method the test replaces. */
+interface RecipeClass {
+  new (queue: QueueService): object
+  prototype: {
+    fulfil: (orderId: string) => Promise<void>
+    onFailed: (job: unknown, err: Error) => Promise<void>
+  }
+}
 
-/**
- * Compile the README method into a class the test can instantiate. The decorator is replaced by a
- * no-op, because the test attaches the method to the worker's `failed` event itself.
- */
-function buildListener(queue: QueueService): FailedListener {
-  const method = readmeDlqSnippet()
-  const source = `class Recipe {\n constructor(queue) { this.queue = queue }\n${method}\n}\nRecipe`
+/** Compile the README class, without its imports, and hand it the real decorators it names. */
+function loadRecipe(): RecipeClass {
+  const source = readmeDlqSnippet()
+    .replace(/^import .*\n/gm, '')
+    .replace('export class', 'class')
   const js = ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, experimentalDecorators: true },
   }).outputText
-  const OnWorkerEvent = (): MethodDecorator => () => undefined
-  const Recipe = runInNewContext(js, {
-    OnWorkerEvent,
-    __decorate: (...args: unknown[]) => args[3],
-  }) as new (queue: QueueService) => { onFailed: FailedListener }
-  const recipe = new Recipe(queue)
-  return (job, err) => recipe.onFailed(job, err)
+  const build = runInThisContext(
+    `(function (Injectable, Inject, Processor, Process, OnWorkerEvent, QueueService) {\n${js}\nreturn OrdersProcessor })`,
+  ) as (...decorators: unknown[]) => RecipeClass
+  return build(Injectable, Inject, Processor, Process, OnWorkerEvent, QueueService)
 }
 
 /** Poll `predicate` until it is truthy or the timeout elapses. */
@@ -58,86 +67,91 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs: number): Pr
   }
 }
 
-/** The error a job fails with, by job id; BullMQ treats an error that only carries the name as unrecoverable. */
-function failureFor(id: string | undefined): Error {
-  if (id === 'named') return Object.assign(new Error('final'), { name: 'UnrecoverableError' })
-  if (id === 'fatal' || id === 'gone-fatal') return new UnrecoverableError('final')
+/** The error a job fails with, by order id; BullMQ treats an error that only carries the name as unrecoverable. */
+function failureFor(orderId: string): Error {
+  if (orderId === 'named') return Object.assign(new Error('final'), { name: 'UnrecoverableError' })
+  if (orderId === 'fatal' || orderId === 'gone-fatal') return new UnrecoverableError('final')
   return new Error('always')
 }
 
-/** A handler that counts the runs of every job, succeeds on the second run of `flaky`, and fails the rest. */
-function countingHandler(attempts: Map<string, number>): (job: Job) => Promise<string> {
-  return (job) => {
-    attempts.set(String(job.id), (attempts.get(String(job.id)) ?? 0) + 1)
-    if (job.id === 'flaky' && job.attemptsMade === 0) return Promise.reject(new Error('once'))
-    if (job.id === 'flaky') return Promise.resolve('ok')
-    return Promise.reject(failureFor(job.id))
+/** Replace the recipe's work with one that counts the runs of each order and fails them by id. */
+function failByOrder(recipe: RecipeClass, runs: Map<string, number>): void {
+  recipe.prototype.fulfil = (orderId) => {
+    runs.set(orderId, (runs.get(orderId) ?? 0) + 1)
+    if (orderId === 'flaky' && runs.get(orderId) === 1) return Promise.reject(new Error('once'))
+    return orderId === 'flaky' ? Promise.resolve() : Promise.reject(failureFor(orderId))
   }
 }
 
 /** Enqueue the scenario's jobs; the last two are removed on failure, so they have no state left to read. */
-async function enqueueScenario(queues: QueueService, name: string): Promise<void> {
+async function enqueueScenario(queues: QueueService, queueName: string): Promise<void> {
   const options = { attempts: 3, backoff: { type: 'fixed', delay: 50 } } as const
-  const ids = ['exhausted', 'fatal', 'named', 'flaky']
-  for (const jobId of ids) await queues.enqueue(name, 'j', {}, { jobId, ...options })
+  for (const orderId of ['exhausted', 'fatal', 'named', 'flaky']) {
+    await queues.enqueue(queueName, 'j', { orderId }, { jobId: orderId, ...options })
+  }
   const removed = { ...options, removeOnFail: true } as const
-  for (const jobId of ['gone', 'gone-fatal']) {
-    await queues.enqueue(name, 'j', {}, { jobId, ...removed })
+  for (const orderId of ['gone', 'gone-fatal']) {
+    await queues.enqueue(queueName, 'j', { orderId }, { jobId: orderId, ...removed })
   }
 }
 
-@Module({})
-class RootModule {}
-
 let redis: RedisContainer
-let app: INestApplicationContext
+let maintenance: Redis
+let app: INestApplicationContext | undefined
+
+/** Boot an application whose only provider is the README class. */
+async function bootWith(recipe: RecipeClass): Promise<INestApplicationContext> {
+  @Module({
+    imports: [BymaxQueueModule.forRoot({ connection: { url: redis.url } })],
+    providers: [recipe],
+  })
+  class RootModule {}
+  return NestFactory.createApplicationContext(RootModule, { logger: false })
+}
 
 beforeAll(async () => {
   redis = await startRedisContainer()
-  app = await NestFactory.createApplicationContext(
-    {
-      module: RootModule,
-      imports: [BymaxQueueModule.forRoot({ connection: { url: redis.url } })],
-    },
-    { logger: false },
-  )
+  maintenance = new Redis(redis.url, { maxRetriesPerRequest: null })
 }, 60_000)
 
+afterEach(async () => {
+  await app?.close()
+  app = undefined
+  await maintenance.flushall()
+})
+
 afterAll(async () => {
-  await app.close()
+  await maintenance.quit()
   await redis.stop()
 })
 
 describe('E2E — the README dead-letter recipe', () => {
   it('still says what this test runs', () => {
-    // The listener below is the README's; if the README changes, this test must change with it.
+    // The class below is the README's; if the README changes, this test must change with it.
     const snippet = readmeDlqSnippet()
+    expect(snippet).toContain('@Inject(QueueService)')
+    expect(snippet).toContain("@Processor('orders')")
     expect(snippet).toContain("@OnWorkerEvent('failed')")
     expect(snippet).toContain('async onFailed(job: Job | undefined, err: Error)')
     expect(snippet).toContain('-dlq')
   })
 
   it('dead-letters a job that exhausted its attempts and one that failed for good at once, removed or not', async () => {
+    const recipe = loadRecipe()
+    const runs = new Map<string, number>()
+    failByOrder(recipe, runs)
+    // The listener Nest binds is the class's own, so a spy on it sees every `failed` event.
+    const listener = jest.spyOn(recipe.prototype, 'onFailed')
+    app = await bootWith(recipe)
     const queues = app.get(QueueService)
-    const listener = buildListener(queues)
-    const name = 'dlq-recipe'
-    const attempts = new Map<string, number>()
-    const worker = app.get(WorkerRegistry).register({
-      queueName: name,
-      handler: countingHandler(attempts),
-    })
-    // The recipe's own listener, which is what a `@OnWorkerEvent('failed')` method becomes.
-    const seen: Promise<void>[] = []
-    worker.on('failed', (job, err) => {
-      seen.push(listener(job, err).catch(() => undefined))
-    })
 
-    await enqueueScenario(queues, name)
+    await enqueueScenario(queues, 'orders')
 
-    await waitFor(async () => (await queues.getMetrics(`${name}-dlq`)).counts.waiting >= 5, 15_000)
-    await Promise.all(seen)
+    await waitFor(async () => (await queues.getMetrics('orders-dlq')).counts.waiting >= 5, 15_000)
+    // Let the retries of `flaky` and the late failures settle before the exact list is read.
+    await new Promise<void>((resolve) => setTimeout(resolve, 500))
 
-    const dead = await queues.getJobs(`${name}-dlq`, 'waiting')
+    const dead = await queues.getJobs('orders-dlq', 'waiting')
     expect(dead.map((j) => j.id).sort()).toEqual([
       'dlq-exhausted',
       'dlq-fatal',
@@ -145,31 +159,32 @@ describe('E2E — the README dead-letter recipe', () => {
       'dlq-gone-fatal',
       'dlq-named',
     ])
+    // Every failed attempt reached the listener (3 + 1 + 1 + 1 + 3 + 1 at least), so the spy works.
+    expect(listener.mock.calls.length).toBeGreaterThanOrEqual(9)
     // The retried attempts of `exhausted` and the single failure of `flaky` did not dead-letter.
-    expect(attempts.get('exhausted')).toBe(3)
-    expect(attempts.get('fatal')).toBe(1)
-    expect(attempts.get('named')).toBe(1)
-    expect(attempts.get('flaky')).toBe(2)
+    expect(runs.get('exhausted')).toBe(3)
+    expect(runs.get('fatal')).toBe(1)
+    expect(runs.get('named')).toBe(1)
+    expect(runs.get('flaky')).toBe(2)
   }, 30_000)
 
   it('never runs for a job whose keys were removed while it ran', async () => {
+    const recipe = loadRecipe()
+    recipe.prototype.fulfil = async () => {
+      await new Promise<void>((resolve) => setTimeout(resolve, 600))
+      throw new Error('late')
+    }
+    const listener = jest.spyOn(recipe.prototype, 'onFailed')
+    app = await bootWith(recipe)
     const queues = app.get(QueueService)
-    const listener = jest.fn(buildListener(queues))
-    const name = 'dlq-recipe-removed'
-    const worker = app.get(WorkerRegistry).register({
-      queueName: name,
-      handler: async () => {
-        await new Promise<void>((resolve) => setTimeout(resolve, 600))
-        throw new Error('late')
-      },
-    })
-    worker.on('failed', (job, err) => void listener(job, err))
-    await queues.enqueue(name, 'j', {}, { jobId: 'running', attempts: 1 })
-    await waitFor(async () => (await queues.getMetrics(name)).counts.active === 1, 10_000)
+    await queues.enqueue('orders', 'j', { orderId: 'running' }, { jobId: 'running', attempts: 1 })
+    await waitFor(async () => (await queues.getMetrics('orders')).counts.active === 1, 10_000)
+
     // An active job is locked, so `job.remove()` refuses it; obliterating the queue is what removes it.
-    await queues.getCachedQueues().get(name)?.obliterate({ force: true })
+    await queues.getCachedQueues().get('orders')?.obliterate({ force: true })
     await new Promise<void>((resolve) => setTimeout(resolve, 1_500))
+
     expect(listener).not.toHaveBeenCalled()
-    expect((await queues.getMetrics(`${name}-dlq`)).counts.waiting).toBe(0)
+    expect((await queues.getMetrics('orders-dlq')).counts.waiting).toBe(0)
   }, 30_000)
 })

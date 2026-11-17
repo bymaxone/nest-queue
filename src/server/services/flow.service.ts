@@ -106,7 +106,7 @@ export class FlowService {
    *   flows. When a tree fails, `STORAGE_FULL` (503) if Redis is out of memory, `CONNECTION_TIMEOUT`
    *   (503) for a timeout or a down connection, otherwise `BULK_ENQUEUE_FAILED` (500), with
    *   `details: { operation, landed, failed, notStarted, unknown }`, each an array of indexes into
-   *   `flows`. `landed` was stored; `failed` was refused, or never sent because the connection was down, and may have left child jobs behind;
+   *   `flows`. `landed` was stored; `failed` was rejected, because Redis refused it or the connection was down, and may have left child jobs behind;
    *   `notStarted` was never sent and is safe to resend; `unknown` was in flight when the deadline
    *   passed, or its command timed out, and may still land, so resend it only with a stable `jobId`.
    */
