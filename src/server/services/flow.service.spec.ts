@@ -74,15 +74,19 @@ describe('FlowService — enabled', () => {
     expect(producerInstances[0]?.add).toHaveBeenCalledWith(flow)
   })
 
-  it('delegates addBulk to the underlying producer as a mutable array', async () => {
-    // addBulk copies the readonly input into the array BullMQ expects.
+  it('adds each tree of addBulk with one producer call and returns the nodes in input order', async () => {
+    // BullMQ's own bulk call skips a tree that failed, so each tree is added on its own.
     const service = new FlowService(makeConnection(), true, 'bull')
-    const flows = [{ name: 'a', queueName: 'q', data: {} }] as FlowJob[]
-    const nodes = [{ job: { id: '1' } }] as unknown as JobNode[]
-    producerInstances[0]?.addBulk.mockResolvedValue(nodes)
+    const flows = [
+      { name: 'a', queueName: 'q', data: {} },
+      { name: 'b', queueName: 'q', data: {} },
+    ] as FlowJob[]
+    const nodes = [{ job: { id: '1' } }, { job: { id: '2' } }] as unknown as JobNode[]
+    producerInstances[0]?.add.mockResolvedValueOnce(nodes[0]).mockResolvedValueOnce(nodes[1])
 
-    await expect(service.addBulk(flows)).resolves.toBe(nodes)
-    expect(producerInstances[0]?.addBulk).toHaveBeenCalledWith([flows[0]])
+    await expect(service.addBulk(flows)).resolves.toStrictEqual(nodes)
+    expect(producerInstances[0]?.add.mock.calls).toEqual([[flows[0]], [flows[1]]])
+    expect(producerInstances[0]?.addBulk).not.toHaveBeenCalled()
   })
 
   it('returns the underlying producer from getProducer', () => {

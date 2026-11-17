@@ -101,7 +101,7 @@ describe('FlowService — a job id that is one of the queue keys', () => {
     )
 
     expect(err.getStatus()).toBe(400)
-    expect(producer.addBulk).not.toHaveBeenCalled()
+    expect(producer.add).not.toHaveBeenCalled()
   })
 
   it('still adds a tree whose ids are ordinary', async () => {
@@ -110,8 +110,8 @@ describe('FlowService — a job id that is one of the queue keys', () => {
     await service.add(tree('a', 'b', 'c'))
     await service.addBulk([tree('d', 'e', 'f')])
 
-    expect(producer.add).toHaveBeenCalledTimes(1)
-    expect(producer.addBulk).toHaveBeenCalledTimes(1)
+    // One call for the single add and one for the tree of the bulk.
+    expect(producer.add).toHaveBeenCalledTimes(2)
   })
   it.each(['add', 'addBulk'] as const)(
     'answers FLOW_DISABLED (503) from %s, whatever the ids, when flows are not enabled',

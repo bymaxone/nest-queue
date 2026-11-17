@@ -15,7 +15,12 @@ import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { timeoutException, withCommandTimeoutCode } from '../utils/command-timeout'
 import { withDeadline } from '../utils/with-deadline'
 import { assertFlowJobIds } from '../utils/reserved-job-ids'
-import { DEFAULT_ENQUEUE_TIMEOUT_MS, MAX_BULK_SIZE } from '../constants/default-options'
+import { batchTimeout, runFlowBulk } from '../utils/add-flow-trees'
+import {
+  DEFAULT_ENQUEUE_TIMEOUT_MS,
+  MAX_BULK_SIZE,
+  MAX_FLOW_TREES_IN_FLIGHT,
+} from '../constants/default-options'
 
 /**
  * Wrapper over the BullMQ `FlowProducer` for hierarchical (parent/child) job
@@ -89,14 +94,21 @@ export class FlowService {
   }
 
   /**
-   * Add multiple flow trees in a single Redis roundtrip.
+   * Add multiple flow trees, one BullMQ `add` per tree with at most 50 in flight, so that a tree
+   * that fails is reported instead of being skipped: BullMQ's own bulk call resolves with ids of
+   * trees Redis refused. After the first failure no further tree is started.
    *
    * @param flows - Flow tree definitions.
    * @returns The root `JobNode` for each flow, in input order.
    *   A job whose custom `jobId` already exists is not added again; see {@link FlowService.add}.
    * @throws {QueueException} `FLOW_DISABLED` (503) when flows are not enabled;
-   *   `BULK_ENQUEUE_FAILED` for more than 1000 flows; `CONNECTION_TIMEOUT` as for
-   *   {@link FlowService.add}.
+   *   `INVALID_JOB_ID` (400) for a reserved `jobId`; `BULK_ENQUEUE_FAILED` (400) for more than 1000
+   *   flows. When a tree fails, `STORAGE_FULL` (503) if Redis is out of memory, `CONNECTION_TIMEOUT`
+   *   (503) for a timeout or a down connection, otherwise `BULK_ENQUEUE_FAILED` (500), with
+   *   `details: { operation, landed, failed, notStarted, unknown }`, each an array of indexes into
+   *   `flows`. `landed` was stored; `failed` was refused, or never sent because the connection was down, and may have left child jobs behind;
+   *   `notStarted` was never sent and is safe to resend; `unknown` was in flight when the deadline
+   *   passed, or its command timed out, and may still land, so resend it only with a stable `jobId`.
    */
   async addBulk(flows: readonly FlowJob[]): Promise<JobNode[]> {
     const producer = this.requireProducer()
@@ -108,7 +120,18 @@ export class FlowService {
         received: flows.length,
       })
     }
-    return this.bounded('addFlowBulk', producer.addBulk([...flows]))
+    // One `add` per tree, not `FlowProducer.addBulk`: that reads each tree's result as `[err, id]` and
+    // skips a failed one, so a bulk Redis refused resolves with ids of jobs that were never stored.
+    const run = runFlowBulk(
+      flows,
+      (flow) =>
+        withCommandTimeoutCode('addFlowBulk', () => this.commandTimeout(), producer.add(flow)),
+      'addFlowBulk',
+      MAX_FLOW_TREES_IN_FLIGHT,
+    )
+    return withDeadline(run.done, this.#deadlineMs, () =>
+      batchTimeout('addFlowBulk', this.#deadlineMs, run),
+    )
   }
 
   /**

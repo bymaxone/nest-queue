@@ -30,11 +30,15 @@ const ALLOWED: Readonly<Record<string, readonly number[]>> = {
   WORKER_REGISTRATION_FAILED: [SERVER],
   INVALID_OPTIONS: [SERVER, BAD],
   INVALID_JOB_ID: [BAD],
+  STORAGE_FULL: [UNAVAILABLE],
 }
 
 /** Sites whose code or status is a variable, each pinned by a behaviour test instead of this scan. */
 const DYNAMIC_SITES: Readonly<Record<string, number>> = {
   'services/connection-resolver.service.ts': 1,
+  // The batch failure repeats the code and status of its first tree when that has one of its own
+  // (a timeout or a full Redis); the add-flow-trees spec pins both.
+  'utils/add-flow-trees.ts': 1,
 }
 
 const root = resolve(__dirname, '..')

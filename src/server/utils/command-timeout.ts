@@ -82,9 +82,48 @@ export function isCommandTimeout(err: unknown): boolean {
   return err instanceof Error && err.message === 'Command timed out'
 }
 
+/** What Redis answers a write it refuses because used memory is above `maxmemory` under `noeviction`. */
+const OOM_REPLY_PREFIX = 'OOM command not allowed'
+
+/**
+ * Whether `err` is Redis refusing a write for lack of memory: a reply that begins with the
+ * documented text, or a transaction abort (`EXECABORT`) that carries such a reply among its
+ * `previousErrors`. An abort for any other reason, and any other text that merely mentions memory,
+ * is not. A spec triggers the real reply against a Redis at its limit and pins the text.
+ *
+ * @param err - The rejection of a Redis call.
+ */
+export function isOutOfMemory(err: unknown): boolean {
+  if (!(err instanceof Error)) return false
+  if (err.message.startsWith(OOM_REPLY_PREFIX)) return true
+  const previous = (err as { previousErrors?: unknown }).previousErrors
+  return (
+    err.message.startsWith('EXECABORT') && Array.isArray(previous) && previous.some(isOutOfMemory)
+  )
+}
+
+/**
+ * Build the `STORAGE_FULL` error a write reports when Redis has no memory left for it. The request
+ * is valid and a retry can succeed once memory is freed, so it is a 503; the details carry the
+ * operation and the reason only, never Redis's text, which names the server's setting and script.
+ *
+ * @param operation - The public call that was refused.
+ * @param cause - The Redis reply, kept for diagnosis.
+ */
+export function storageFullException(operation: string, cause: unknown): QueueException {
+  const exception = new QueueException(
+    QUEUE_ERROR_CODES.STORAGE_FULL,
+    HttpStatus.SERVICE_UNAVAILABLE,
+    { operation, reason: 'out_of_memory' },
+  )
+  exception.cause = cause
+  return exception
+}
+
 /**
  * Await `work`, reporting an ioredis command timeout, or a call refused because the connection is
- * down, as the documented `CONNECTION_TIMEOUT` and leaving every other outcome untouched.
+ * down, as the documented `CONNECTION_TIMEOUT`, a write Redis refused for lack of memory as
+ * `STORAGE_FULL`, and leaving every other outcome untouched.
  *
  * @param operation - The public call being made.
  * @param commandTimeoutMs - Reads the command deadline in force on the connection, in milliseconds;
@@ -100,6 +139,7 @@ export async function withCommandTimeoutCode<T>(
     return await work
   } catch (err) {
     if (isCommandTimeout(err)) throw timeoutException(operation, commandTimeoutMs(), err)
+    if (isOutOfMemory(err)) throw storageFullException(operation, err)
     throw isOfflineRejection(err) ? unavailableException(operation, err) : err
   }
 }
