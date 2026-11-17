@@ -156,7 +156,7 @@ describe('E2E — the README dead-letter recipe', () => {
       },
     })
     worker.on('failed', (job, err) => void listener(job, err))
-    await queues.enqueue(name, 'j', {}, { jobId: 'active', attempts: 1 })
+    await queues.enqueue(name, 'j', {}, { jobId: 'running', attempts: 1 })
     await waitFor(async () => (await queues.getMetrics(name)).counts.active === 1, 10_000)
     // An active job is locked, so `job.remove()` refuses it; obliterating the queue is what removes it.
     await queues.getCachedQueues().get(name)?.obliterate({ force: true })
