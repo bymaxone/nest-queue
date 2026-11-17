@@ -134,7 +134,12 @@ describe('E2E — Redis out of memory', () => {
 
     expectStorageFull(refused)
     // The bulk of flows says what became of every tree; none landed, and nothing was left behind.
-    expect(refused.flowBulk.details).toMatchObject({ landed: [], unknown: [] })
+    expect(refused.flowBulk.details).toMatchObject({
+      operation: 'addFlowBulk',
+      reason: 'out_of_memory',
+      landed: [],
+      unknown: [],
+    })
     const reported = [
       ...(refused.flowBulk.details.failed as number[]),
       ...(refused.flowBulk.details.notStarted as number[]),
