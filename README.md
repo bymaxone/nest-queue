@@ -495,10 +495,9 @@ a crash or a shutdown that outlasts the drain budget.
 **DLQ pattern.** When BullMQ has given up on a job, move it to a dead-letter queue. The `failed` event also fires
 for an attempt that BullMQ will retry, so the listener asks what BullMQ did with the job: a retried job is
 `delayed`, `waiting` or `active` again, and a job it gave up on is `failed`, or already gone when `removeOnFail`
-removed it, which `getState()` reports as `unknown`. That covers every way a job ends: attempts used up, an
-`UnrecoverableError` (which ends a job before its attempts are used), and a removed job. Comparing `attemptsMade`
-with `attempts` misses the `UnrecoverableError`, and testing `instanceof UnrecoverableError` misses an error
-BullMQ recognizes by its name alone. The id uses a hyphen because BullMQ refuses a custom job id that contains a
+removed it, which `getState()` reports as `unknown`. Comparing `attemptsMade` with `attempts` misses an
+`UnrecoverableError`, which ends a job before its attempts are used, and testing `instanceof UnrecoverableError`
+misses an error BullMQ recognizes by its name alone. The id uses a hyphen because BullMQ refuses a custom job id that contains a
 colon. A job whose keys are removed from Redis while it runs never reaches this listener: BullMQ reports an error
 on the worker and emits no `failed` event.
 
