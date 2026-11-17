@@ -3,8 +3,8 @@
  * these values as they come: `NaN` or `Infinity` in a count or a delay fails with a raw serialisation
  * error on the first job, and a `count` of `-1` or `1.5` on `removeOnComplete` or `removeOnFail` keeps every
  * job, which removes the retention cap silently. Each field is tried with the six values that
- * matter, and the refusal names the option and what it received: a finite number as it is, only the
- * type of anything else.
+ * matter, and the refusal names the option and what it received: a finite number as it is, `null`, or
+ * only the type of anything else.
  * @layer server/config
  */
 
@@ -37,7 +37,7 @@ function refusal(defaultJobOptions: unknown): string | undefined {
   return undefined
 }
 
-/** What a refusal says it received: a finite number as it is, the type of anything else. */
+/** What a refusal says it received: a finite number as it is, `null`, or the type of anything else. */
 const SENTINEL = 'SENTINEL-8f3a-do-not-echo'
 
 /** The values no whole-number option may take, and how the refusal describes each. */

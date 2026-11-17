@@ -26,8 +26,8 @@ function priorityProblem(path: string, value: unknown): string | undefined {
 }
 
 /**
- * What was received, for a refusal: a finite number as it is, the type of anything else, and never the
- * value, which can come from a request or a file and may be a secret.
+ * What was received, for a refusal: a finite number as it is, `null`, or only the type of anything
+ * else, never any other value, which can come from a request or a file and may be a secret.
  */
 function received(value: unknown): string {
   if (value === null) return 'null'
@@ -74,7 +74,7 @@ function backoffProblem(path: string, value: unknown): string | undefined {
 
 /**
  * The first problem in `defaultJobOptions`, as a reason that names the option and what it received (a
- * finite number as it is, only the type of anything else), or `undefined` when there is none. Options
+ * finite number as it is, `null`, or only the type of anything else), or `undefined` when there is none. Options
  * this does not know are BullMQ's to judge.
  *
  * @param defaults - The `defaultJobOptions` of the module options, as given.
