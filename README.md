@@ -436,7 +436,7 @@ await this.queue.enqueue(
 
 ### A duplicate does not add a job
 
-A custom `jobId` is stored at `<prefix>:<queue>:<jobId>`, next to the keys BullMQ keeps for the queue itself, so an id that equals one of those names (`active`, `wait`, `failed`, `completed`, `delayed`, `id`, `meta`, `events`, …) would overwrite or collide with it. `enqueue`, `enqueueBulk` and the flow methods refuse such an id with `INVALID_JOB_ID` (400) before BullMQ is called, and `getJob` answers `null` for it. The list comes from BullMQ's own key names, so it follows an upgrade; BullMQ already refuses an id that contains `:` or is a whole number.
+A custom `jobId` is stored at `<prefix>:<queue>:<jobId>`, next to the keys BullMQ keeps for the queue itself, so an id that equals one of those names (`active`, `wait`, `failed`, `completed`, `delayed`, `id`, `meta`, `events`, …) would overwrite or collide with it. `enqueue`, `enqueueBulk` and the flow methods refuse such an id with `INVALID_JOB_ID` (400) before BullMQ is called, and `getJob` answers `null` for it. The list comes from BullMQ's own key names, so it follows an upgrade; BullMQ already refuses an id that contains `:` (other than the three-part form) or is a whole number.
 
 When a custom `jobId` already exists, or a `deduplication` rule keeps the job that is already there (a rule with `replace` swaps it for the new one instead), `enqueue`, `enqueueBulk` and the flow methods add nothing: BullMQ answers with the id of the **existing** job together with the data and options of **this** call, so the returned object does not describe what is stored. Call `QueueService.getJob` when you need the stored job.
 
