@@ -36,18 +36,27 @@ function refusal(defaultJobOptions: unknown): string | undefined {
   return undefined
 }
 
-/** The values no whole-number option may take, and the ones every such option takes. */
-const NOT_WHOLE: [string, unknown][] = [
-  ['NaN', NaN],
-  ['Infinity', Infinity],
-  ['-Infinity', -Infinity],
-  ['-1', -1],
-  ['1.5', 1.5],
-  ["'3'", '3'],
-  ['null', null],
-  ['1e300', 1e300],
-  ['2 ** 53', 2 ** 53],
-  ['Number.MAX_VALUE', Number.MAX_VALUE],
+/** What a refusal says it received: a finite number as it is, the type of anything else. */
+const SENTINEL = 'SENTINEL-8f3a-do-not-echo'
+
+/** The values no whole-number option may take, and how the refusal describes each. */
+const NOT_WHOLE: [string, unknown, string][] = [
+  ['NaN', NaN, 'a number that is not finite'],
+  ['Infinity', Infinity, 'a number that is not finite'],
+  ['-Infinity', -Infinity, 'a number that is not finite'],
+  ['-1', -1, '-1'],
+  ['1.5', 1.5, '1.5'],
+  ["'3'", '3', 'a string'],
+  ['null', null, 'null'],
+  ['1e300', 1e300, '1e+300'],
+  ['2 ** 53', 2 ** 53, '9007199254740992'],
+  ['Number.MAX_VALUE', Number.MAX_VALUE, '1.7976931348623157e+308'],
+  ['a sentinel string', SENTINEL, 'a string'],
+  ['a symbol', Symbol(SENTINEL), 'a symbol'],
+  ['a function', Object.assign(() => SENTINEL, { secret: SENTINEL }), 'a function'],
+  ['an object', { secret: SENTINEL }, 'an object'],
+  ['an array', [SENTINEL], 'an array'],
+  ['a bigint', 10n, 'a bigint'],
 ]
 const WHOLE = [0, 1, 3, 1_000_000]
 
@@ -66,14 +75,27 @@ const WHOLE_NUMBER_OPTIONS: [string, (value: unknown) => unknown][] = [
   ['defaultJobOptions.removeOnFail.count', (value) => ({ removeOnFail: { count: value } })],
 ]
 
+/** The options that take an object as well as a number. */
+const OBJECT_OPTIONS = [
+  'defaultJobOptions.backoff',
+  'defaultJobOptions.removeOnComplete',
+  'defaultJobOptions.removeOnFail',
+]
+
 describe('validateOptions — defaultJobOptions', () => {
   describe.each(WHOLE_NUMBER_OPTIONS)('%s', (path, build) => {
-    it.each(NOT_WHOLE)('refuses %s and names the option, not the value', (_label, value) => {
-      const reason = refusal(build(value))
+    // A plain object is a legal shape for these three options (`{ age, count }`, `{ type, delay }`).
+    const takesObject = OBJECT_OPTIONS.includes(path)
+    it.each(NOT_WHOLE.filter(([label]) => !(takesObject && label === 'an object')))(
+      'refuses %s, naming the option and what it received',
+      (_label, value, got) => {
+        const reason = refusal(build(value))
 
-      expect(reason).toContain(path)
-      expect(reason).not.toContain(String(value))
-    })
+        expect(reason).toContain(path)
+        expect(reason).toContain(`received ${got}`)
+        expect(reason).not.toContain(SENTINEL)
+      },
+    )
 
     it.each(WHOLE)('accepts %s', (value) => {
       expect(refusal(build(value))).toBeUndefined()

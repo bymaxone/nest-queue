@@ -22,19 +22,34 @@ function isWholeNumber(value: unknown): boolean {
 function priorityProblem(path: string, value: unknown): string | undefined {
   return value === undefined || (isWholeNumber(value) && (value as number) <= MAX_JOB_PRIORITY)
     ? undefined
-    : `${path} must be a whole number from 0 to ${String(MAX_JOB_PRIORITY)}`
+    : `${path} must be a whole number from 0 to ${String(MAX_JOB_PRIORITY)}, received ${received(value)}`
+}
+
+/**
+ * What was received, for a refusal: a finite number as it is, the type of anything else, and never the
+ * value, which can come from a request or a file and may be a secret.
+ */
+function received(value: unknown): string {
+  if (value === null) return 'null'
+  if (typeof value === 'number')
+    return Number.isFinite(value) ? String(value) : 'a number that is not finite'
+  if (Array.isArray(value)) return 'an array'
+  const type = typeof value
+  return type === 'object' ? 'an object' : `a ${type}`
 }
 
 /** The reason `value` is not a whole number >= 0, when `value` is set. */
 function wholeNumberProblem(path: string, value: unknown): string | undefined {
   return value === undefined || isWholeNumber(value)
     ? undefined
-    : `${path} must be a whole number >= 0`
+    : `${path} must be a whole number >= 0, received ${received(value)}`
 }
 
 /** The reason a `removeOn*` value is wrong: `true`, `false`, a count, or `{ age?, count? }`. */
 function retentionProblem(path: string, value: unknown): string | undefined {
   if (typeof value === 'boolean') return undefined
+  if (Array.isArray(value))
+    return `${path} must be true, false, a number or an object, received an array`
   if (typeof value !== 'object' || value === null) return wholeNumberProblem(path, value)
   const { age, count } = value as { age?: unknown; count?: unknown }
   return wholeNumberProblem(`${path}.age`, age) ?? wholeNumberProblem(`${path}.count`, count)
@@ -42,6 +57,7 @@ function retentionProblem(path: string, value: unknown): string | undefined {
 
 /** The reason a `backoff` is wrong: a delay in milliseconds, or `{ type, delay?, jitter? }`. */
 function backoffProblem(path: string, value: unknown): string | undefined {
+  if (Array.isArray(value)) return `${path} must be a number or an object, received an array`
   if (typeof value !== 'object' || value === null) {
     return wholeNumberProblem(path, value)
   }
@@ -50,7 +66,9 @@ function backoffProblem(path: string, value: unknown): string | undefined {
     jitter === undefined || (typeof jitter === 'number' && jitter >= 0 && jitter <= 1)
   return (
     wholeNumberProblem(`${path}.delay`, delay) ??
-    (jitterIsValid ? undefined : `${path}.jitter must be a number from 0 to 1`)
+    (jitterIsValid
+      ? undefined
+      : `${path}.jitter must be a number from 0 to 1, received ${received(jitter)}`)
   )
 }
 
