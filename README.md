@@ -494,8 +494,8 @@ a crash or a shutdown that outlasts the drain budget.
 
 **DLQ pattern.** When BullMQ has given up on a job, move it to a dead-letter queue. The predicate is the job's
 state, not a comparison of `attemptsMade` with `attempts`: the `failed` event also fires for an attempt that
-will be retried (the job is then `delayed`), and a job that fails with `UnrecoverableError`, or that calls
-`job.discard()`, is final after its first attempt, so the comparison would never dead-letter it. The id uses a
+will be retried (the job is then `delayed`), and a job that fails with `UnrecoverableError` is final after its first attempt, so the comparison would never
+dead-letter it. The id uses a
 hyphen because BullMQ refuses a custom job id that contains a colon.
 
 ```typescript
