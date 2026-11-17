@@ -605,8 +605,8 @@ Connection details arrive through injected options — the library never reads
 `process.env` itself, so credentials live wherever your configuration layer keeps them.
 No connection string, password, or TLS material is written to a log line, an exception
 message, or an exception payload. `QueueException.details` carries only scalar
-values — a reason, a limit, a queue or scheduler name, a status — never a
-connection object and never `job.data`.
+values — a reason, a limit, a queue or scheduler name, a status, and for a flow bulk
+arrays of integer indexes into the batch — never a connection object and never `job.data`.
 
 They are also not reachable by serializing the objects that hold them. The connection is
 attached to the resolved options as a non-enumerable accessor, and the resolver keeps the
@@ -677,9 +677,17 @@ check re-queues it and it runs again. **Every handler must be idempotent** — s
       Redis indefinitely.
 - [ ] `shutdown.drainTimeoutMs` exceeds your worst-case job runtime, so a normal deploy
       does not force-close work that was about to finish.
-- [ ] Redis runs with `maxmemory-policy noeviction`: under any other policy Redis can evict queue keys
-      and BullMQ prints `IMPORTANT! Eviction policy is allkeys-lru. It should be "noeviction"` (with the policy your server has) when it connects. Enable persistence (AOF) if queued jobs must
-      survive a Redis restart; without it they are lost.
+- [ ] Redis runs with `maxmemory-policy noeviction`: under any other policy Redis can evict queue keys,
+      and BullMQ prints `IMPORTANT! Eviction policy is allkeys-lru. It should be "noeviction"` (with the
+      policy your server has) when it connects. With `noeviction`, a Redis that has reached `maxmemory`
+      refuses writes, and the library reports `STORAGE_FULL` (503) from `enqueue`, `enqueueBulk`,
+      `upsertJobScheduler` and the flow methods, while reads keep answering. Alert on that code, and
+      size `maxmemory` for the queue's backlog plus the retained completed and failed jobs.
+- [ ] Persistence is chosen on purpose. Redis's default image saves an RDB snapshot at its save points
+      (`save 3600 1 300 100 60 10000`): a clean restart keeps the queue, because the server saves on
+      SIGTERM, but a crash or kill loses every job written since the last snapshot (measured: a key
+      written after the last save was gone after `kill -9`). Only AOF (`appendonly yes`) keeps them
+      across both; with the default `appendfsync everysec` the last second of writes can still be lost.
 
 ---
 
@@ -835,6 +843,8 @@ const all: readonly QueueMetrics[] = await this.metricsService.getAll()
 
 `FlowService.add` and `addBulk` are held to `enqueueTimeoutMs` like every `QueueService` call and reject with `CONNECTION_TIMEOUT` when Redis does not answer in time. A flow that timed out may still have been added, so use a custom `jobId` when you retry.
 
+`FlowService.addBulk` adds one tree per BullMQ call, at most 50 in flight, instead of BullMQ's own bulk call: that call skips a tree whose result is an error, so when Redis refused a bulk (out of memory, for example) it resolved with ids of jobs that were never stored. After the first failure no further tree is started, and the call rejects with `details: { operation, landed, failed, notStarted, unknown }`, each an array of indexes into `flows`. `landed` was stored. `failed` was refused, and may have left child jobs behind: the children of a tree are written before its root, so an orphan child sits in its queue and **is processed without its parent** (measured). `notStarted` was never sent and is safe to resend. `unknown` was in flight when `enqueueTimeoutMs` passed and may still land; resend it only with a stable `jobId`. The code is `STORAGE_FULL` when Redis was out of memory, `CONNECTION_TIMEOUT` for a timeout or a down connection, otherwise `BULK_ENQUEUE_FAILED` (500). A bulk is not atomic: the trees around a failed one are stored.
+
 ### Other exports
 
 | Export                                                                                                                                | What it is                                                                                                       |
@@ -895,7 +905,7 @@ The HTTP status follows the cause at the throw site: **503** when Redis or an op
 | `queue.duplicate_processor`              |    500    | Two `@Processor` classes claim the same queue name                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `queue.flow_disabled`                    |    503    | `FlowService` used without `flows.enabled`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `queue.metrics_disabled`                 |    503    | `MetricsService` used without `metrics.enabled`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `queue.bulk_enqueue_failed`              | 400 · 500 | **400:** `enqueueBulk` or `FlowService.addBulk` exceeded the 1 000 cap. **500:** the underlying `addBulk` failed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `queue.bulk_enqueue_failed`              | 400 · 500 | **400:** `enqueueBulk` or `FlowService.addBulk` exceeded the 1 000 cap. **500:** the underlying `addBulk` failed, or a tree of `FlowService.addBulk` failed for a reason other than a timeout or a full Redis (its details then carry `landed`, `failed`, `notStarted` and `unknown`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `queue.worker_registration_failed`       |    500    | A worker could not be constructed, started, or closed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ### Reserved codes
