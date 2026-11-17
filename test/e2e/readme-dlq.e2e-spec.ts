@@ -37,7 +37,10 @@ function readmeDlqSnippet(): string {
 /** The class of the recipe: built by Nest, with the one method the test replaces. */
 interface RecipeClass {
   new (queue: QueueService): object
-  prototype: { fulfil: (orderId: string) => Promise<void> }
+  prototype: {
+    fulfil: (orderId: string) => Promise<void>
+    onFailed: (job: unknown, err: Error) => Promise<void>
+  }
 }
 
 /** Compile the README class, without its imports, and hand it the real decorators it names. */
@@ -137,6 +140,8 @@ describe('E2E — the README dead-letter recipe', () => {
     const recipe = loadRecipe()
     const runs = new Map<string, number>()
     failByOrder(recipe, runs)
+    // The listener Nest binds is the class's own, so a spy on it sees every `failed` event.
+    const listener = jest.spyOn(recipe.prototype, 'onFailed')
     app = await bootWith(recipe)
     const queues = app.get(QueueService)
 
@@ -154,6 +159,8 @@ describe('E2E — the README dead-letter recipe', () => {
       'dlq-gone-fatal',
       'dlq-named',
     ])
+    // Every failed attempt reached the listener (3 + 1 + 1 + 1 + 3 + 1 at least), so the spy works.
+    expect(listener.mock.calls.length).toBeGreaterThanOrEqual(9)
     // The retried attempts of `exhausted` and the single failure of `flaky` did not dead-letter.
     expect(runs.get('exhausted')).toBe(3)
     expect(runs.get('fatal')).toBe(1)
@@ -167,6 +174,7 @@ describe('E2E — the README dead-letter recipe', () => {
       await new Promise<void>((resolve) => setTimeout(resolve, 600))
       throw new Error('late')
     }
+    const listener = jest.spyOn(recipe.prototype, 'onFailed')
     app = await bootWith(recipe)
     const queues = app.get(QueueService)
     await queues.enqueue('orders', 'j', { orderId: 'running' }, { jobId: 'running', attempts: 1 })
@@ -176,6 +184,7 @@ describe('E2E — the README dead-letter recipe', () => {
     await queues.getCachedQueues().get('orders')?.obliterate({ force: true })
     await new Promise<void>((resolve) => setTimeout(resolve, 1_500))
 
+    expect(listener).not.toHaveBeenCalled()
     expect((await queues.getMetrics('orders-dlq')).counts.waiting).toBe(0)
   }, 30_000)
 })
