@@ -504,17 +504,37 @@ colon. A job whose keys are removed from Redis while it runs never reaches this 
 on the worker and emits no `failed` event.
 
 ```typescript
-@OnWorkerEvent('failed')
-async onFailed(job: Job | undefined, err: Error): Promise<void> {
-  if (!job) return
-  // `failed` also fires for an attempt that will be retried. BullMQ has given up on the job when it is
-  // `failed`, or already removed (`unknown`, with `removeOnFail`).
-  const state = await job.getState()
-  if (state === 'failed' || state === 'unknown') {
-    await this.queue.enqueue(`${job.queueName}-dlq`, job.name, job.data, {
-      // BullMQ refuses a custom job id that contains a colon.
-      jobId: `dlq-${job.id}`,
-    })
+import { Inject, Injectable } from '@nestjs/common'
+import { OnWorkerEvent, Process, Processor, QueueService } from '@bymax-one/nest-queue'
+import type { Job } from 'bullmq'
+
+@Injectable()
+@Processor('orders')
+export class OrdersProcessor {
+  constructor(@Inject(QueueService) private readonly queue: QueueService) {}
+
+  @Process()
+  async handle(job: Job<{ orderId: string }>): Promise<void> {
+    await this.fulfil(job.data.orderId)
+  }
+
+  @OnWorkerEvent('failed')
+  async onFailed(job: Job | undefined, err: Error): Promise<void> {
+    if (!job) return
+    // `failed` also fires for an attempt that will be retried. BullMQ has given up on the job when it is
+    // `failed`, or already removed (`unknown`, with `removeOnFail`).
+    const state = await job.getState()
+    if (state === 'failed' || state === 'unknown') {
+      await this.queue.enqueue(`${job.queueName}-dlq`, job.name, job.data, {
+        // BullMQ refuses a custom job id that contains a colon.
+        jobId: `dlq-${job.id}`,
+      })
+    }
+  }
+
+  private async fulfil(orderId: string): Promise<void> {
+    // Your work. A throw is a failed attempt, retried under the job's `attempts`.
+    if (orderId === '') throw new Error('no order')
   }
 }
 ```
@@ -843,7 +863,7 @@ const all: readonly QueueMetrics[] = await this.metricsService.getAll()
 
 `FlowService.add` and `addBulk` are held to `enqueueTimeoutMs` like every `QueueService` call and reject with `CONNECTION_TIMEOUT` when Redis does not answer in time. A flow that timed out may still have been added, so use a custom `jobId` when you retry.
 
-`FlowService.addBulk` adds one tree per BullMQ call, at most 50 in flight, instead of BullMQ's own bulk call: that call skips a tree whose result is an error, so when Redis refused a bulk (out of memory, for example) it resolved with ids of jobs that were never stored. After the first failure no further tree is started, and the call rejects with `details: { operation, landed, failed, notStarted, unknown }`, each an array of indexes into `flows`. `landed` was stored. `failed` was refused (or never sent, because the connection was down), and may have left child jobs behind: an orphan child sits in its queue and **is processed without its parent** (measured). `notStarted` was never sent and is safe to resend. `unknown` was in flight when `enqueueTimeoutMs` passed, or its command timed out, and may still land; resend it only with a stable `jobId`. The code is `STORAGE_FULL` when Redis was out of memory, `CONNECTION_TIMEOUT` for a timeout or a down connection, otherwise `BULK_ENQUEUE_FAILED` (500). A bulk is not atomic: the trees around a failed one are stored.
+`FlowService.addBulk` adds one tree per BullMQ call, at most 50 in flight, instead of BullMQ's own bulk call: that call skips a tree whose result is an error, so when Redis refused a bulk (out of memory, for example) it resolved with ids of jobs that were never stored. After the first failure no further tree is started, and the call rejects with `details: { operation, landed, failed, notStarted, unknown }`, each an array of indexes into `flows`. `landed` was stored. `failed` was rejected (Redis refused it, or the connection was down), and may have left child jobs behind: an orphan child sits in its queue and **is processed without its parent** (measured). `notStarted` was never sent and is safe to resend. `unknown` was in flight when `enqueueTimeoutMs` passed, or its command timed out, and may still land; resend it only with a stable `jobId`. The code is `STORAGE_FULL` when Redis was out of memory, `CONNECTION_TIMEOUT` for a timeout or a down connection, otherwise `BULK_ENQUEUE_FAILED` (500). A bulk is not atomic: the trees around a failed one are stored.
 
 ### Other exports
 

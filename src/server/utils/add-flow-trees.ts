@@ -16,7 +16,7 @@ import { timeoutException } from './command-timeout'
 export interface FlowBulkOutcome {
   /** Trees whose add resolved. */
   landed: number[]
-  /** Trees Redis refused, or that were never sent; one may have left child jobs behind. */
+  /** Trees whose add rejected, because Redis refused them or the connection was down; one may have left child jobs behind. */
   failed: number[]
   /** Trees never handed to BullMQ; nothing of them was written, so they are safe to resend. */
   notStarted: number[]
