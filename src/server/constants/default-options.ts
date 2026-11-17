@@ -66,6 +66,12 @@ export const DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS = 30_000 as const
 export const MAX_BULK_SIZE = 1_000 as const
 
 /**
+ * The highest job priority BullMQ accepts: its `PRIORITY_LIMIT` is `2 ** 21 - 1` and `Job` refuses a
+ * priority above it. A spec compares this with the installed BullMQ, so a change there fails CI.
+ */
+export const MAX_JOB_PRIORITY = 2_097_151 as const
+
+/**
  * The most flow trees `FlowService.addBulk` has in flight at once. It adds one tree per BullMQ call so
  * a tree that fails is reported, and measured on 1 000 two-job trees 50 in flight takes as long as the
  * single bulk call (72 ms against 70 ms), where one at a time takes 493 ms.

@@ -7,9 +7,22 @@
  * @layer server/utils
  */
 
-/** Whether `value` is a whole number from 0 up, the shape of every count, delay and age here. */
+import { MAX_JOB_PRIORITY } from '../constants/default-options'
+
+/**
+ * Whether `value` is a whole number from 0 up that a double holds exactly, the shape of every count,
+ * delay and age here. `Number.isInteger` alone accepts `1e300` and `2 ** 53`, which Redis and JSON do
+ * not carry faithfully.
+ */
 function isWholeNumber(value: unknown): boolean {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
+/** The reason a priority is wrong: a whole number from 0 up to what BullMQ accepts. */
+function priorityProblem(path: string, value: unknown): string | undefined {
+  return value === undefined || (isWholeNumber(value) && (value as number) <= MAX_JOB_PRIORITY)
+    ? undefined
+    : `${path} must be a whole number from 0 to ${String(MAX_JOB_PRIORITY)}`
 }
 
 /** The reason `value` is not a whole number >= 0, when `value` is set. */
@@ -54,7 +67,7 @@ export function jobDefaultsProblem(defaults: unknown): string | undefined {
   return (
     wholeNumberProblem(`${base}.attempts`, o.attempts) ??
     wholeNumberProblem(`${base}.delay`, o.delay) ??
-    wholeNumberProblem(`${base}.priority`, o.priority) ??
+    priorityProblem(`${base}.priority`, o.priority) ??
     backoffProblem(`${base}.backoff`, o.backoff) ??
     retentionProblem(`${base}.removeOnComplete`, o.removeOnComplete) ??
     retentionProblem(`${base}.removeOnFail`, o.removeOnFail)

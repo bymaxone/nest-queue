@@ -7,9 +7,11 @@
  * @layer server/config
  */
 
+import { PRIORITY_LIMIT } from 'bullmq'
 import type { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
+import { MAX_JOB_PRIORITY } from '../constants/default-options'
 import { validateOptions } from './validate-options'
 
 /** Options that pass every other check, with `defaultJobOptions` as given. */
@@ -43,6 +45,9 @@ const NOT_WHOLE: [string, unknown][] = [
   ['1.5', 1.5],
   ["'3'", '3'],
   ['null', null],
+  ['1e300', 1e300],
+  ['2 ** 53', 2 ** 53],
+  ['Number.MAX_VALUE', Number.MAX_VALUE],
 ]
 const WHOLE = [0, 1, 3, 1_000_000]
 
@@ -73,6 +78,21 @@ describe('validateOptions — defaultJobOptions', () => {
     it.each(WHOLE)('accepts %s', (value) => {
       expect(refusal(build(value))).toBeUndefined()
     })
+  })
+
+  it('accepts the largest whole number a double holds exactly where there is no other ceiling', () => {
+    const largest = Number.MAX_SAFE_INTEGER
+    for (const [path, build] of WHOLE_NUMBER_OPTIONS) {
+      if (path !== 'defaultJobOptions.priority')
+        expect({ path, r: refusal(build(largest)) }).toEqual({ path, r: undefined })
+    }
+  })
+
+  it('takes a priority up to the ceiling BullMQ enforces, and refuses one over it', () => {
+    expect(MAX_JOB_PRIORITY).toBe(PRIORITY_LIMIT)
+    expect(refusal({ priority: MAX_JOB_PRIORITY })).toBeUndefined()
+    expect(refusal({ priority: MAX_JOB_PRIORITY + 1 })).toContain('defaultJobOptions.priority')
+    expect(refusal({ priority: Number.MAX_SAFE_INTEGER })).toContain('defaultJobOptions.priority')
   })
 
   it.each([true, false])('accepts %s for removeOnComplete and removeOnFail', (value) => {
