@@ -207,4 +207,46 @@ describe('runFlowBulk', () => {
     expect(code).toBe(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT)
     expect(details).toMatchObject({ landed: [1], failed: [0], notStarted: [], unknown: [] })
   })
+  it('puts every tree in exactly one list, and hands to add exactly the trees that are not notStarted', async () => {
+    // The invariant over many shapes: batch size, limit, which tree fails and how it fails.
+    const failures: [string, () => unknown][] = [
+      ['a refusal', () => new Error('refused')],
+      ['a timeout', () => timeoutException('addFlow', 5000)],
+      ['a connection that was down', () => unavailableException('addFlow', new Error('down'))],
+    ]
+    for (const size of [0, 1, 2, 5, 9]) {
+      for (const limit of [1, 2, 3, 50]) {
+        for (const failAt of [-1, 0, 1, size - 1]) {
+          for (const [kind, make] of failures) {
+            const handed: number[] = []
+            const run = runFlowBulk(
+              flows(size),
+              async (flow) => {
+                const index = Number(flow.name.slice(1))
+                handed.push(index)
+                if (index % 2 === 0) await new Promise<void>((resolve) => setImmediate(resolve))
+                if (index === failAt) throw make()
+                return nodeOf(flow)
+              },
+              'addFlowBulk',
+              limit,
+            )
+
+            await run.done.catch(() => undefined)
+
+            const { landed, failed, notStarted, unknown } = run.outcome()
+            const where = `size ${String(size)}, limit ${String(limit)}, ${kind} at ${String(failAt)}`
+            const all = [...landed, ...failed, ...notStarted, ...unknown].sort((a, b) => a - b)
+            expect({ where, all }).toEqual({ where, all: [...Array(size).keys()] })
+            expect({ where, handed: [...handed].sort((a, b) => a - b) }).toEqual({
+              where,
+              handed: [...landed, ...failed, ...unknown].sort((a, b) => a - b),
+            })
+            // A tree that reported a timeout is unknown, never failed.
+            expect({ where, bad: kind === 'a timeout' ? failed : [] }).toEqual({ where, bad: [] })
+          }
+        }
+      }
+    }
+  })
 })

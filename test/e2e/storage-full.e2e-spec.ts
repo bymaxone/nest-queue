@@ -77,52 +77,69 @@ function tree(queueName: string, id: string): FlowJob {
   }
 }
 
-describe('E2E — Redis out of memory', () => {
-  it('reports STORAGE_FULL from every write, stores nothing of a refused call, and recovers', async () => {
-    const queues = app.get(QueueService)
-    const flows = app.get(FlowService)
-    for (let i = 0; i < 5; i += 1) {
-      await queues.enqueue('full', 'j', { big: BIG }, { jobId: `seed-${String(i)}` })
-    }
-    // Below the memory in use: Redis refuses every further write, deterministically.
-    await maintenance.config('SET', 'maxmemory', '1mb')
-    await maintenance.config('SET', 'maxmemory-policy', 'noeviction')
-    const waiting = (await queues.getMetrics('full')).counts.waiting
+/** What each kind of write rejected with while Redis was out of memory. */
+interface Refusals {
+  single: Failure
+  bulk: Failure
+  flow: Failure
+  flowBulk: Failure
+}
 
-    const single = await failure(() => queues.enqueue('full', 'j', { big: BIG }))
-    const bulk = await failure(() =>
+type Failure = Awaited<ReturnType<typeof failure>>
+
+/** Seed a queue, then put `maxmemory` below the memory in use so Redis refuses every further write. */
+async function fillRedis(queues: QueueService): Promise<number> {
+  for (let i = 0; i < 5; i += 1) {
+    await queues.enqueue('full', 'j', { big: BIG }, { jobId: `seed-${String(i)}` })
+  }
+  await maintenance.config('SET', 'maxmemory', '1mb')
+  await maintenance.config('SET', 'maxmemory-policy', 'noeviction')
+  return (await queues.getMetrics('full')).counts.waiting
+}
+
+/** Make one write of every kind and collect what each rejected with. */
+async function writeWhileFull(queues: QueueService, flows: FlowService): Promise<Refusals> {
+  return {
+    single: await failure(() => queues.enqueue('full', 'j', { big: BIG })),
+    bulk: await failure(() =>
       queues.enqueueBulk('full', [
         { name: 'j', data: { big: BIG } },
         { name: 'j', data: { big: BIG } },
       ]),
-    )
-    const flow = await failure(() => flows.add(tree('full-flow', 'one')))
-    const flowBulk = await failure(() =>
+    ),
+    flow: await failure(() => flows.add(tree('full-flow', 'one'))),
+    flowBulk: await failure(() =>
       flows.addBulk([tree('full-flow', 'a'), tree('full-flow', 'b'), tree('full-flow', 'c')]),
-    )
+    ),
+  }
+}
 
-    expect([single.status, bulk.status, flow.status, flowBulk.status]).toEqual([503, 503, 503, 503])
-    expect([single.code, bulk.code, flow.code, flowBulk.code]).toEqual(
-      Array.from({ length: 4 }, () => 'queue.storage_full'),
-    )
-    expect(single.details).toEqual({ operation: 'enqueue', reason: 'out_of_memory' })
-    expect(bulk.details).toEqual({ operation: 'enqueueBulk', reason: 'out_of_memory' })
-    expect(flow.details).toEqual({ operation: 'addFlow', reason: 'out_of_memory' })
+/** Every write is a 503 `STORAGE_FULL` with only its operation and reason, and none leaks Redis's text. */
+function expectStorageFull(refused: Refusals): void {
+  const all = [refused.single, refused.bulk, refused.flow, refused.flowBulk]
+  expect(all.map((r) => r.status)).toEqual([503, 503, 503, 503])
+  expect(all.map((r) => r.code)).toEqual(Array.from({ length: 4 }, () => 'queue.storage_full'))
+  expect(refused.single.details).toEqual({ operation: 'enqueue', reason: 'out_of_memory' })
+  expect(refused.bulk.details).toEqual({ operation: 'enqueueBulk', reason: 'out_of_memory' })
+  expect(refused.flow.details).toEqual({ operation: 'addFlow', reason: 'out_of_memory' })
+  for (const r of all) expect(r.text).not.toMatch(/maxmemory|OOM|user_script/)
+}
+
+describe('E2E — Redis out of memory', () => {
+  it('reports STORAGE_FULL from every write, stores nothing of a refused call, and recovers', async () => {
+    const queues = app.get(QueueService)
+    const waiting = await fillRedis(queues)
+
+    const refused = await writeWhileFull(queues, app.get(FlowService))
+
+    expectStorageFull(refused)
     // The bulk of flows says what became of every tree; none landed, and nothing was left behind.
-    expect(flowBulk.details).toMatchObject({
-      operation: 'addFlowBulk',
-      reason: 'out_of_memory',
-      landed: [],
-      unknown: [],
-    })
+    expect(refused.flowBulk.details).toMatchObject({ landed: [], unknown: [] })
     const reported = [
-      ...(flowBulk.details.failed as number[]),
-      ...(flowBulk.details.notStarted as number[]),
+      ...(refused.flowBulk.details.failed as number[]),
+      ...(refused.flowBulk.details.notStarted as number[]),
     ]
     expect(reported.sort()).toEqual([0, 1, 2])
-    for (const text of [single.text, bulk.text, flow.text, flowBulk.text]) {
-      expect(text).not.toMatch(/maxmemory|OOM|user_script/)
-    }
     expect(await maintenance.keys('bull:full-flow:*')).toEqual([])
     // Reads still answer, and nothing of the refused writes was stored.
     expect((await queues.getMetrics('full')).counts.waiting).toBe(waiting)
