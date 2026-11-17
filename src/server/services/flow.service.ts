@@ -14,7 +14,7 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { timeoutException, withCommandTimeoutCode } from '../utils/command-timeout'
 import { withDeadline } from '../utils/with-deadline'
-import { assertFlowJobIds } from '../utils/reserved-job-ids'
+import { assertFlowTree } from '../utils/assert-job-inputs'
 import { batchTimeout, runFlowBulk } from '../utils/add-flow-trees'
 import {
   DEFAULT_ENQUEUE_TIMEOUT_MS,
@@ -89,7 +89,7 @@ export class FlowService {
    */
   async add(flow: FlowJob): Promise<JobNode> {
     const producer = this.requireProducer()
-    assertFlowJobIds(flow)
+    assertFlowTree(flow, 'flow')
     return this.bounded('addFlow', producer.add(flow))
   }
 
@@ -112,7 +112,9 @@ export class FlowService {
    */
   async addBulk(flows: readonly FlowJob[]): Promise<JobNode[]> {
     const producer = this.requireProducer()
-    for (const flow of flows) assertFlowJobIds(flow)
+    flows.forEach((flow, index) => {
+      assertFlowTree(flow, `flows[${String(index)}]`)
+    })
     if (flows.length > MAX_BULK_SIZE) {
       throw new QueueException(QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED, HttpStatus.BAD_REQUEST, {
         reason: 'batch size exceeds limit',

@@ -9,6 +9,9 @@ import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { isOutOfMemory, withCommandTimeoutCode } from './command-timeout'
 
+/** A value standing for the job data ioredis keeps in the arguments of the failed command. */
+const SENTINEL = 'SENTINEL-job-payload-do-not-serialise'
+
 /** The reply Redis 7 gives a script that writes while used memory is above `maxmemory`. */
 const OOM_TEXT =
   "OOM command not allowed when used memory > 'maxmemory'. script: d961aae0df158b3c2887dd8eb7c285294be16d24, on @user_script:478."
@@ -70,7 +73,7 @@ describe('isOutOfMemory', () => {
 
 describe('withCommandTimeoutCode — out of memory', () => {
   it('reports it as STORAGE_FULL (503) with only the operation and the reason, keeping the cause', async () => {
-    const cause = replyError(OOM_TEXT)
+    const cause = replyError(OOM_TEXT, { command: { name: 'evalsha', args: [SENTINEL] } })
 
     const err = (await rejection(Promise.reject(cause))) as QueueException
 
@@ -84,7 +87,13 @@ describe('withCommandTimeoutCode — out of memory', () => {
       },
     })
     expect(JSON.stringify(err.getResponse())).not.toMatch(/maxmemory|script|user_script/)
-    expect(err.cause).toBe(cause)
+    // Only the reply's name and message survive: ioredis hangs the command, with the job data in its
+    // arguments, on the error, and a serialised exception must not carry it.
+    expect(err.cause).toBeInstanceOf(Error)
+    expect((err.cause as Error).name).toBe(cause.name)
+    expect((err.cause as Error).message).toBe(cause.message)
+    expect(JSON.stringify(err)).not.toContain(SENTINEL)
+    expect(Object.keys(err.cause as object)).toEqual(['name'])
   })
 
   it('does not report a transaction abort that carries another reply', async () => {

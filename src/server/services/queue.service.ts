@@ -19,7 +19,8 @@ import { validateJobSchedulerOptions } from '../utils/validate-job-scheduler-opt
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { MAX_BULK_SIZE } from '../constants/default-options'
 import { assertPageWindow } from '../utils/assert-page-window'
-import { assertJobIdAllowed, isReservedJobId } from '../utils/reserved-job-ids'
+import { assertJobInputs } from '../utils/assert-job-inputs'
+import { isReservedJobId } from '../utils/reserved-job-ids'
 import { withDeadline } from '../utils/with-deadline'
 import { timeoutException, withCommandTimeoutCode } from '../utils/command-timeout'
 
@@ -207,7 +208,7 @@ export class QueueService {
     data: TData,
     options?: JobsOptions,
   ): Promise<TypedJob<TData, TResult>> {
-    assertJobIdAllowed(options?.jobId)
+    assertJobInputs(options, 'options')
     const job = await this.call('enqueue', queueName, () =>
       this.queueFor(queueName).add(jobName, data, options),
     )
@@ -237,7 +238,9 @@ export class QueueService {
         received: jobs.length,
       })
     }
-    for (const job of jobs) assertJobIdAllowed(job.options?.jobId)
+    jobs.forEach((job, index) => {
+      assertJobInputs(job.options, `jobs[${String(index)}].options`)
+    })
     try {
       const created = await this.call('enqueueBulk', queueName, () =>
         this.queueFor(queueName).addBulk(

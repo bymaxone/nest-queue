@@ -7,7 +7,7 @@
  */
 
 import { HttpStatus } from '@nestjs/common'
-import { QueueKeys, type FlowJob } from 'bullmq'
+import { QueueKeys } from 'bullmq'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { QueueException } from '../errors/queue-exception'
 
@@ -39,28 +39,12 @@ export function isReservedJobId(jobId: string): boolean {
  * the id often comes from request data. An absent id passes, since BullMQ then generates one.
  *
  * @param jobId - The custom id of a job, when the caller gave one.
- * @throws {QueueException} `INVALID_JOB_ID` (400) with `{ field: 'jobId' }` for a reserved id.
+ * @param field - The option the id came from, named in the refusal: `jobId` or `parent.id`.
+ * @throws {QueueException} `INVALID_JOB_ID` (400) with `{ field }` for a reserved id.
  */
-export function assertJobIdAllowed(jobId: string | undefined): void {
+export function assertJobIdAllowed(jobId: string | undefined, field = 'jobId'): void {
   // Stryker disable next-line ConditionalExpression: equivalent — `Set.has(undefined)` is false, so dropping the presence check changes nothing observable; it states that an absent id passes and narrows the type
   if (jobId !== undefined && isReservedJobId(jobId)) {
-    throw new QueueException(QUEUE_ERROR_CODES.INVALID_JOB_ID, HttpStatus.BAD_REQUEST, {
-      field: 'jobId',
-    })
-  }
-}
-
-/**
- * Apply {@link assertJobIdAllowed} to a flow tree: the root and every descendant, however deep.
- * The walk is iterative, so a deep tree cannot overflow the stack.
- *
- * @param flow - The root of a flow tree.
- * @throws {QueueException} `INVALID_JOB_ID` (400) when any job of the tree has a reserved id.
- */
-export function assertFlowJobIds(flow: FlowJob): void {
-  const pending: FlowJob[] = [flow]
-  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
-    assertJobIdAllowed(node.opts?.jobId)
-    if (node.children !== undefined) pending.push(...node.children)
+    throw new QueueException(QUEUE_ERROR_CODES.INVALID_JOB_ID, HttpStatus.BAD_REQUEST, { field })
   }
 }
