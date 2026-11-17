@@ -62,11 +62,14 @@ function batchFailure(operation: string, first: unknown, outcome: FlowBulkOutcom
 }
 
 /** The code and details a `QueueException` carries in its envelope. */
-function envelopeOf(err: QueueException): { code: string; details: Record<string, unknown> } {
+function envelopeOf(err: QueueException): {
+  code: string
+  details: Record<string, unknown> | null
+} {
   const { error } = err.getResponse() as {
     error: { code: string; details: Record<string, unknown> | null }
   }
-  return { code: error.code, details: error.details ?? {} }
+  return error
 }
 
 /** The partition of a batch from the state of each tree. */
