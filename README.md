@@ -492,22 +492,23 @@ It implements a **bounded drain protocol** with at-least-once semantics:
 idempotency keys to guard against reprocessing a job that was partially handled before
 a crash or a shutdown that outlasts the drain budget.
 
-**DLQ pattern.** When BullMQ has given up on a job, move it to a dead-letter queue. A failure is final when the
-job has used its `attempts` or failed with `UnrecoverableError`, which ends a job before its attempts are used: a
-comparison of `attemptsMade` with `attempts` alone would miss it. The job's state is not the
-predicate, because a job removed on failure (`removeOnFail`) has no state left to read, and the `failed` event also
-fires for an attempt that will be retried. The id uses a hyphen because BullMQ refuses a custom job id that contains
-a colon.
+**DLQ pattern.** When BullMQ has given up on a job, move it to a dead-letter queue. The `failed` event also fires
+for an attempt that BullMQ will retry, so the listener asks what BullMQ did with the job: a retried job is
+`delayed`, `waiting` or `active` again, and a job it gave up on is `failed`, or already gone when `removeOnFail`
+removed it, which `getState()` reports as `unknown`. That covers every way a job ends: attempts used up, an
+`UnrecoverableError` (which ends a job before its attempts are used), and a removed job. Comparing `attemptsMade`
+with `attempts` misses the `UnrecoverableError`, and testing `instanceof UnrecoverableError` misses an error
+BullMQ recognizes by its name alone. The id uses a hyphen because BullMQ refuses a custom job id that contains a
+colon.
 
 ```typescript
-import { UnrecoverableError } from 'bullmq'
-
 @OnWorkerEvent('failed')
 async onFailed(job: Job | undefined, err: Error): Promise<void> {
-  // `failed` also fires for an attempt that will be retried. The failure is final when the attempts are
-  // used up, or when the handler threw `UnrecoverableError`, which skips the remaining attempts.
-  const final = err instanceof UnrecoverableError || (job?.attemptsMade ?? 0) >= (job?.opts.attempts ?? 1)
-  if (job && final) {
+  if (!job) return
+  // `failed` also fires for an attempt that will be retried. BullMQ has given up on the job when it is
+  // `failed`, or already removed (`unknown`, with `removeOnFail`).
+  const state = await job.getState()
+  if (state === 'failed' || state === 'unknown') {
     await this.queue.enqueue(`${job.queueName}-dlq`, job.name, job.data, {
       // BullMQ refuses a custom job id that contains a colon.
       jobId: `dlq-${job.id}`,

@@ -34,7 +34,7 @@ type FailedListener = (job: Job | undefined, err: Error) => Promise<void>
  * no-op, because the test attaches the method to the worker's `failed` event itself.
  */
 function buildListener(queue: QueueService): FailedListener {
-  const method = readmeDlqSnippet().replace(/^import .*\n/gm, '')
+  const method = readmeDlqSnippet()
   const source = `class Recipe {\n constructor(queue) { this.queue = queue }\n${method}\n}\nRecipe`
   const js = ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, experimentalDecorators: true },
@@ -42,7 +42,6 @@ function buildListener(queue: QueueService): FailedListener {
   const OnWorkerEvent = (): MethodDecorator => () => undefined
   const Recipe = runInNewContext(js, {
     OnWorkerEvent,
-    UnrecoverableError,
     __decorate: (...args: unknown[]) => args[3],
   }) as new (queue: QueueService) => { onFailed: FailedListener }
   const recipe = new Recipe(queue)
@@ -101,6 +100,10 @@ describe('E2E — the README dead-letter recipe', () => {
         attempts.set(String(job.id), (attempts.get(String(job.id)) ?? 0) + 1)
         if (job.id === 'flaky' && job.attemptsMade === 0) return Promise.reject(new Error('once'))
         if (job.id === 'flaky') return Promise.resolve('ok')
+        // BullMQ also treats an error that only carries the name as unrecoverable.
+        if (job.id === 'named') {
+          return Promise.reject(Object.assign(new Error('final'), { name: 'UnrecoverableError' }))
+        }
         return Promise.reject(
           job.id === 'fatal' || job.id === 'gone-fatal'
             ? new UnrecoverableError('final')
@@ -117,13 +120,14 @@ describe('E2E — the README dead-letter recipe', () => {
     const options = { attempts: 3, backoff: { type: 'fixed', delay: 50 } } as const
     await queues.enqueue(name, 'j', {}, { jobId: 'exhausted', ...options })
     await queues.enqueue(name, 'j', {}, { jobId: 'fatal', ...options })
+    await queues.enqueue(name, 'j', {}, { jobId: 'named', ...options })
     await queues.enqueue(name, 'j', {}, { jobId: 'flaky', ...options })
     // A job removed on failure has no state left to read when the listener runs.
     const removed = { ...options, removeOnFail: true } as const
     await queues.enqueue(name, 'j', {}, { jobId: 'gone', ...removed })
     await queues.enqueue(name, 'j', {}, { jobId: 'gone-fatal', ...removed })
 
-    await waitFor(async () => (await queues.getMetrics(`${name}-dlq`)).counts.waiting >= 4, 15_000)
+    await waitFor(async () => (await queues.getMetrics(`${name}-dlq`)).counts.waiting >= 5, 15_000)
     await Promise.all(seen)
 
     const dead = await queues.getJobs(`${name}-dlq`, 'waiting')
@@ -132,10 +136,12 @@ describe('E2E — the README dead-letter recipe', () => {
       'dlq-fatal',
       'dlq-gone',
       'dlq-gone-fatal',
+      'dlq-named',
     ])
     // The retried attempts of `exhausted` and the single failure of `flaky` did not dead-letter.
     expect(attempts.get('exhausted')).toBe(3)
     expect(attempts.get('fatal')).toBe(1)
+    expect(attempts.get('named')).toBe(1)
     expect(attempts.get('flaky')).toBe(2)
   }, 30_000)
 })

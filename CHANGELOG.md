@@ -21,7 +21,7 @@ Documentation only. Against 1.2.23 the published package differs in `README.md`,
 
 ### Fixed
 
-- **The dead-letter recipe in the README could not dead-letter a job.** It built the job id as `dlq:${job.id}`, which BullMQ refuses (`Custom Id cannot contain :`), so the enqueue threw inside the `failed` listener and the job never reached the dead-letter queue. It now uses `dlq-${job.id}`. Its test for "retries exhausted" compared `attemptsMade` with `attempts` alone, which a job that fails with `UnrecoverableError` on its first attempt never satisfies; it now also enqueues when the handler threw `UnrecoverableError`, and the README says why the job's state is not the predicate (a job removed on failure has none).
+- **The dead-letter recipe in the README could not dead-letter a job.** It built the job id as `dlq:${job.id}`, which BullMQ refuses (`Custom Id cannot contain :`), so the enqueue threw inside the `failed` listener and the job never reached the dead-letter queue. It now uses `dlq-${job.id}`. Its test for "retries exhausted" compared `attemptsMade` with `attempts`, which a job that fails with `UnrecoverableError` on its first attempt never satisfies; it now asks BullMQ what it did with the job (`failed`, or `unknown` when `removeOnFail` already removed it), which also covers an error BullMQ recognizes by its name alone.
 
 ### Changed
 
