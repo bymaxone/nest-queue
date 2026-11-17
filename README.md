@@ -492,19 +492,22 @@ It implements a **bounded drain protocol** with at-least-once semantics:
 idempotency keys to guard against reprocessing a job that was partially handled before
 a crash or a shutdown that outlasts the drain budget.
 
-**DLQ pattern.** When BullMQ has given up on a job, move it to a dead-letter queue. The predicate is the job's
-state, not a comparison of `attemptsMade` with `attempts`: the `failed` event also fires for an attempt that
-will be retried, and a job that fails with `UnrecoverableError` is final after its first attempt, so the comparison would never
-dead-letter it. The id uses a
-hyphen because BullMQ refuses a custom job id that contains a colon.
+**DLQ pattern.** When BullMQ has given up on a job, move it to a dead-letter queue. A failure is final when the
+job has used its `attempts` or failed with `UnrecoverableError`, which ends a job after its first attempt: a
+comparison of `attemptsMade` with `attempts` alone would never dead-letter it. The job's state is not the
+predicate, because a job removed on failure (`removeOnFail`) has no state left to read, and the `failed` event also
+fires for an attempt that will be retried. The id uses a hyphen because BullMQ refuses a custom job id that contains
+a colon.
 
 ```typescript
+import { UnrecoverableError } from 'bullmq'
+
 @OnWorkerEvent('failed')
 async onFailed(job: Job | undefined, err: Error): Promise<void> {
-  // `failed` also fires for an attempt that will be retried; only a job BullMQ has given up on is in
-  // the `failed` state. This also covers a job that fails with `UnrecoverableError` on its first
-  // attempt, which a comparison of `attemptsMade` with `attempts` would miss.
-  if (job && (await job.getState()) === 'failed') {
+  // `failed` also fires for an attempt that will be retried. The failure is final when the attempts are
+  // used up, or when the handler threw `UnrecoverableError`, which skips the remaining attempts.
+  const final = err instanceof UnrecoverableError || (job?.attemptsMade ?? 0) >= (job?.opts.attempts ?? 1)
+  if (job && final) {
     await this.queue.enqueue(`${job.queueName}-dlq`, job.name, job.data, {
       // BullMQ refuses a custom job id that contains a colon.
       jobId: `dlq-${job.id}`,
