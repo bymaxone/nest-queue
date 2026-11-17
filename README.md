@@ -492,14 +492,26 @@ It implements a **bounded drain protocol** with at-least-once semantics:
 idempotency keys to guard against reprocessing a job that was partially handled before
 a crash or a shutdown that outlasts the drain budget.
 
-**DLQ pattern.** When a job exhausts its `attempts`, move it to a dead-letter queue:
+**DLQ pattern.** When BullMQ has given up on a job, move it to a dead-letter queue. The `failed` event also fires
+for an attempt that BullMQ will retry, so the listener asks what BullMQ did with the job: a retried job is
+`delayed`, `waiting` or `active` again, and a job it gave up on is `failed`, or already gone when `removeOnFail`
+removed it, which `getState()` reports as `unknown`. Comparing `attemptsMade` with `attempts` misses an
+`UnrecoverableError`, which ends a job before its attempts are used, and testing `instanceof UnrecoverableError`
+misses an error BullMQ recognizes by its name alone. The id uses a hyphen because BullMQ refuses a custom job id that contains a
+colon. A job whose keys are removed from Redis while it runs never reaches this listener: BullMQ reports an error
+on the worker and emits no `failed` event.
 
 ```typescript
 @OnWorkerEvent('failed')
 async onFailed(job: Job | undefined, err: Error): Promise<void> {
-  if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+  if (!job) return
+  // `failed` also fires for an attempt that will be retried. BullMQ has given up on the job when it is
+  // `failed`, or already removed (`unknown`, with `removeOnFail`).
+  const state = await job.getState()
+  if (state === 'failed' || state === 'unknown') {
     await this.queue.enqueue(`${job.queueName}-dlq`, job.name, job.data, {
-      jobId: `dlq:${job.id}`,
+      // BullMQ refuses a custom job id that contains a colon.
+      jobId: `dlq-${job.id}`,
     })
   }
 }
@@ -663,6 +675,9 @@ check re-queues it and it runs again. **Every handler must be idempotent** — s
       Redis indefinitely.
 - [ ] `shutdown.drainTimeoutMs` exceeds your worst-case job runtime, so a normal deploy
       does not force-close work that was about to finish.
+- [ ] Redis runs with `maxmemory-policy noeviction`: under any other policy Redis can evict queue keys
+      and BullMQ prints `IMPORTANT! Eviction policy is allkeys-lru. It should be "noeviction"` (with the policy your server has) when it connects. Enable persistence (AOF) if queued jobs must
+      survive a Redis restart; without it they are lost.
 
 ---
 
@@ -952,7 +967,8 @@ do not pick them up:
    the handler execution time — a worker that runs longer than `lockDuration` will have its
    lock stolen, marking the job as stalled.
 3. BullMQ re-queues a stalled job up to its `maxStalledCount` times (default `1`) and then
-   fails it; this library does not expose that setting.
+   fails it; this library does not expose that setting. A stalled re-run does not count against the
+   job's `attempts`.
 
 ---
 

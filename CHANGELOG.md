@@ -15,6 +15,20 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
+## [1.2.24] — 2026-11-17
+
+Documentation only. Against 1.2.23 the published package differs in `README.md`, `CHANGELOG.md` and `package.json`; `dist/` and the declared types do not change.
+
+### Fixed
+
+- **The dead-letter recipe in the README could not dead-letter a job.** It built the job id as `dlq:${job.id}`, which BullMQ refuses (`Custom Id cannot contain :`), so the enqueue threw inside the `failed` listener and the job never reached the dead-letter queue. It now uses `dlq-${job.id}`. Its test for "retries exhausted" compared `attemptsMade` with `attempts`, which a job that fails with `UnrecoverableError` on its first attempt never satisfies; it now asks BullMQ what it did with the job (`failed`, or `unknown` when `removeOnFail` already removed it), which also covers an error BullMQ recognizes by its name alone.
+
+### Changed
+
+- The production checklist now asks for Redis `maxmemory-policy noeviction` and for persistence where queued jobs must survive a Redis restart, and the stuck-jobs section says that a stalled re-run does not count against a job's `attempts`.
+
+---
+
 ## [1.2.23] — 2026-11-14
 
 Documentation only. Against 1.2.22 the published package differs in `CHANGELOG.md` and `package.json`; `dist/` and the declared types do not change.
@@ -1186,7 +1200,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.23...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.24...HEAD
+[1.2.24]: https://github.com/bymaxone/nest-queue/compare/v1.2.23...v1.2.24
 [1.2.23]: https://github.com/bymaxone/nest-queue/compare/v1.2.22...v1.2.23
 [1.2.22]: https://github.com/bymaxone/nest-queue/compare/v1.2.21...v1.2.22
 [1.2.21]: https://github.com/bymaxone/nest-queue/compare/v1.2.20...v1.2.21
