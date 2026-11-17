@@ -22,12 +22,12 @@ export const QUEUE_ERROR_MESSAGES: Record<string, string> = {
   [QUEUE_ERROR_CODES.JOB_NOT_FOUND]: 'Job not found',
   [QUEUE_ERROR_CODES.INVALID_JOB_DATA]: 'Invalid job data',
   [QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS]: 'Invalid repeat options',
-  [QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR]:
-    'Multiple processor decorators target the same queue',
+  [QUEUE_ERROR_CODES.DUPLICATE_PROCESSOR]: 'Multiple processor decorators target the same queue',
   [QUEUE_ERROR_CODES.FLOW_DISABLED]: 'Flow support is disabled',
   [QUEUE_ERROR_CODES.METRICS_DISABLED]: 'Metrics support is disabled',
   [QUEUE_ERROR_CODES.SHUTDOWN_TIMEOUT_EXCEEDED]: 'Shutdown timeout exceeded',
   [QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED]: 'Bulk enqueue failed',
   [QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED]: 'Failed to register worker',
   [QUEUE_ERROR_CODES.INVALID_OPTIONS]: 'Invalid module options',
+  [QUEUE_ERROR_CODES.INVALID_JOB_ID]: 'Invalid job id',
 }

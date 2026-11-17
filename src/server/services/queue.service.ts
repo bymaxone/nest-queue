@@ -19,6 +19,7 @@ import { validateJobSchedulerOptions } from '../utils/validate-job-scheduler-opt
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { MAX_BULK_SIZE } from '../constants/default-options'
 import { assertPageWindow } from '../utils/assert-page-window'
+import { assertJobIdAllowed, isReservedJobId } from '../utils/reserved-job-ids'
 import { withDeadline } from '../utils/with-deadline'
 import { timeoutException, withCommandTimeoutCode } from '../utils/command-timeout'
 
@@ -206,6 +207,7 @@ export class QueueService {
     data: TData,
     options?: JobsOptions,
   ): Promise<TypedJob<TData, TResult>> {
+    assertJobIdAllowed(options?.jobId)
     const job = await this.call('enqueue', queueName, () =>
       this.queueFor(queueName).add(jobName, data, options),
     )
@@ -235,6 +237,7 @@ export class QueueService {
         received: jobs.length,
       })
     }
+    for (const job of jobs) assertJobIdAllowed(job.options?.jobId)
     try {
       const created = await this.call('enqueueBulk', queueName, () =>
         this.queueFor(queueName).addBulk(
@@ -277,6 +280,8 @@ export class QueueService {
     queueName: string,
     jobId: string,
   ): Promise<TypedJob<TData, TResult> | null> {
+    // A reserved id can never be a job, so there is nothing to read; the key under it is not a job hash.
+    if (isReservedJobId(jobId)) return null
     const job = await this.call('getJob', queueName, () => this.queueFor(queueName).getJob(jobId))
     return (job as TypedJob<TData, TResult> | undefined) ?? null
   }

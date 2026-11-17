@@ -27,6 +27,7 @@ export const QUEUE_ERROR_CODES = {
   BULK_ENQUEUE_FAILED: 'queue.bulk_enqueue_failed',
   WORKER_REGISTRATION_FAILED: 'queue.worker_registration_failed',
   INVALID_OPTIONS: 'queue.invalid_options',
+  INVALID_JOB_ID: 'queue.invalid_job_id',
 } as const
 
 /** Union of every value in {@link QUEUE_ERROR_CODES}. */

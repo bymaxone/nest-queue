@@ -32,6 +32,7 @@ const QUEUE_METHODS = [
 ] as const
 
 jest.mock('bullmq', () => ({
+  QueueKeys: jest.requireActual<{ QueueKeys: unknown }>('bullmq').QueueKeys,
   defaultRepeatStrategy: jest.requireActual<{ defaultRepeatStrategy: unknown }>('bullmq')
     .defaultRepeatStrategy,
   Queue: jest.fn().mockImplementation(() => {

@@ -22,6 +22,7 @@ interface MockQueue {
 const queueInstances: MockQueue[] = []
 
 jest.mock('bullmq', () => ({
+  QueueKeys: jest.requireActual<{ QueueKeys: unknown }>('bullmq').QueueKeys,
   defaultRepeatStrategy: jest.fn(
     jest.requireActual<{ defaultRepeatStrategy: (...args: unknown[]) => unknown }>('bullmq')
       .defaultRepeatStrategy,
