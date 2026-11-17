@@ -493,8 +493,8 @@ idempotency keys to guard against reprocessing a job that was partially handled 
 a crash or a shutdown that outlasts the drain budget.
 
 **DLQ pattern.** When BullMQ has given up on a job, move it to a dead-letter queue. A failure is final when the
-job has used its `attempts` or failed with `UnrecoverableError`, which ends a job after its first attempt: a
-comparison of `attemptsMade` with `attempts` alone would never dead-letter it. The job's state is not the
+job has used its `attempts` or failed with `UnrecoverableError`, which ends a job before its attempts are used: a
+comparison of `attemptsMade` with `attempts` alone would miss it. The job's state is not the
 predicate, because a job removed on failure (`removeOnFail`) has no state left to read, and the `failed` event also
 fires for an attempt that will be retried. The id uses a hyphen because BullMQ refuses a custom job id that contains
 a colon.
