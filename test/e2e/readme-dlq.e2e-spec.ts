@@ -58,6 +58,34 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs: number): Pr
   }
 }
 
+/** The error a job fails with, by job id; BullMQ treats an error that only carries the name as unrecoverable. */
+function failureFor(id: string | undefined): Error {
+  if (id === 'named') return Object.assign(new Error('final'), { name: 'UnrecoverableError' })
+  if (id === 'fatal' || id === 'gone-fatal') return new UnrecoverableError('final')
+  return new Error('always')
+}
+
+/** A handler that counts the runs of every job, succeeds on the second run of `flaky`, and fails the rest. */
+function countingHandler(attempts: Map<string, number>): (job: Job) => Promise<string> {
+  return (job) => {
+    attempts.set(String(job.id), (attempts.get(String(job.id)) ?? 0) + 1)
+    if (job.id === 'flaky' && job.attemptsMade === 0) return Promise.reject(new Error('once'))
+    if (job.id === 'flaky') return Promise.resolve('ok')
+    return Promise.reject(failureFor(job.id))
+  }
+}
+
+/** Enqueue the scenario's jobs; the last two are removed on failure, so they have no state left to read. */
+async function enqueueScenario(queues: QueueService, name: string): Promise<void> {
+  const options = { attempts: 3, backoff: { type: 'fixed', delay: 50 } } as const
+  const ids = ['exhausted', 'fatal', 'named', 'flaky']
+  for (const jobId of ids) await queues.enqueue(name, 'j', {}, { jobId, ...options })
+  const removed = { ...options, removeOnFail: true } as const
+  for (const jobId of ['gone', 'gone-fatal']) {
+    await queues.enqueue(name, 'j', {}, { jobId, ...removed })
+  }
+}
+
 @Module({})
 class RootModule {}
 
@@ -96,20 +124,7 @@ describe('E2E — the README dead-letter recipe', () => {
     const attempts = new Map<string, number>()
     const worker = app.get(WorkerRegistry).register({
       queueName: name,
-      handler: (job) => {
-        attempts.set(String(job.id), (attempts.get(String(job.id)) ?? 0) + 1)
-        if (job.id === 'flaky' && job.attemptsMade === 0) return Promise.reject(new Error('once'))
-        if (job.id === 'flaky') return Promise.resolve('ok')
-        // BullMQ also treats an error that only carries the name as unrecoverable.
-        if (job.id === 'named') {
-          return Promise.reject(Object.assign(new Error('final'), { name: 'UnrecoverableError' }))
-        }
-        return Promise.reject(
-          job.id === 'fatal' || job.id === 'gone-fatal'
-            ? new UnrecoverableError('final')
-            : new Error('always'),
-        )
-      },
+      handler: countingHandler(attempts),
     })
     // The recipe's own listener, which is what a `@OnWorkerEvent('failed')` method becomes.
     const seen: Promise<void>[] = []
@@ -117,15 +132,7 @@ describe('E2E — the README dead-letter recipe', () => {
       seen.push(listener(job, err).catch(() => undefined))
     })
 
-    const options = { attempts: 3, backoff: { type: 'fixed', delay: 50 } } as const
-    await queues.enqueue(name, 'j', {}, { jobId: 'exhausted', ...options })
-    await queues.enqueue(name, 'j', {}, { jobId: 'fatal', ...options })
-    await queues.enqueue(name, 'j', {}, { jobId: 'named', ...options })
-    await queues.enqueue(name, 'j', {}, { jobId: 'flaky', ...options })
-    // A job removed on failure has no state left to read when the listener runs.
-    const removed = { ...options, removeOnFail: true } as const
-    await queues.enqueue(name, 'j', {}, { jobId: 'gone', ...removed })
-    await queues.enqueue(name, 'j', {}, { jobId: 'gone-fatal', ...removed })
+    await enqueueScenario(queues, name)
 
     await waitFor(async () => (await queues.getMetrics(`${name}-dlq`)).counts.waiting >= 5, 15_000)
     await Promise.all(seen)
@@ -144,6 +151,7 @@ describe('E2E — the README dead-letter recipe', () => {
     expect(attempts.get('named')).toBe(1)
     expect(attempts.get('flaky')).toBe(2)
   }, 30_000)
+
   it('never runs for a job whose keys were removed while it ran', async () => {
     const queues = app.get(QueueService)
     const listener = jest.fn(buildListener(queues))
