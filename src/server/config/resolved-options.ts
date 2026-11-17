@@ -6,6 +6,7 @@
 import type { JobsOptions, QueueOptions, Telemetry } from 'bullmq'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
 import type { QueueConnectionConfig } from '../interfaces/queue-connection.interface'
+import { snapshotOptions } from './snapshot-options'
 import {
   DEFAULT_JOB_OPTIONS,
   DEFAULT_METRICS_CACHE_TTL_MS,
@@ -46,10 +47,11 @@ export interface ResolvedQueueOptions {
  * `defaultJobOptions` is merged (not replaced); `telemetry` is only present when
  * the consumer supplied it.
  *
- * @param opts - The validated module options.
+ * @param given - The validated module options, as the consumer gave them.
  * @returns A frozen, fully-resolved options object.
  */
-export function applyDefaults(opts: BymaxQueueModuleOptions): Readonly<ResolvedQueueOptions> {
+export function applyDefaults(given: BymaxQueueModuleOptions): Readonly<ResolvedQueueOptions> {
+  const opts = snapshotOptions(given)
   const connection = opts.connection
 
   const base: Omit<ResolvedQueueOptions, 'connection'> &

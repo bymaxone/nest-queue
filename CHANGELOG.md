@@ -15,6 +15,26 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
+## [1.2.26] — 2026-11-17
+
+Against 1.2.25 the declared types do not change; the built package differs in the error message of `INVALID_OPTIONS` and in how module options are read.
+
+### Fixed
+
+- **A module option that holds `undefined` or `null` no longer overwrites its default.** `defaultJobOptions: { attempts: undefined }` was spread over the library defaults and left `attempts` unset, so a job was tried once instead of three times, with nothing reported. A key that holds `undefined` or `null` is now not given, in `defaultJobOptions`, `flows`, `metrics` and `shutdown`, and is dropped before validation and before the defaults are applied. Each known key of a group is read by property access, so a getter on a class instance counts as a value and is validated and applied, and the options are read once, so a getter that answers differently the second time cannot pass validation with one value and be applied with another.
+- **The message of `INVALID_OPTIONS` no longer says "Invalid module options" for a refusal that is not about the module.** A per-job option, a `getJobs` window and a bootstrap refusal share the code, so the message is now "Invalid options".
+
+### Changed
+
+- The README says that `enqueueBulk` is not atomic: when it rejects, for example with `STORAGE_FULL`, some of its jobs may already be stored, so retry it with stable `jobId`s.
+
+#### Apply to a derived backend
+
+- `defaultJobOptions: { attempts: null }`, and the same for `delay`, `priority`, `backoff`, `removeOnComplete` and `removeOnFail`, was refused at bootstrap with `INVALID_OPTIONS` (`received null`) in 1.2.25 and is now accepted as "not given", like `undefined`. A `null` nested inside a value (`backoff: { delay: null }`, `removeOnFail: { count: null }`) is still refused.
+- A host that matches on the text of the `INVALID_OPTIONS` message ("Invalid module options") needs the new text; branch on `code`, which is unchanged.
+
+---
+
 ## [1.2.25] — 2026-11-17
 
 Against 1.2.24 the declared types change: `QUEUE_ERROR_CODES` and the `QueueErrorCode` union gain members (see the note below).

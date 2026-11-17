@@ -18,6 +18,7 @@ import { DiscoveryModule } from '@nestjs/core'
 import type { Redis } from 'ioredis'
 import type { BymaxQueueModuleOptions } from './interfaces/queue-module-options.interface'
 import type { QueueConnectionMode } from './interfaces/queue-connection.interface'
+import { snapshotOptions } from './config/snapshot-options'
 import { validateOptions } from './config/validate-options'
 import { applyDefaults, type ResolvedQueueOptions } from './config/resolved-options'
 import {
@@ -73,8 +74,9 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
    * @returns The configured dynamic module.
    */
   static override forRoot(options: typeof OPTIONS_TYPE): DynamicModule {
-    validateOptions(options)
-    const resolved = applyDefaults(options)
+    const snapshot = snapshotOptions(options)
+    validateOptions(snapshot)
+    const resolved = applyDefaults(snapshot)
     const base = super.forRoot(options)
 
     return {
@@ -129,8 +131,9 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
         {
           provide: BYMAX_QUEUE_RESOLVED_OPTIONS,
           useFactory: (opts: BymaxQueueModuleOptions): Readonly<ResolvedQueueOptions> => {
-            validateOptions(opts)
-            return applyDefaults(opts)
+            const snapshot = snapshotOptions(opts)
+            validateOptions(snapshot)
+            return applyDefaults(snapshot)
           },
           inject: [MODULE_OPTIONS_TOKEN],
         },
