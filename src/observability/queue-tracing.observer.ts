@@ -10,7 +10,8 @@
 import { context, propagation, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api'
 import type { Span } from '@opentelemetry/api'
 import { Injectable, type OnModuleInit, Inject } from '@nestjs/common'
-import { handBackOf, QueueObserverRegistry } from '@bymax-one/nest-queue'
+import { QueueObserverRegistry } from '@bymax-one/nest-queue'
+import { handBackOf } from '../shared/hand-back'
 import type { QueueObserveInfo, QueueObserver, TraceCarrier } from '@bymax-one/nest-queue'
 
 /** The tracer name, the package the spans come from. */

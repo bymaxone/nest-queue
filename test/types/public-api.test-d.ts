@@ -13,6 +13,7 @@
  */
 import type { DynamicModule } from '@nestjs/common'
 import type { Job } from 'bullmq'
+import type { handBackOf, HandBack } from '../../src/shared/hand-back'
 
 // Everything is imported with `import type`: the assertions only ever appear in
 // type position (`typeof X`), so nothing here emits a runtime import.
@@ -26,8 +27,6 @@ import type {
   BYMAX_QUEUE_CONNECTION_MODE,
   BYMAX_QUEUE_RESOLVED_OPTIONS,
   FlowService,
-  HandBack,
-  handBackOf,
   JobFinishedEvent,
   JobOutcome,
   JobSchedulerRepeatOptions,

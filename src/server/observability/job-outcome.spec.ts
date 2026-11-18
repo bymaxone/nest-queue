@@ -12,7 +12,8 @@ import {
   WaitingError,
 } from 'bullmq'
 import type { Job } from 'bullmq'
-import { failureOutcome, handBackOf } from './job-outcome'
+import { handBackOf } from '../../shared/hand-back'
+import { failureOutcome } from './job-outcome'
 
 /** The part of a job the classification reads. */
 function jobWith(attemptsMade: number, attempts?: number): Job {
