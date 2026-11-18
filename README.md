@@ -508,19 +508,20 @@ A job that already carries metadata keeps it, and `queue.process` continues the 
 
 ### Log events
 
-Every operational log line is an object handed to the Nest `Logger`, `{ event, message, ...fields }`, with fields of closed or numeric values only, so `@bymax-one/nest-logger` writes them as data and Nest's console logger prints them readably. The text of `message` is what earlier versions logged as a plain string.
+Every operational log line is an object handed to the Nest `Logger`, `{ event, message, ...fields }`, with fields of closed or numeric values only, so `@bymax-one/nest-logger` writes them as data and Nest's console logger prints them readably. `message` holds the library's own text only. When an error caused the event, it is carried as the error itself under `err`, where a logger that knows errors serialises and redacts it, and never as text in `message`; earlier versions interpolated its text into the line.
 
-| Code                          | Level | When                                                                                                  | Fields                        |
-| ----------------------------- | ----- | ----------------------------------------------------------------------------------------------------- | ----------------------------- |
-| `QUEUE_SHUTDOWN_COMPLETE`     | log   | The module finished closing its workers, queues, flow producer and connection                         | `durationMs`, `forcedWorkers` |
-| `QUEUE_WORKER_DRAIN_TIMEOUT`  | warn  | A worker did not drain within the shutdown budget and was stopped                                     | `queue`, `drainTimeoutMs`     |
-| `QUEUE_WORKER_CLOSE_FAILED`   | warn  | A worker failed to close and was stopped                                                              | `queue`                       |
-| `QUEUE_DRAIN_FAILED`          | warn  | A queue could not be drained on shutdown (`drainOnShutdown`)                                          | `queue`                       |
-| `QUEUE_CLIENT_ERROR`          | error | A Redis connection the module uses emitted an error                                                   | `role`                        |
-| `QUEUE_EMITTER_ERROR`         | error | A `Queue`, `Worker`, `QueueEvents` or `FlowProducer` emitted an error                                 | `kind`, `queue`               |
-| `QUEUE_EVENT_HANDLER_FAILED`  | error | An `@OnWorkerEvent` or `@OnQueueEvent` handler threw or rejected                                      | `decorator`, `eventName`      |
-| `QUEUE_CONCURRENCY_DEFAULTED` | warn  | A `@Processor` that gave no concurrency got the default                                               | `queue`, `concurrency`        |
-| `QUEUE_UNBOUNDED_RETRIES`     | warn  | The shared client has `maxRetriesPerRequest: null`, so a command waits for as long as an outage lasts | none                          |
+| Code                          | Level | When                                                                                                  | Fields                          |
+| ----------------------------- | ----- | ----------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `QUEUE_SHUTDOWN_COMPLETE`     | log   | The module finished closing its workers, queues, flow producer and connection                         | `durationMs`, `forcedWorkers`   |
+| `QUEUE_WORKER_DRAIN_TIMEOUT`  | warn  | A worker did not drain within the shutdown budget and was stopped                                     | `queue`, `drainTimeoutMs`       |
+| `QUEUE_WORKER_CLOSE_FAILED`   | warn  | A worker failed to close and was stopped                                                              | `queue`, `err`                  |
+| `QUEUE_DRAIN_FAILED`          | warn  | A queue could not be drained on shutdown (`drainOnShutdown`)                                          | `queue`, `err`                  |
+| `QUEUE_OBSERVER_FAILED`       | warn  | An observer threw from `jobFinished`; it is ignored and the job is not affected                       | `hook`                          |
+| `QUEUE_CLIENT_ERROR`          | error | A Redis connection the module uses emitted an error                                                   | `role`, `err`                   |
+| `QUEUE_EMITTER_ERROR`         | error | A `Queue`, `Worker`, `QueueEvents` or `FlowProducer` emitted an error                                 | `kind`, `queue`, `err`          |
+| `QUEUE_EVENT_HANDLER_FAILED`  | error | An `@OnWorkerEvent` or `@OnQueueEvent` handler threw or rejected                                      | `decorator`, `eventName`, `err` |
+| `QUEUE_CONCURRENCY_DEFAULTED` | warn  | A `@Processor` that gave no concurrency got the default                                               | `queue`, `concurrency`          |
+| `QUEUE_UNBOUNDED_RETRIES`     | warn  | The shared client has `maxRetriesPerRequest: null`, so a command waits for as long as an outage lasts | none                            |
 
 ### Your own observer
 

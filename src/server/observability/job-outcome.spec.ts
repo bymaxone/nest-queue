@@ -67,6 +67,13 @@ describe('failureOutcome', () => {
     ['a name that only contains one', Object.assign(new Error('x'), { name: 'MyDelayedError' })],
     ['a message that only mentions one', new Error('DelayedError')],
     ['a string', 'DelayedError'],
+    [
+      'a name that is a key every object inherits',
+      Object.assign(new Error('x'), { name: 'toString' }),
+    ],
+    ['a name that is not a string', { name: 5 }],
+    ['a name that only prints as one', { name: ['DelayedError'] }],
+    ['a name that is the constructor', Object.assign(new Error('x'), { name: 'constructor' })],
     ['null', null],
     ['an object with no name', {}],
   ])('counts %s as a failure of the work', (_label, error) => {

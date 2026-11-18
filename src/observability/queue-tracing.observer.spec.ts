@@ -89,6 +89,14 @@ describe('QueueTracingObserver — enqueue', () => {
     )
   })
 
+  it('names the tracer after the package, so a backend can tell whose spans they are', async () => {
+    const observer = new QueueTracingObserver(new QueueObserverRegistry())
+
+    await observer.traceEnqueue({ queue: 'email' }, {}, () => Promise.resolve())
+
+    expect(spanNamed('queue.enqueue').instrumentationScope.name).toBe('@bymax-one/nest-queue')
+  })
+
   it('makes the span a child of the span that is active, so a request and its job share one trace', async () => {
     const observer = new QueueTracingObserver(new QueueObserverRegistry())
     const tracer = trace.getTracer('test')
@@ -129,6 +137,10 @@ describe('QueueTracingObserver — enqueue', () => {
     [
       'a QueueException whose code is not a string',
       Object.assign(new Error('x'), { getResponse: () => ({ error: { code: 7 } }) }),
+    ],
+    [
+      'an object whose getResponse answers an object with no error',
+      Object.assign(new Error('x'), { getResponse: () => ({}) }),
     ],
     [
       'an object with getResponse that answers nothing',
@@ -234,6 +246,10 @@ describe('QueueTracingObserver — process', () => {
     expect(byName.attributes['bymax.queue.outcome']).toBe('delayed')
     expect(byName.status).toEqual({ code: SpanStatusCode.UNSET })
     for (const other of [
+      Object.assign(new Error('x'), { name: 'toString' }),
+      { name: 5 },
+      { name: ['DelayedError'] },
+      Object.assign(new Error('x'), { name: 'constructor' }),
       new Error('DelayedError'),
       Object.assign(new Error('x'), { name: 'MyDelayedError' }),
       'text',

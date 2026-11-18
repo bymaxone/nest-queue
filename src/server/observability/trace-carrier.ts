@@ -50,19 +50,18 @@ export function withTraceMetadata(
  */
 export function readTraceMetadata(metadata: unknown): TraceCarrier {
   if (typeof metadata !== 'string') return {}
-  let parsed: unknown
   try {
-    parsed = JSON.parse(metadata)
+    // A value that is not an object (null, a number) has no header to read and throws on the access.
+    const parsed = JSON.parse(metadata) as Record<string, unknown>
+    const carrier: TraceCarrier = {}
+    for (const key of CARRIER_KEYS) {
+      const value = parsed[key]
+      if (typeof value === 'string' && value.length <= MAX_HEADER_LENGTH) carrier[key] = value
+    }
+    return carrier
   } catch {
     return {}
   }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {}
-  const carrier: TraceCarrier = {}
-  for (const key of CARRIER_KEYS) {
-    const value = (parsed as Record<string, unknown>)[key]
-    if (typeof value === 'string' && value.length <= MAX_HEADER_LENGTH) carrier[key] = value
-  }
-  return carrier
 }
 
 /**

@@ -273,9 +273,10 @@ describe('WorkerRegistry.registerSandboxed', () => {
       }).not.toThrow()
       expect(logSpy).toHaveBeenCalledWith({
         event: 'QUEUE_EMITTER_ERROR',
-        message: 'Worker for queue "sandboxed" emitted an error: Connection is closed',
+        message: 'Worker for queue "sandboxed" emitted an error',
         kind: 'Worker',
         queue: 'sandboxed',
+        err: new Error('Connection is closed'),
       })
     } finally {
       logSpy.mockRestore()
@@ -763,9 +764,10 @@ describe('WorkerRegistry — validation boundaries and error details', () => {
       // error" on its own tells them nothing.
       expect(logSpy).toHaveBeenCalledWith({
         event: 'QUEUE_EMITTER_ERROR',
-        message: 'Worker for queue "email" emitted an error: Connection is closed',
+        message: 'Worker for queue "email" emitted an error',
         kind: 'Worker',
         queue: 'email',
+        err: new Error('Connection is closed'),
       })
     } finally {
       logSpy.mockRestore()

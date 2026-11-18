@@ -25,6 +25,8 @@ export const QUEUE_LOG_EVENTS = {
   EVENT_HANDLER_FAILED: 'QUEUE_EVENT_HANDLER_FAILED',
   /** A processor registered without a concurrency got the default. */
   CONCURRENCY_DEFAULTED: 'QUEUE_CONCURRENCY_DEFAULTED',
+  /** An observer threw from the hook that reports how an attempt ended. */
+  OBSERVER_FAILED: 'QUEUE_OBSERVER_FAILED',
   /** The shared client keeps commands queued for as long as an outage lasts. */
   UNBOUNDED_RETRIES: 'QUEUE_UNBOUNDED_RETRIES',
 } as const
@@ -38,8 +40,10 @@ export interface QueueLogMessage {
   readonly event: QueueLogEvent
   /** The text a log reader sees. */
   readonly message: string
+  /** The error that caused the event, as the value itself and never as text in `message`. */
+  readonly err?: unknown
   /** Closed or numeric fields of the event. */
-  readonly [field: string]: string | number | boolean
+  readonly [field: string]: unknown
 }
 
 /**
@@ -55,4 +59,23 @@ export function logEvent(
   fields: Readonly<Record<string, string | number | boolean>> = {},
 ): QueueLogMessage {
   return { event, message, ...fields }
+}
+
+/**
+ * Build the log event of a failure. The error is carried as the value itself, under `err`, where a
+ * logger that knows errors serialises and redacts it; it is never put in `message`, which holds the
+ * library's own text only, because the text of an error can hold anything the failing code did.
+ *
+ * @param event - The code of the event.
+ * @param message - The text, with nothing of the error in it.
+ * @param err - What was thrown or emitted.
+ * @param fields - Fields of closed or numeric values; never a value the host supplied.
+ */
+export function logFailure(
+  event: QueueLogEvent,
+  message: string,
+  err: unknown,
+  fields: Readonly<Record<string, string | number | boolean>> = {},
+): QueueLogMessage {
+  return { event, message, ...fields, err }
 }

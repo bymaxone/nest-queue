@@ -6,6 +6,7 @@
  */
 
 import 'reflect-metadata'
+import { getEventListeners } from 'node:events'
 import { BYMAX_HEALTH_INDICATOR_METADATA } from '@bymax-one/nest-core/health'
 import type { ConnectionResolver } from '@bymax-one/nest-queue'
 import { QueueHealthIndicator, QUEUE_HEALTH_INDICATOR_NAME } from './queue-health.indicator'
@@ -71,16 +72,27 @@ describe('QueueHealthIndicator', () => {
     await expect(pending).resolves.toMatchObject({ status: 'up' })
   })
 
-  it('is down when the aggregator stops waiting, and when it already has', async () => {
+  it('is down at once when the aggregator stops waiting, and when it already has', async () => {
+    jest.useFakeTimers()
     const stopping = new AbortController()
     const pending = indicatorWith(() => new Promise<string>(() => undefined)).check(stopping.signal)
     stopping.abort()
+    await jest.advanceTimersByTimeAsync(0)
     await expect(pending).resolves.toMatchObject({ status: 'down' })
 
-    const stopped = AbortSignal.abort()
-    await expect(
-      indicatorWith(() => new Promise<string>(() => undefined)).check(stopped),
-    ).resolves.toMatchObject({ status: 'down' })
+    const stopped = indicatorWith(() => new Promise<string>(() => undefined)).check(
+      AbortSignal.abort(),
+    )
+    await jest.advanceTimersByTimeAsync(0)
+    await expect(stopped).resolves.toMatchObject({ status: 'down' })
+  })
+
+  it('removes its listener from the signal once it has answered', async () => {
+    const signal = new AbortController().signal
+
+    await indicatorWith(() => Promise.resolve('PONG')).check(signal)
+
+    expect(getEventListeners(signal, 'abort')).toHaveLength(0)
   })
 
   it('leaves no timer behind once it has answered', async () => {

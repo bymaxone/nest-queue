@@ -22,12 +22,8 @@ interface LoggerSpy {
 export function loggedEvents(spy: LoggerSpy): QueueLogMessage[] {
   return spy.mock.calls.map((call) => {
     const first = call[0]
-    if (
-      typeof first !== 'object' ||
-      first === null ||
-      typeof (first as { event?: unknown }).event !== 'string' ||
-      typeof (first as { message?: unknown }).message !== 'string'
-    ) {
+    const { event, message } = (first ?? {}) as { event?: unknown; message?: unknown }
+    if (typeof event !== 'string' || typeof message !== 'string') {
       throw new Error(`the logger was called with something that is not an event: ${String(first)}`)
     }
     return first as QueueLogMessage

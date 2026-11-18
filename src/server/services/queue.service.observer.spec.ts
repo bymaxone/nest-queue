@@ -90,7 +90,7 @@ describe('QueueService — enqueue under observers', () => {
 
     await service.enqueue('email', 'send', { to: 'a' }, { attempts: 2 })
 
-    expect(infos).toEqual([{ queue: 'email', job: 'send' }])
+    expect(infos).toStrictEqual([{ queue: 'email', job: 'send' }])
     expect(queue.add).toHaveBeenCalledWith(
       'send',
       { to: 'a' },
@@ -165,7 +165,7 @@ describe('QueueService — bulk enqueue under observers', () => {
       { name: 'b', data: 2 },
     ])
 
-    expect(infos).toEqual([{ queue: 'email' }])
+    expect(infos).toStrictEqual([{ queue: 'email' }])
     const metadata = JSON.stringify({ traceparent })
     expect(queue.addBulk).toHaveBeenCalledWith([
       { name: 'a', data: 1, opts: { attempts: 2, telemetry: { metadata } } },

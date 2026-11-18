@@ -196,6 +196,7 @@ describe('README log events', () => {
       QUEUE_WORKER_DRAIN_TIMEOUT: 'warn',
       QUEUE_WORKER_CLOSE_FAILED: 'warn',
       QUEUE_DRAIN_FAILED: 'warn',
+      QUEUE_OBSERVER_FAILED: 'warn',
       QUEUE_CLIENT_ERROR: 'error',
       QUEUE_EMITTER_ERROR: 'error',
       QUEUE_EVENT_HANDLER_FAILED: 'error',

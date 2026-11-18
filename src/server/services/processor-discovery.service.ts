@@ -27,8 +27,7 @@ import type {
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { DEFAULT_WORKER_CONCURRENCY } from '../constants/default-options'
-import { describeError } from '../utils/describe-error'
-import { logEvent, QUEUE_LOG_EVENTS } from '../utils/log-event'
+import { logEvent, logFailure, QUEUE_LOG_EVENTS } from '../utils/log-event'
 
 /** Stable code in the log line of a failing `@OnWorkerEvent` / `@OnQueueEvent` handler. */
 const EVENT_HANDLER_FAILED = 'queue.event_handler_failed'
@@ -264,11 +263,12 @@ export class ProcessorDiscoveryService implements OnModuleInit {
   ): (...args: unknown[]) => void {
     const report = (cause: unknown): void => {
       this.logger.error(
-        logEvent(
+        logFailure(
           QUEUE_LOG_EVENTS.EVENT_HANDLER_FAILED,
           `${origin.decorator}("${origin.eventName}") handler ` +
             `${instance.constructor.name}.${String(origin.methodKey)} failed ` +
-            `(${EVENT_HANDLER_FAILED}): ${describeError(cause)}`,
+            `(${EVENT_HANDLER_FAILED})`,
+          cause,
           { decorator: origin.decorator, eventName: origin.eventName },
         ),
       )

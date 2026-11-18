@@ -736,9 +736,10 @@ describe('QueueService — bulk and scheduler hardening', () => {
       }).not.toThrow()
       expect(logSpy).toHaveBeenCalledWith({
         event: 'QUEUE_EMITTER_ERROR',
-        message: 'Queue for queue "email" emitted an error: Connection is closed',
+        message: 'Queue for queue "email" emitted an error',
         kind: 'Queue',
         queue: 'email',
+        err: new Error('Connection is closed'),
       })
     } finally {
       logSpy.mockRestore()

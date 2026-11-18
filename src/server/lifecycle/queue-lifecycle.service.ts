@@ -24,7 +24,6 @@ import {
 } from '@nestjs/common'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
-import { describeError } from '../utils/describe-error'
 import { withDeadline } from '../utils/with-deadline'
 import { abandonWorker } from '../utils/abandoned-workers'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
@@ -34,7 +33,7 @@ import { QueueService } from '../services/queue.service'
 import { WorkerRegistry } from '../services/worker-registry.service'
 import { QueueEventsRegistry } from '../services/queue-events-registry.service'
 import { disconnectUnlessEnded } from '../utils/disconnect-unless-ended'
-import { logEvent, QUEUE_LOG_EVENTS } from '../utils/log-event'
+import { logEvent, logFailure, QUEUE_LOG_EVENTS } from '../utils/log-event'
 
 /** How long a worker's forced close may take, in milliseconds, once the drain budget has ended. */
 const FORCE_CLOSE_GRACE_MS = 1000
@@ -146,9 +145,10 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
                     `(${QUEUE_ERROR_CODES.SHUTDOWN_TIMEOUT_EXCEEDED}); ${stopped}`,
                   { queue: name, drainTimeoutMs: this.resolved.shutdown.drainTimeoutMs },
                 )
-              : logEvent(
+              : logFailure(
                   QUEUE_LOG_EVENTS.WORKER_CLOSE_FAILED,
-                  `Worker "${name}" failed to close gracefully (${describeError(cause)}); ${stopped}`,
+                  `Worker "${name}" failed to close gracefully; ${stopped}`,
+                  cause,
                   { queue: name },
                 ),
           )
@@ -203,10 +203,10 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
     for (const [name, queue] of this.queues.getCachedQueues()) {
       await queue.drain().catch((cause: unknown) => {
         this.logger.warn(
-          logEvent(
+          logFailure(
             QUEUE_LOG_EVENTS.QUEUE_DRAIN_FAILED,
-            `Queue "${name}" could not be drained on shutdown (drainOnShutdown): ` +
-              `${describeError(cause)}; its waiting jobs remain`,
+            `Queue "${name}" could not be drained on shutdown (drainOnShutdown); its waiting jobs remain`,
+            cause,
             { queue: name },
           ),
         )

@@ -57,6 +57,8 @@ describe('readTraceMetadata', () => {
     ['JSON that is not an object', '"text"'],
     ['null', 'null'],
     ['an array', '[1]'],
+    ['an object that merely prints as JSON', { toString: () => JSON.stringify({ traceparent }) }],
+    ['an array of headers', JSON.stringify([{ traceparent }])],
     ['an object without the headers', '{"other":"x"}'],
   ])('reads nothing from %s', (_label, metadata) => {
     expect(readTraceMetadata(metadata)).toEqual({})

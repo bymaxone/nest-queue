@@ -7,6 +7,7 @@
  * @layer server
  */
 
+import { inspect } from 'node:util'
 import { loggedEvents, loggedText } from './utils/log-lines'
 import { Logger } from '@nestjs/common'
 import { Redis } from 'ioredis'
@@ -219,8 +220,19 @@ describe('the client inventory — what the log line carries', () => {
 
     const owned = loggedEvents(lines).filter((line) => line.role === 'owned')
     expect(owned.length).toBeGreaterThan(0)
-    expect(owned.map((line) => line.message).join('\n')).toMatch(/emitted an error: \S/)
+    // The event carries the error itself, whose type and code say what failed, and its message holds
+    // library text only.
+    expect(owned.map((line) => line.message)).toEqual(
+      owned.map(() => 'Redis connection (owned) emitted an error'),
+    )
+    expect(owned[0]?.err).toMatchObject({ code: 'ECONNREFUSED' })
     expect(loggedText(lines)).not.toContain('SENTINEL')
+    expect(
+      inspect(
+        owned.map((line) => line.err),
+        { depth: 6 },
+      ),
+    ).not.toContain('SENTINEL')
   })
 })
 

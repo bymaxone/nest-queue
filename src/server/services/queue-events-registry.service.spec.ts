@@ -70,8 +70,9 @@ describe('QueueEventsRegistry.getOrCreate — the duplicated connection', () => 
 
     expect(lines).toHaveBeenCalledWith({
       event: 'QUEUE_CLIENT_ERROR',
-      message: 'Redis connection (queue events: email) emitted an error: ECONNRESET',
+      message: 'Redis connection (queue events: email) emitted an error',
       role: 'queue events: email',
+      err: new Error('ECONNRESET'),
     })
     lines.mockRestore()
   })
@@ -197,9 +198,10 @@ describe('QueueEventsRegistry.getConnections', () => {
       }).not.toThrow()
       expect(logSpy).toHaveBeenCalledWith({
         event: 'QUEUE_EMITTER_ERROR',
-        message: 'QueueEvents for queue "email" emitted an error: Connection is closed',
+        message: 'QueueEvents for queue "email" emitted an error',
         kind: 'QueueEvents',
         queue: 'email',
+        err: new Error('Connection is closed'),
       })
     } finally {
       logSpy.mockRestore()

@@ -375,7 +375,8 @@ describe('QueueLifecycle shutdown — stopping a worker', () => {
   })
 
   it('stops a worker whose pause fails the same way, with the real cause in the log', async () => {
-    const pause = jest.fn().mockRejectedValue(new Error('Connection is closed.'))
+    const pauseError = new Error('Connection is closed.')
+    const pause = jest.fn().mockRejectedValue(pauseError)
     const close = jest.fn().mockResolvedValue(undefined)
     const { lifecycle } = makeLifecycle({
       workers: new Map([['email', makeWorker(close, pause)]]),
@@ -384,7 +385,9 @@ describe('QueueLifecycle shutdown — stopping a worker', () => {
     await lifecycle.onModuleDestroy()
 
     expect(close.mock.calls).toEqual([[true]])
-    expect(warnSpy).toHaveBeenCalledWith(saying('Connection is closed.'))
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'QUEUE_WORKER_CLOSE_FAILED', err: pauseError }),
+    )
   })
 
   it('does not let a forced close that never settles hold the shutdown for more than a second', async () => {
@@ -571,10 +574,11 @@ describe('QueueLifecycle shutdown — why a worker was forced', () => {
     // A close() that rejects with a real error (Redis went away during shutdown) is not a drain
     // that ran out of budget; calling it one sends the operator after the wrong cause. The worker
     // is still force-closed, and the log carries the real reason.
+    const closeError = new Error('Connection is closed.')
     const close = jest
       .fn()
       .mockImplementation((force?: boolean) =>
-        force === true ? Promise.resolve() : Promise.reject(new Error('Connection is closed.')),
+        force === true ? Promise.resolve() : Promise.reject(closeError),
       )
     const { lifecycle } = makeLifecycle({
       workers: new Map([['email', makeWorker(close)]]),
@@ -585,9 +589,10 @@ describe('QueueLifecycle shutdown — why a worker was forced', () => {
 
     expect(close).toHaveBeenCalledWith(true)
     const lines = loggedMessages(warnSpy)
-    expect(
-      lines.some((line) => line.includes('"email"') && line.includes('Connection is closed.')),
-    ).toBe(true)
+    // The real reason is the error the event carries, never text in the message.
+    expect(loggedEvents(warnSpy)[0]).toMatchObject({ err: closeError })
+    expect(lines.join('\n')).not.toContain('Connection is closed.')
+    expect(lines.some((line) => line.includes('"email"'))).toBe(true)
     expect(lines.some((line) => line.includes('failed to close'))).toBe(true)
     expect(
       lines.some((line) =>
@@ -625,7 +630,8 @@ describe('QueueLifecycle shutdown — conditional drain', () => {
     // drainOnShutdown promises the waiting jobs are removed; a drain that fails leaves them in
     // Redis, so that has to be visible, while the rest of the shutdown must still run.
     const queueClose = jest.fn().mockResolvedValue(undefined)
-    const queueDrain = jest.fn().mockRejectedValue(new Error('drain failed'))
+    const drainError = new Error('drain failed')
+    const queueDrain = jest.fn().mockRejectedValue(drainError)
     const { lifecycle, queuesCloseAll, connectionDestroy } = makeLifecycle({
       queues: new Map([['email', makeQueue(queueClose, queueDrain)]]),
       resolved: makeResolved({ drainOnShutdown: true }),
@@ -634,12 +640,11 @@ describe('QueueLifecycle shutdown — conditional drain', () => {
     await closeApp(lifecycle)
 
     const lines = loggedMessages(warnSpy)
-    expect(lines.some((line) => line.includes('"email"') && line.includes('drain failed'))).toBe(
-      true,
-    )
+    expect(lines.some((line) => line.includes('"email"'))).toBe(true)
+    expect(lines.join('\n')).not.toContain('drain failed')
     expect(lines.some((line) => line.includes('drainOnShutdown'))).toBe(true)
     expect(loggedEvents(warnSpy)).toEqual([
-      expect.objectContaining({ event: 'QUEUE_DRAIN_FAILED', queue: 'email' }),
+      expect.objectContaining({ event: 'QUEUE_DRAIN_FAILED', queue: 'email', err: drainError }),
     ])
     expect(queuesCloseAll).toHaveBeenCalledTimes(1)
     expect(connectionDestroy).toHaveBeenCalledTimes(1)

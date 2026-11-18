@@ -647,8 +647,9 @@ describe('ConnectionResolver — error events after startup', () => {
 
     const refused = {
       event: 'QUEUE_CLIENT_ERROR',
-      message: 'Redis connection (owned) emitted an error: ECONNREFUSED',
+      message: 'Redis connection (owned) emitted an error',
       role: 'owned',
+      err: new Error('ECONNREFUSED'),
     }
     expect(loggedEvents(lines)).toEqual([refused, refused])
   })
@@ -682,8 +683,9 @@ describe('ConnectionResolver — error events after startup', () => {
     probe.emit('error', new Error('ECONNRESET'))
     expect(lines).toHaveBeenCalledWith({
       event: 'QUEUE_CLIENT_ERROR',
-      message: 'Redis connection (probe) emitted an error: ECONNRESET',
+      message: 'Redis connection (probe) emitted an error',
       role: 'probe',
+      err: new Error('ECONNRESET'),
     })
   })
 })

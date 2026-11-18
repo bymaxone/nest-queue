@@ -60,7 +60,6 @@ export function optionsOf(job: Job): JobsOptions | undefined {
  */
 export function failureOutcome(job: Job, error: unknown): JobOutcome | undefined {
   if (handBackOf(error) !== undefined) return undefined
-  const name = error instanceof Error ? error.name : ''
-  if (name === 'UnrecoverableError') return 'failed'
+  if (error instanceof Error && error.name === 'UnrecoverableError') return 'failed'
   return job.attemptsMade + 1 < (optionsOf(job)?.attempts ?? 1) ? 'retried' : 'failed'
 }

@@ -33,7 +33,7 @@ Against 1.2.25 the declared types of the main entry gain the observer types and 
 
 ### Changed
 
-- **The library's log lines are objects.** Each operational log line is now `{ event, message, ...fields }` handed to the Nest `Logger`, with the text it used to log unchanged inside `message` and fields of closed or numeric values only (the README lists each event's code, level, trigger and fields). `@bymax-one/nest-logger` writes the fields as data and Nest's console logger prints the object readably.
+- **The library's log lines are objects.** Each operational log line is now `{ event, message, ...fields }` handed to the Nest `Logger`, with the library's own text in `message`, fields of closed or numeric values only, and, when an error caused the line, that error as the value under `err` instead of its text interpolated into the message (the README lists each event's code, level, trigger and fields). `@bymax-one/nest-logger` writes the fields as data and Nest's console logger prints the object readably.
 - A flow tree whose node is shared by several parents is checked and copied once, so a tree that reuses one child definition at every level costs the number of nodes, not the number of paths to them.
 - The README says that `enqueueBulk` is not atomic: when it rejects, for example with `STORAGE_FULL`, some of its jobs may already be stored, so retry it with stable `jobId`s.
 
@@ -43,7 +43,7 @@ Against 1.2.25 the declared types of the main entry gain the observer types and 
 - `FlowService.add` and `FlowService.addBulk` throw `INVALID_OPTIONS` (400, `details: { reason }`) for a tree that is not well formed, where they used to throw a `TypeError` or loop: a node that is not an object, `children` that is not an array, a node that is its own ancestor. They send BullMQ a copy of the tree, and `enqueue` and `enqueueBulk` a copy of the options, so a host that relied on BullMQ reading its own objects (a getter that changes, a node mutated while the call was pending) now gets the values the call checked.
 - A host that read `.cause` of a `CONNECTION_TIMEOUT`, of a `BULK_ENQUEUE_FAILED` from `enqueueBulk` or `FlowService.addBulk`, to read `.command` off the ioredis error gets an error with the same name and message and no `command`.
 - `QueueObserverRegistry` and the observer types are new exports of the main entry; `QueueService`, `FlowService` and `WorkerRegistry` take it as an optional last constructor parameter, which Nest provides. A host that constructs them by hand needs no change.
-- A host or a log pipeline that matched the text of one of the library's log lines as a plain string receives an object now: read `message`, or match on `event`. A test that asserted "this text was not logged" against the old string must assert against the object, or it passes without checking anything.
+- A host or a log pipeline that matched the text of one of the library's log lines as a plain string receives an object now: read `message`, or match on `event`. A test that asserted "this text was not logged" against the old string must assert against the object, or it passes without checking anything. A pipeline that read the text of an error out of the message now reads the error itself from `err`.
 - A host that matches on the text of the `INVALID_OPTIONS` message ("Invalid module options") needs the new text; branch on `code`, which is unchanged.
 
 ---

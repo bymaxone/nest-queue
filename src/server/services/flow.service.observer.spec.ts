@@ -74,7 +74,7 @@ describe('FlowService — trees under observers', () => {
 
     await service.add(tree())
 
-    expect(infos).toEqual([{ queue: 'orders', job: 'parent' }])
+    expect(infos).toStrictEqual([{ queue: 'orders', job: 'parent' }])
     const sent = (producer.add.mock.calls as unknown[][])[0]?.[0] as FlowJob
     expect(sent.opts).toEqual({ telemetry: { metadata } })
     expect(sent.children?.[0]?.opts).toEqual({ telemetry: { metadata } })

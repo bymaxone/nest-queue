@@ -6,7 +6,8 @@
  * @layer server/observability
  */
 
-import { Injectable } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
+import { logEvent, QUEUE_LOG_EVENTS } from '../utils/log-event'
 
 /** How one attempt of a job ended. `retried` means BullMQ will run the job again. */
 export type JobOutcome = 'completed' | 'failed' | 'retried'
@@ -73,6 +74,7 @@ export interface QueueObserver {
 @Injectable()
 export class QueueObserverRegistry {
   readonly #observers: QueueObserver[] = []
+  private readonly logger = new Logger(QueueObserverRegistry.name)
 
   /**
    * Add an observer.
@@ -129,8 +131,9 @@ export class QueueObserverRegistry {
   }
 
   /**
-   * Tell every observer how an attempt ended. An observer that throws is ignored, since the job has
-   * already finished and its result must not change.
+   * Tell every observer how an attempt ended. An observer that throws is ignored and the throw is
+   * logged as `QUEUE_OBSERVER_FAILED`, since the job has already finished and its result must not
+   * change.
    *
    * @param event - The outcome of the attempt.
    */
@@ -139,7 +142,15 @@ export class QueueObserverRegistry {
       try {
         observer.jobFinished?.(event)
       } catch {
-        // An observer is not allowed to fail a job; what it throws is its own to report.
+        // An observer is not allowed to fail a job. What it threw is not logged: it is the
+        // observer's own value, and an event carries closed values only.
+        this.logger.warn(
+          logEvent(
+            QUEUE_LOG_EVENTS.OBSERVER_FAILED,
+            'A queue observer threw from jobFinished; it is ignored and the job is not affected',
+            { hook: 'jobFinished' },
+          ),
+        )
       }
     }
   }

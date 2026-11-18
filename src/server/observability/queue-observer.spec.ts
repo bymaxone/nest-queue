@@ -5,6 +5,8 @@
  * @layer server/observability
  */
 
+import { Logger } from '@nestjs/common'
+import { loggedEvents } from '../utils/log-lines'
 import { QueueObserverRegistry } from './queue-observer'
 import type { QueueObserver } from './queue-observer'
 
@@ -123,6 +125,31 @@ describe('QueueObserverRegistry — jobFinished and removal', () => {
       registry.jobFinished(event)
     }).not.toThrow()
     expect(heard).toEqual([event])
+  })
+
+  it('logs the throw of an observer as an event with no value of its own, and says nothing for an observer without the hook', () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+    const registry = new QueueObserverRegistry()
+    registry.register({ traceEnqueue: (_info, _carrier, run) => run() })
+    registry.jobFinished(event)
+    expect(warn).not.toHaveBeenCalled()
+    registry.register({
+      jobFinished: () => {
+        throw new Error('SENTINEL-observer-value')
+      },
+    })
+
+    registry.jobFinished(event)
+
+    expect(loggedEvents(warn)).toStrictEqual([
+      {
+        event: 'QUEUE_OBSERVER_FAILED',
+        message:
+          'A queue observer threw from jobFinished; it is ignored and the job is not affected',
+        hook: 'jobFinished',
+      },
+    ])
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('SENTINEL')
   })
 
   it('stops telling an observer that was removed, and removes it once', () => {
