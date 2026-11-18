@@ -32,9 +32,8 @@ const HAND_BACKS: Readonly<Record<string, HandBack>> = {
  * @returns What the processor handed back, or `undefined` for a failure.
  */
 export function handBackOf(error: unknown): HandBack | undefined {
-  if (typeof error !== 'object' || error === null) return undefined
   // BullMQ reads the message first and the name after it, and each read is guarded on its own, so a
-  // member that throws never hides the other one.
+  // member that throws, or a value that has none (`null`), never hides the other one.
   if (memberOf(error, 'message') === RATE_LIMIT_MESSAGE) return 'rate_limited'
   const name = memberOf(error, 'name')
   return typeof name === 'string' && Object.hasOwn(HAND_BACKS, name) ? HAND_BACKS[name] : undefined
@@ -44,7 +43,7 @@ export function handBackOf(error: unknown): HandBack | undefined {
  * A member of what a processor threw. Reading it can itself throw (a getter), and that must never
  * replace the processor's own error, so an unreadable member reads as absent.
  */
-function memberOf(error: object, key: 'name' | 'message'): unknown {
+function memberOf(error: unknown, key: 'name' | 'message'): unknown {
   try {
     return (error as Record<string, unknown>)[key]
   } catch {

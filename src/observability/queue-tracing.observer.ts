@@ -47,16 +47,15 @@ const HAND_BACKS: Readonly<Record<string, string>> = {
  * name of the error, and the span does the same: the job is not failed, whatever the error is.
  */
 function handBackOf(error: unknown): string | undefined {
-  if (typeof error !== 'object' || error === null) return undefined
   // BullMQ reads the message first and the name after it, and each read is guarded on its own, so a
-  // member that throws never hides the other one.
+  // member that throws, or a value that has none (`null`), never hides the other one.
   if (memberOf(error, 'message') === RATE_LIMIT_MESSAGE) return 'rate_limited'
   const name = memberOf(error, 'name')
   return typeof name === 'string' && Object.hasOwn(HAND_BACKS, name) ? HAND_BACKS[name] : undefined
 }
 
 /** A member of the error that throws when read must not replace the error being reported. */
-function memberOf(error: object, key: 'name' | 'message'): unknown {
+function memberOf(error: unknown, key: 'name' | 'message'): unknown {
   try {
     return (error as Record<string, unknown>)[key]
   } catch {
