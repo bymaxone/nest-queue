@@ -75,7 +75,7 @@ export function logFailure(
   event: QueueLogEvent,
   message: string,
   err: unknown,
-  fields: Readonly<Record<string, string | number | boolean>> = {},
+  fields: Readonly<Record<string, string | number | boolean>>,
 ): QueueLogMessage {
   return { event, message, ...fields, err }
 }
