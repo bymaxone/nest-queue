@@ -87,6 +87,24 @@ describe('QueueHealthIndicator', () => {
     await expect(stopped).resolves.toMatchObject({ status: 'down' })
   })
 
+  it('is down, with no wait left to reject unheard, when the connection has no client and the signal is already aborted', async () => {
+    const unhandled = jest.fn()
+    process.on('unhandledRejection', unhandled)
+    const connection = {
+      getMode: () => 'A',
+      getClient: () => {
+        throw new Error('not initialized')
+      },
+    } as unknown as ConnectionResolver
+
+    const result = await new QueueHealthIndicator(connection).check(AbortSignal.abort())
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    process.off('unhandledRejection', unhandled)
+
+    expect(result).toEqual({ status: 'down', details: { mode: 'A' } })
+    expect(unhandled).not.toHaveBeenCalled()
+  })
+
   it('removes its listener from the signal once it has answered', async () => {
     const signal = new AbortController().signal
 

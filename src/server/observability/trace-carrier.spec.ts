@@ -113,6 +113,20 @@ describe('stampFlow', () => {
     expect(own.opts).toEqual({ telemetry: { metadata: 'mine' } })
   })
 
+  it('stamps a node with more children than a call can take as arguments', () => {
+    const child: FlowJob = { name: 'c', queueName: 'q' }
+    const flow: FlowJob = {
+      name: 'r',
+      queueName: 'q',
+      children: Array.from({ length: 150_000 }, () => child),
+    }
+
+    expect(() => {
+      stampFlow(flow, carrier)
+    }).not.toThrow()
+    expect(child.opts).toEqual({ telemetry: { metadata } })
+  })
+
   it('visits a node that several parents share once', () => {
     const shared: FlowJob = { name: 's', queueName: 'q' }
     let reads = 0

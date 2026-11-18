@@ -81,6 +81,6 @@ export function stampFlow(flow: FlowJob, carrier: Readonly<TraceCarrier>): void 
     seen.add(node)
     const opts = node.opts
     if (!hasMetadata(opts)) node.opts = stamped(opts, carrier)
-    pending.push(...(node.children ?? []))
+    for (const child of node.children ?? []) pending.push(child)
   }
 }
