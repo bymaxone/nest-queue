@@ -361,3 +361,67 @@ describe('assertJobInputs — the options are read once', () => {
     expect(Object.keys(copy).sort()).toEqual(['__proto__', 'jobId'])
   })
 })
+
+describe('assertJobInputs — objects that hold their values as inherited getters', () => {
+  /** An object that answers `values` through getters on its prototype, as a class instance does. */
+  function instanceOf(values: Record<string, unknown>): object {
+    class Holder {}
+    for (const [key, value] of Object.entries(values)) {
+      Object.defineProperty(Holder.prototype, key, { get: () => value, enumerable: false })
+    }
+    return new Holder()
+  }
+  const asOptions = (value: unknown): JobsOptions => value as JobsOptions
+  const read = (options: object): Record<string, unknown> =>
+    assertJobInputs(asOptions(options), 'options') as Record<string, unknown>
+
+  it('reads the job id and the parent of an options class instance', () => {
+    const copy = read(instanceOf({ jobId: 'a', parent: { id: 'p', queue: 'q' } }))
+
+    expect(copy.jobId).toBe('a')
+    expect(copy.parent).toEqual({ id: 'p', queue: 'q' })
+  })
+
+  it('reads each key of a backoff, a retention and a parent that is a class instance', () => {
+    const copy = read({
+      backoff: instanceOf({ type: 'exponential', delay: 10, jitter: 0.5 }),
+      removeOnComplete: instanceOf({ age: 5, count: 6 }),
+      removeOnFail: instanceOf({ age: 7, count: 8 }),
+      parent: instanceOf({ id: 'p', queue: 'q' }),
+    })
+
+    expect(copy).toEqual({
+      backoff: { type: 'exponential', delay: 10, jitter: 0.5 },
+      removeOnComplete: { age: 5, count: 6 },
+      removeOnFail: { age: 7, count: 8 },
+      parent: { id: 'p', queue: 'q' },
+    })
+  })
+
+  it('refuses a bad value that a getter holds in a nested object', () => {
+    expect(
+      refusal(() =>
+        assertJobInputs(asOptions({ removeOnFail: instanceOf({ count: -1 }) }), 'options'),
+      ),
+    ).toMatchObject({ code: QUEUE_ERROR_CODES.INVALID_OPTIONS })
+  })
+
+  it('hands back a copy that can be changed and whose keys can be removed', () => {
+    const copy = assertJobInputs({ attempts: 2, delay: 5 }, 'options') as Record<string, unknown>
+
+    copy.attempts = 9
+    delete copy.delay
+
+    expect(copy).toEqual({ attempts: 9 })
+  })
+
+  it('copies an empty children list as an empty list', () => {
+    expect(assertFlowTree({ name: 'n', queueName: 'q', children: [] }, 'flow').children).toEqual([])
+  })
+
+  it('gives a tree node without options no options key', () => {
+    const copy = assertFlowTree({ name: 'n', queueName: 'q' }, 'flow')
+
+    expect('opts' in copy).toBe(false)
+  })
+})

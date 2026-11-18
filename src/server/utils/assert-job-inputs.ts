@@ -106,7 +106,7 @@ export function assertFlowTree(flow: FlowJob, path: string): FlowJob {
     if (!Array.isArray(children)) {
       invalid(`${next.path}.children must be an array, received ${received(children)}`)
     }
-    const placed: FlowJob[] = new Array<FlowJob>(children.length)
+    const placed: FlowJob[] = []
     copy.children = placed
     for (let index = 0; index < children.length; index += 1) {
       pending.push({
