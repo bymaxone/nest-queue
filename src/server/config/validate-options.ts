@@ -79,8 +79,9 @@ function isParseableUrl(url: string): boolean {
  */
 export function validateOptions(given: BymaxQueueModuleOptions): void {
   const opts = snapshotOptions(given)
-  const cfg = (opts as { connection?: unknown }).connection
-  if (cfg === null || typeof cfg !== 'object') {
+  const cfg = (opts as { connection?: object | string }).connection
+  // The snapshot drops a `null` connection as not given, so only `undefined` or a non-object remains to refuse.
+  if (typeof cfg !== 'object') {
     invalid('connection is required')
   }
 

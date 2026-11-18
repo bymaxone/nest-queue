@@ -18,6 +18,14 @@ function optionsWith(extra: Record<string, unknown>): BymaxQueueModuleOptions {
   return { connection, ...extra }
 }
 
+/** A class whose `enabled` is a getter on the prototype, as a class instance has it. */
+class InstanceFlows {
+  constructor(private readonly enabledValue: unknown) {}
+  get enabled(): unknown {
+    return this.enabledValue
+  }
+}
+
 /** A class whose `attempts` is a getter on the prototype, as a class instance has it. */
 class InstanceOptions {
   constructor(private readonly attemptsValue: unknown) {}
@@ -92,6 +100,30 @@ describe('a group that is a class instance', () => {
     const resolved = applyDefaults(optionsWith({ defaultJobOptions: new InstanceOptions(unset) }))
 
     expect(resolved.defaultJobOptions.attempts).toBe(3)
+  })
+})
+
+describe('the other groups that are a class instance', () => {
+  it('reads an inherited getter of the flows group as a value', () => {
+    expect(applyDefaults(optionsWith({ flows: new InstanceFlows(true) })).flows).toEqual({
+      enabled: true,
+    })
+  })
+
+  it('copies the flows group as a plain object without its unset keys', () => {
+    expect(snapshotOptions(optionsWith({ flows: { enabled: null } })).flows).toEqual({})
+    const copy = snapshotOptions(optionsWith({ flows: new InstanceFlows(true) })).flows
+
+    expect(copy).toMatchObject({ enabled: true })
+    expect(Object.getPrototypeOf(copy)).toBe(Object.prototype)
+  })
+
+  it('leaves a group that was not given out of the copy', () => {
+    const snapshot = snapshotOptions(optionsWith({}))
+
+    for (const name of ['defaultJobOptions', 'flows', 'metrics', 'shutdown']) {
+      expect(name in snapshot).toBe(false)
+    }
   })
 })
 

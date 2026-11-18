@@ -51,7 +51,7 @@ const TOP_LEVEL_KEYS = [
  * property access. A value that is not an object is returned as it is, for validation to judge.
  */
 function setValuesOf<T>(group: T, known: readonly string[]): T {
-  if (typeof group !== 'object' || group === null) return group
+  if (typeof group !== 'object') return group
   const source = group as Record<string, unknown>
   const copy: Record<string, unknown> = {}
   for (const key of new Set([...Object.keys(source), ...known])) {
