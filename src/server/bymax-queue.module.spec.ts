@@ -214,6 +214,21 @@ describe('BymaxQueueModule.forRoot', () => {
     expect(dynamic.global).toBe(true)
   })
 
+  it.each([undefined, null])(
+    'treats isGlobal: %s as not given, so the module stays global',
+    (unset) => {
+      // An option that holds nothing keeps its default, here for the module registration too.
+      const sync = BymaxQueueModule.forRoot({ ...baseOptions, isGlobal: unset } as never)
+      const async = BymaxQueueModule.forRootAsync({
+        useFactory: () => baseOptions,
+        isGlobal: unset,
+      } as never)
+
+      expect(sync.global).toBe(true)
+      expect(async.global).toBe(true)
+    },
+  )
+
   it('respects isGlobal: false', () => {
     // An explicit false opts the module out of global registration.
     const dynamic = BymaxQueueModule.forRoot({ ...baseOptions, isGlobal: false })

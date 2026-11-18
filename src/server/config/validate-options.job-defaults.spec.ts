@@ -87,16 +87,19 @@ describe('validateOptions — defaultJobOptions', () => {
   describe.each(WHOLE_NUMBER_OPTIONS)('%s', (path, build) => {
     // A plain object is a legal shape for these three options (`{ age, count }`, `{ type, delay }`).
     const takesObject = OBJECT_OPTIONS.includes(path)
-    it.each(NOT_WHOLE.filter(([label]) => !(takesObject && label === 'an object')))(
-      'refuses %s, naming the option and what it received',
-      (_label, value, got) => {
-        const reason = refusal(build(value))
+    // A group key that holds `null` is "not given" (see below); a nested value that holds it is not.
+    const isGroupKey = path.split('.').length === 2
+    it.each(
+      NOT_WHOLE.filter(
+        ([label]) => !(takesObject && label === 'an object') && !(isGroupKey && label === 'null'),
+      ),
+    )('refuses %s, naming the option and what it received', (_label, value, got) => {
+      const reason = refusal(build(value))
 
-        expect(reason).toContain(path)
-        expect(reason).toContain(`received ${got}`)
-        expect(reason).not.toContain(SENTINEL)
-      },
-    )
+      expect(reason).toContain(path)
+      expect(reason).toContain(`received ${got}`)
+      expect(reason).not.toContain(SENTINEL)
+    })
 
     it.each(WHOLE)('accepts %s', (value) => {
       expect(refusal(build(value))).toBeUndefined()

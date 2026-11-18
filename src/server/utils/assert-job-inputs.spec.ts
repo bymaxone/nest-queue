@@ -86,6 +86,18 @@ describe('assertJobInputs', () => {
     ).toBeUndefined()
   })
 
+  it('describes the refusal as invalid options, not as invalid module options', () => {
+    let message: unknown
+    try {
+      assertJobInputs({ delay: Infinity }, 'options')
+    } catch (err) {
+      message = ((err as QueueException).getResponse() as { error: { message: string } }).error
+        .message
+    }
+
+    expect(message).toBe('Invalid options')
+  })
+
   it('names the path it is given', () => {
     const r = refusal(() => {
       assertJobInputs({ delay: Infinity }, 'jobs[3].options')
