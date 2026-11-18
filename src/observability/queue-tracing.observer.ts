@@ -58,8 +58,8 @@ function handBackOf(error: unknown): string | undefined {
       : undefined
   } catch {
     // A member of the error that throws when read must not replace the error being reported.
-    return undefined
   }
+  return undefined
 }
 
 /**

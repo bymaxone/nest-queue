@@ -43,9 +43,9 @@ export function handBackOf(error: unknown): HandBack | undefined {
       : undefined
   } catch {
     // Reading a member of what a processor threw can itself throw (a getter): that must never
-    // replace the processor's own error, so the error is read as an ordinary failure.
-    return undefined
+    // replace the processor's own error, so the error is read as an ordinary failure below.
   }
+  return undefined
 }
 
 /** Whether the error is BullMQ's `UnrecoverableError`, which fails the job whatever attempts remain. */
@@ -53,8 +53,9 @@ function isUnrecoverable(error: unknown): boolean {
   try {
     return error instanceof Error && error.name === 'UnrecoverableError'
   } catch {
-    return false
+    // An unreadable name is not the name of an unrecoverable error.
   }
+  return false
 }
 
 /**
