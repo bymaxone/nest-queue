@@ -29,7 +29,7 @@ function priorityProblem(path: string, value: unknown): string | undefined {
  * What was received, for a refusal: a finite number as it is, `null`, or only the type of anything
  * else, never any other value, which can come from a request or a file and may be a secret.
  */
-function received(value: unknown): string {
+export function received(value: unknown): string {
   if (value === null) return 'null'
   if (typeof value === 'number')
     return Number.isFinite(value) ? String(value) : 'a number that is not finite'

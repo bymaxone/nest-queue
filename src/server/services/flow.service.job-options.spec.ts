@@ -100,3 +100,55 @@ describe('FlowService — job options BullMQ would not honour', () => {
     expect(producer.add).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('FlowService — the tree that was checked is the tree that is sent', () => {
+  /** A tree whose grandchild has `attempts` that answer 3 the first time and -1 after. */
+  function flipping(): FlowJob {
+    let reads = 0
+    return deep({
+      get attempts(): number {
+        reads += 1
+        return reads === 1 ? 3 : -1
+      },
+    })
+  }
+  const grandchildOpts = (tree: unknown): JobsOptions | undefined =>
+    (tree as FlowJob).children?.[0]?.children?.[0]?.opts
+
+  it('add sends a copy of the tree', async () => {
+    const { service, producer } = makeFlow()
+    const given = flipping()
+
+    await service.add(given)
+
+    const sent = (producer.add.mock.calls as unknown[][])[0]?.[0] as FlowJob
+    expect(sent).not.toBe(given)
+    expect(grandchildOpts(sent)?.attempts).toBe(3)
+    expect(grandchildOpts(sent)?.attempts).toBe(3)
+  })
+
+  it('addBulk sends a copy of every tree', async () => {
+    const { service, producer } = makeFlow()
+
+    await service.addBulk([flipping(), flipping()])
+
+    expect(producer.add).toHaveBeenCalledTimes(2)
+    for (const call of producer.add.mock.calls as unknown[][]) {
+      expect(grandchildOpts(call[0])?.attempts).toBe(3)
+    }
+  })
+
+  it.each(['x', { 0: {} }])(
+    'add refuses children that are %j before any call',
+    async (children) => {
+      const { service, producer } = makeFlow()
+
+      const err = await rejection(() =>
+        service.add({ name: 'r', queueName: 'q', children } as unknown as FlowJob),
+      )
+
+      expect(err.getStatus()).toBe(400)
+      expect(producer.add).not.toHaveBeenCalled()
+    },
+  )
+})

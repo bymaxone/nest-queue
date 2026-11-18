@@ -7,7 +7,14 @@
 
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
-import { isOutOfMemory, withCommandTimeoutCode } from './command-timeout'
+import {
+  errorSummary,
+  isOutOfMemory,
+  timeoutException,
+  unavailableException,
+  withCommandTimeoutCode,
+} from './command-timeout'
+import { runFlowBulk } from './add-flow-trees'
 
 /** A value standing for the job data ioredis keeps in the arguments of the failed command. */
 const SENTINEL = 'SENTINEL-job-payload-do-not-serialise'
@@ -102,5 +109,66 @@ describe('withCommandTimeoutCode — out of memory', () => {
     })
 
     await expect(rejection(Promise.reject(abort))).resolves.toBe(abort)
+  })
+})
+
+describe('the cause of a library error never carries the command of a job', () => {
+  /** A Redis reply error as ioredis builds it, with the failed command and the job data in its arguments. */
+  function replyWithCommand(message: string): Error {
+    return replyError(message, { command: { name: 'evalsha', args: [SENTINEL] } })
+  }
+
+  it.each([
+    ["READONLY You can't write against a read only replica."],
+    ['WRONGTYPE Operation against a key holding the wrong kind of value'],
+  ])('keeps only the name and the message of %s', (message) => {
+    const reply = replyWithCommand(message)
+
+    const summary = errorSummary(reply) as Error
+
+    expect(summary).not.toBe(reply)
+    expect(summary).toBeInstanceOf(Error)
+    expect(summary.name).toBe('ReplyError')
+    expect(summary.message).toBe(message)
+    expect(JSON.stringify(summary)).not.toContain(SENTINEL)
+    expect(Object.keys(summary)).not.toContain('command')
+  })
+
+  it('keeps an error with no command as it is, and what is not an error as it is', () => {
+    const refused = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' })
+
+    expect(errorSummary(refused)).toBe(refused)
+    expect(errorSummary('text')).toBe('text')
+    expect(errorSummary(undefined)).toBeUndefined()
+  })
+
+  it('applies to the cause of a timeout and of a connection that is down', () => {
+    const reply = replyWithCommand('Command timed out')
+
+    expect(JSON.stringify(timeoutException('enqueue', 100, reply).cause)).not.toContain(SENTINEL)
+    expect(JSON.stringify(unavailableException('enqueue', reply).cause)).not.toContain(SENTINEL)
+    expect((timeoutException('enqueue', 100, reply).cause as Error).message).toBe(
+      'Command timed out',
+    )
+  })
+
+  it('applies to a failed flow batch, whatever the first failure was', async () => {
+    const reply = replyWithCommand(
+      'WRONGTYPE Operation against a key holding the wrong kind of value',
+    )
+    const run = runFlowBulk(
+      [{ name: 'a', queueName: 'q' }],
+      () => Promise.reject(reply),
+      'addFlowBulk',
+      2,
+    )
+
+    const err = await run.done.then(
+      () => undefined,
+      (e: unknown) => e as QueueException,
+    )
+
+    expect(err?.cause).toBeDefined()
+    expect(JSON.stringify(err?.cause)).not.toContain(SENTINEL)
   })
 })

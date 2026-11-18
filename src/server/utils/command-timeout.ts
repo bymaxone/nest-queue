@@ -26,7 +26,7 @@ export function timeoutException(
     HttpStatus.SERVICE_UNAVAILABLE,
     { operation, timeoutMs },
   )
-  if (cause !== undefined) exception.cause = cause
+  if (cause !== undefined) exception.cause = errorSummary(cause)
   return exception
 }
 
@@ -50,7 +50,7 @@ export function unavailableException(
     HttpStatus.SERVICE_UNAVAILABLE,
     { operation, reason },
   )
-  exception.cause = cause
+  exception.cause = errorSummary(cause)
   return exception
 }
 
@@ -102,18 +102,24 @@ export function isOutOfMemory(err: unknown): boolean {
   )
 }
 
-/**
- * What is kept of the error Redis answered with: its name and message, and nothing else. An ioredis
- * reply error carries the command that failed, whose arguments hold the job's data, so keeping the
- * error itself would let `JSON.stringify` or a logger print a payload.
- *
- * @param reply - The error Redis answered with.
- */
-function replySummary(reply: unknown): Error {
-  const { name, message } = reply as Error
-  const summary = new Error(message)
-  summary.name = name
+/** A fresh error with the name and message of `reply` and nothing else. */
+function nameAndMessage(reply: Error): Error {
+  const summary = new Error(reply.message)
+  summary.name = reply.name
   return summary
+}
+
+/**
+ * What is kept of an error from Redis or BullMQ as the `cause` of a library error. An ioredis reply
+ * error carries the command that failed, whose arguments hold the job's data, so keeping the error
+ * itself would let `JSON.stringify` or a logger print a payload: only its name and message are kept.
+ * An error with no command (a refused connection, a timeout) carries nothing of the job and is kept
+ * as it is, so its code and address stay for diagnosis.
+ *
+ * @param reply - The error that ended the call.
+ */
+export function errorSummary(reply: unknown): unknown {
+  return reply instanceof Error && 'command' in reply ? nameAndMessage(reply) : reply
 }
 
 /**
@@ -130,7 +136,7 @@ export function storageFullException(operation: string, cause: unknown): QueueEx
     HttpStatus.SERVICE_UNAVAILABLE,
     { operation, reason: 'out_of_memory' },
   )
-  exception.cause = replySummary(cause)
+  exception.cause = nameAndMessage(cause as Error)
   return exception
 }
 

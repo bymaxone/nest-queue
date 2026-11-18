@@ -22,7 +22,7 @@ import { assertPageWindow } from '../utils/assert-page-window'
 import { assertJobInputs } from '../utils/assert-job-inputs'
 import { isReservedJobId } from '../utils/reserved-job-ids'
 import { withDeadline } from '../utils/with-deadline'
-import { timeoutException, withCommandTimeoutCode } from '../utils/command-timeout'
+import { errorSummary, timeoutException, withCommandTimeoutCode } from '../utils/command-timeout'
 
 /** A typed job in the library's public shape. */
 type TypedJob<TData, TResult> = Job<TData, TResult>
@@ -208,9 +208,9 @@ export class QueueService {
     data: TData,
     options?: JobsOptions,
   ): Promise<TypedJob<TData, TResult>> {
-    assertJobInputs(options, 'options')
+    const checked = assertJobInputs(options, 'options')
     const job = await this.call('enqueue', queueName, () =>
-      this.queueFor(queueName).add(jobName, data, options),
+      this.queueFor(queueName).add(jobName, data, checked),
     )
     return job
   }
@@ -238,17 +238,16 @@ export class QueueService {
         received: jobs.length,
       })
     }
-    jobs.forEach((job, index) => {
-      assertJobInputs(job.options, `jobs[${String(index)}].options`)
-    })
+    const checked = jobs.map((job, index) =>
+      assertJobInputs(job.options, `jobs[${String(index)}].options`),
+    )
     try {
       const created = await this.call('enqueueBulk', queueName, () =>
         this.queueFor(queueName).addBulk(
-          jobs.map((job) => ({
-            name: job.name,
-            data: job.data,
-            ...(job.options === undefined ? {} : { opts: job.options }),
-          })),
+          jobs.map((job, index) => {
+            const opts = checked[index]
+            return { name: job.name, data: job.data, ...(opts === undefined ? {} : { opts }) }
+          }),
         ),
       )
       return created
@@ -266,7 +265,7 @@ export class QueueService {
             operation: 'enqueueBulk',
           },
         ),
-        { cause: err },
+        { cause: errorSummary(err) },
       )
     }
   }

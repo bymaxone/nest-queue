@@ -10,7 +10,7 @@ import { HttpStatus } from '@nestjs/common'
 import type { FlowJob, JobNode } from 'bullmq'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { QueueException } from '../errors/queue-exception'
-import { timeoutException } from './command-timeout'
+import { errorSummary, timeoutException } from './command-timeout'
 
 /** What became of every tree of a batch, as indexes into the batch; the four lists partition it. */
 export interface FlowBulkOutcome {
@@ -57,7 +57,7 @@ function batchFailure(operation: string, first: unknown, outcome: FlowBulkOutcom
         operation,
         ...outcome,
       })
-  exception.cause = first
+  exception.cause = first instanceof QueueException ? first : errorSummary(first)
   return exception
 }
 

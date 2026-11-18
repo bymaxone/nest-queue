@@ -89,8 +89,8 @@ export class FlowService {
    */
   async add(flow: FlowJob): Promise<JobNode> {
     const producer = this.requireProducer()
-    assertFlowTree(flow, 'flow')
-    return this.bounded('addFlow', producer.add(flow))
+    const checked = assertFlowTree(flow, 'flow')
+    return this.bounded('addFlow', producer.add(checked))
   }
 
   /**
@@ -112,9 +112,7 @@ export class FlowService {
    */
   async addBulk(flows: readonly FlowJob[]): Promise<JobNode[]> {
     const producer = this.requireProducer()
-    flows.forEach((flow, index) => {
-      assertFlowTree(flow, `flows[${String(index)}]`)
-    })
+    const checked = flows.map((flow, index) => assertFlowTree(flow, `flows[${String(index)}]`))
     if (flows.length > MAX_BULK_SIZE) {
       throw new QueueException(QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED, HttpStatus.BAD_REQUEST, {
         reason: 'batch size exceeds limit',
@@ -125,7 +123,7 @@ export class FlowService {
     // One `add` per tree, not `FlowProducer.addBulk`: that reads each tree's result as `[err, id]` and
     // skips a failed one, so a bulk Redis refused resolves with ids of jobs that were never stored.
     const run = runFlowBulk(
-      flows,
+      checked,
       (flow) =>
         withCommandTimeoutCode('addFlowBulk', () => this.commandTimeout(), producer.add(flow)),
       'addFlowBulk',
