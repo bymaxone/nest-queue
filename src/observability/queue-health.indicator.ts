@@ -38,7 +38,7 @@ export class QueueHealthIndicator implements IHealthIndicator {
    */
   async check(signal?: AbortSignal): Promise<HealthIndicatorResult> {
     const details = { mode: this.connection.getMode() }
-    let release = (): void => undefined
+    const releases: (() => void)[] = []
     const stopped = new Promise<never>((_, reject) => {
       const stop = (): void => {
         reject(new Error())
@@ -46,10 +46,10 @@ export class QueueHealthIndicator implements IHealthIndicator {
       const timer = setTimeout(stop, PING_TIMEOUT_MS)
       if (signal?.aborted === true) stop()
       signal?.addEventListener('abort', stop)
-      release = (): void => {
+      releases.push(() => {
         clearTimeout(timer)
         signal?.removeEventListener('abort', stop)
-      }
+      })
     })
     try {
       await Promise.race([this.connection.getClient().ping(), stopped])
@@ -57,7 +57,7 @@ export class QueueHealthIndicator implements IHealthIndicator {
     } catch {
       return { status: 'down', details }
     } finally {
-      release()
+      for (const release of releases) release()
     }
   }
 }

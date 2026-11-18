@@ -111,6 +111,7 @@ describe('QueueObserverRegistry — jobFinished and removal', () => {
   const event = { queue: 'q', outcome: 'completed', durationSeconds: 0.5 } as const
 
   it('tells every observer, and ignores one that throws', () => {
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
     const registry = new QueueObserverRegistry()
     const heard: unknown[] = []
     registry.register({
