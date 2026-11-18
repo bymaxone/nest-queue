@@ -271,9 +271,13 @@ describe('WorkerRegistry.registerSandboxed', () => {
       expect(() => {
         ;(worker as unknown as EventEmitter).emit('error', new Error('Connection is closed'))
       }).not.toThrow()
-      expect(logSpy).toHaveBeenCalledWith(
-        'Worker for queue "sandboxed" emitted an error: Connection is closed',
-      )
+      expect(logSpy).toHaveBeenCalledWith({
+        event: 'QUEUE_EMITTER_ERROR',
+        message: 'Worker for queue "sandboxed" emitted an error',
+        kind: 'Worker',
+        queue: 'sandboxed',
+        err: new Error('Connection is closed'),
+      })
     } finally {
       logSpy.mockRestore()
     }
@@ -758,9 +762,13 @@ describe('WorkerRegistry — validation boundaries and error details', () => {
       // The line must name WHICH emitter and WHICH queue failed: during an
       // incident an operator reads this to decide where to look, and "emitted an
       // error" on its own tells them nothing.
-      expect(logSpy).toHaveBeenCalledWith(
-        'Worker for queue "email" emitted an error: Connection is closed',
-      )
+      expect(logSpy).toHaveBeenCalledWith({
+        event: 'QUEUE_EMITTER_ERROR',
+        message: 'Worker for queue "email" emitted an error',
+        kind: 'Worker',
+        queue: 'email',
+        err: new Error('Connection is closed'),
+      })
     } finally {
       logSpy.mockRestore()
     }

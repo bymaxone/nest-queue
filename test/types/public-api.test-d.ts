@@ -13,6 +13,7 @@
  */
 import type { DynamicModule } from '@nestjs/common'
 import type { Job } from 'bullmq'
+import type { handBackOf, HandBack } from '../../src/shared/hand-back'
 
 // Everything is imported with `import type`: the assertions only ever appear in
 // type position (`typeof X`), so nothing here emits a runtime import.
@@ -26,13 +27,18 @@ import type {
   BYMAX_QUEUE_CONNECTION_MODE,
   BYMAX_QUEUE_RESOLVED_OPTIONS,
   FlowService,
+  JobFinishedEvent,
+  JobOutcome,
   JobSchedulerRepeatOptions,
   JobStatus,
   JOB_STATUS,
   QueueErrorCode,
   QueueMetrics,
+  QueueObserver,
+  QueueObserverRegistry,
   QueueService,
   QUEUE_ERROR_CODES,
+  TraceCarrier,
 } from '@bymax-one/nest-queue'
 import type {
   JobStatus as SharedJobStatus,
@@ -266,4 +272,27 @@ export type _AsyncFactoryStillAcceptsVariadicUnknown = Expect<
     { useFactory: (...args: unknown[]) => BymaxQueueModuleOptions },
     BymaxQueueModuleAsyncOptions
   >
+>
+
+// The observer hooks a host implements: every hook is optional, and the process hook hands the
+// carrier stored with the job as read-only.
+export type _ObserverHooksAreOptional = Expect<Extends<Partial<QueueObserver>, QueueObserver>>
+export type _OutcomeIsClosed = Expect<Equal<JobOutcome, 'completed' | 'failed' | 'retried'>>
+export type _FinishedEventCarriesQueueOutcomeAndDuration = Expect<
+  Equal<
+    JobFinishedEvent,
+    { readonly queue: string; readonly outcome: JobOutcome; readonly durationSeconds: number }
+  >
+>
+export type _CarrierIsAStringRecord = Expect<Equal<TraceCarrier, Record<string, string>>>
+export type _RegisterReturnsTheRemover = Expect<
+  Equal<ReturnType<QueueObserverRegistry['register']>, () => void>
+>
+
+// The reader that tells a hand-back from a failure answers a closed set, or nothing.
+export type _HandBackIsClosed = Expect<
+  Equal<HandBack, 'delayed' | 'waiting_children' | 'rate_limited' | 'waiting'>
+>
+export type _HandBackOfAnswersTheClosedSet = Expect<
+  Equal<ReturnType<typeof handBackOf>, HandBack | undefined>
 >

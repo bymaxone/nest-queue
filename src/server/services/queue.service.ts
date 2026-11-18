@@ -4,7 +4,7 @@
  * @layer server/services
  */
 
-import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common'
+import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import { defaultRepeatStrategy, type Job, type JobsOptions, Queue, type QueueOptions } from 'bullmq'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
@@ -22,6 +22,8 @@ import { assertPageWindow } from '../utils/assert-page-window'
 import { assertJobInputs } from '../utils/assert-job-inputs'
 import { isReservedJobId } from '../utils/reserved-job-ids'
 import { withDeadline } from '../utils/with-deadline'
+import { QueueObserverRegistry, type TraceCarrier } from '../observability/queue-observer'
+import { withTraceMetadata } from '../observability/trace-carrier'
 import { errorSummary, timeoutException, withCommandTimeoutCode } from '../utils/command-timeout'
 
 /** A typed job in the library's public shape. */
@@ -73,7 +75,29 @@ export class QueueService {
   constructor(
     @Inject(ConnectionResolver) private readonly connection: ConnectionResolver,
     @Inject(BYMAX_QUEUE_RESOLVED_OPTIONS) private readonly options: ResolvedQueueOptions,
+    @Optional()
+    @Inject(QueueObserverRegistry)
+    private readonly observers?: QueueObserverRegistry,
   ) {}
+
+  /**
+   * Run an enqueue inside the observers' spans. The trace headers they write are stored with the job
+   * by `stamp`, unless BullMQ's own telemetry is configured, which stores its own.
+   */
+  private observed<T>(
+    queueName: string,
+    jobName: string | undefined,
+    run: (carrier: TraceCarrier) => Promise<T>,
+  ): Promise<T> {
+    if (this.observers === undefined) return run({})
+    const info = jobName === undefined ? { queue: queueName } : { queue: queueName, job: jobName }
+    return this.observers.traceEnqueue(info, run)
+  }
+
+  /** The options to send BullMQ: the checked ones, with the trace headers when they are to be stored. */
+  private stamp(options: JobsOptions | undefined, carrier: TraceCarrier): JobsOptions | undefined {
+    return this.options.telemetry === undefined ? withTraceMetadata(options, carrier) : options
+  }
 
   /**
    * Return the cached `Queue` for `queueName`, or create one with the module
@@ -209,8 +233,10 @@ export class QueueService {
     options?: JobsOptions,
   ): Promise<TypedJob<TData, TResult>> {
     const checked = assertJobInputs(options, 'options')
-    const job = await this.call('enqueue', queueName, () =>
-      this.queueFor(queueName).add(jobName, data, checked),
+    const job = await this.observed(queueName, jobName, (carrier) =>
+      this.call('enqueue', queueName, () =>
+        this.queueFor(queueName).add(jobName, data, this.stamp(checked, carrier)),
+      ),
     )
     return job
   }
@@ -242,12 +268,14 @@ export class QueueService {
       assertJobInputs(job.options, `jobs[${String(index)}].options`),
     )
     try {
-      const created = await this.call('enqueueBulk', queueName, () =>
-        this.queueFor(queueName).addBulk(
-          jobs.map((job, index) => {
-            const opts = checked[index]
-            return { name: job.name, data: job.data, ...(opts === undefined ? {} : { opts }) }
-          }),
+      const created = await this.observed(queueName, undefined, (carrier) =>
+        this.call('enqueueBulk', queueName, () =>
+          this.queueFor(queueName).addBulk(
+            jobs.map((job, index) => {
+              const opts = this.stamp(checked[index], carrier)
+              return { name: job.name, data: job.data, ...(opts === undefined ? {} : { opts }) }
+            }),
+          ),
         ),
       )
       return created

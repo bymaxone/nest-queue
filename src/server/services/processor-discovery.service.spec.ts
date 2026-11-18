@@ -4,6 +4,7 @@
  * @layer server/services
  */
 
+import { loggedEvents } from '../utils/log-lines'
 import 'reflect-metadata'
 import { Logger } from '@nestjs/common'
 import type { DiscoveryService } from '@nestjs/core'
@@ -169,14 +170,17 @@ describe('ProcessorDiscoveryService.onModuleInit', () => {
       eventsReg,
     )
     svc.onModuleInit()
-    expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('email'))
+    const [defaulted] = loggedEvents(loggerWarnSpy)
+    expect(loggedEvents(loggerWarnSpy)).toHaveLength(1)
+    expect(defaulted).toMatchObject({
+      event: 'QUEUE_CONCURRENCY_DEFAULTED',
+      queue: 'email',
+      concurrency: 2,
+    })
+    expect(defaulted?.message).toContain('email')
     // The warning must state the fallback value and the production-tuning advice.
-    expect(loggerWarnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('defaulting to concurrency='),
-    )
-    expect(loggerWarnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('explicit concurrency for production workloads'),
-    )
+    expect(defaulted?.message).toContain('defaulting to concurrency=')
+    expect(defaulted?.message).toContain('explicit concurrency for production workloads')
     loggerWarnSpy.mockRestore()
   })
 
@@ -575,73 +579,98 @@ describe('ProcessorDiscoveryService — a failing @OnWorkerEvent / @OnQueueEvent
     await new Promise<void>((resolve) => setImmediate(resolve))
   }
 
+  it('carries what a handler threw as the error and never as text in the message', async () => {
+    const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    const thrown = new Error('SENTINEL-handler-error')
+
+    @Processor('email', { concurrency: 1 })
+    class SentinelProcessor {
+      @Process()
+      handle(_job: Job): Promise<void> {
+        return Promise.resolve()
+      }
+
+      @OnWorkerEvent('completed')
+      onCompleted(): never {
+        throw thrown
+      }
+    }
+
+    const { worker } = bind(new SentinelProcessor())
+    worker.on.mock.calls.find(([ev]) => ev === 'completed')?.[1]?.({ id: '1' })
+    await settle()
+
+    const [logged] = loggedEvents(errorSpy)
+    expect(logged?.err).toBe(thrown)
+    expect(logged?.message).not.toContain('SENTINEL')
+    errorSpy.mockRestore()
+  })
+
   it.each([
-    ['rejects asynchronously', async () => Promise.reject(new Error('boom')), 'boom'],
+    ['rejects asynchronously', async () => Promise.reject(new Error('boom'))],
     [
       'throws synchronously',
       () => {
         throw new Error('boom')
       },
-      'boom',
     ],
-    [
-      'rejects with a null-prototype value',
-      () => rejectLater(Object.create(null)),
-      'unknown error',
-    ],
-  ])(
-    'logs a handler that %s instead of raising an unhandled rejection',
-    async (_label, body, text) => {
-      // The listener is bound straight onto an EventEmitter, which neither awaits it nor catches a
-      // throw: a rejected promise is an unhandledRejection (the Node default ends the process) and a
-      // synchronous throw escapes `emit` into BullMQ's own code. A failing handler is the consumer's
-      // bug, never a reason to take the process down, and it must still be reported.
-      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
-      const unhandled = jest.fn()
-      process.on('unhandledRejection', unhandled)
+    ['rejects with a null-prototype value', () => rejectLater(Object.create(null))],
+  ])('logs a handler that %s instead of raising an unhandled rejection', async (_label, body) => {
+    // The listener is bound straight onto an EventEmitter, which neither awaits it nor catches a
+    // throw: a rejected promise is an unhandledRejection (the Node default ends the process) and a
+    // synchronous throw escapes `emit` into BullMQ's own code. A failing handler is the consumer's
+    // bug, never a reason to take the process down, and it must still be reported.
+    const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    const unhandled = jest.fn()
+    process.on('unhandledRejection', unhandled)
 
-      @Processor('email', { concurrency: 1 })
-      class FailingProcessor {
-        @Process()
-        handle(_job: Job): Promise<void> {
-          return Promise.resolve()
-        }
-
-        @OnWorkerEvent('completed')
-        onCompleted(): unknown {
-          return body()
-        }
-
-        @OnQueueEvent('completed')
-        onQueueCompleted(): unknown {
-          return body()
-        }
+    @Processor('email', { concurrency: 1 })
+    class FailingProcessor {
+      @Process()
+      handle(_job: Job): Promise<void> {
+        return Promise.resolve()
       }
 
-      const { worker, qe } = bind(new FailingProcessor())
-      const workerListener = worker.on.mock.calls.find(([ev]) => ev === 'completed')?.[1]
-      const queueListener = qe.on.mock.calls.find(([ev]) => ev === 'completed')?.[1]
-
-      expect(() => workerListener?.({ id: '1' })).not.toThrow()
-      expect(() => queueListener?.({ jobId: '1' })).not.toThrow()
-      await settle()
-      process.off('unhandledRejection', unhandled)
-
-      expect(unhandled).not.toHaveBeenCalled()
-      expect(errorSpy).toHaveBeenCalledTimes(2)
-      for (const [line] of errorSpy.mock.calls) {
-        expect(String(line)).toContain('queue.event_handler_failed')
-        expect(String(line)).toContain(text)
+      @OnWorkerEvent('completed')
+      onCompleted(): unknown {
+        return body()
       }
-      expect(String(errorSpy.mock.calls[0]?.[0])).toBe(
-        `@OnWorkerEvent("completed") handler FailingProcessor.onCompleted failed (queue.event_handler_failed): ${text}`,
-      )
-      expect(String(errorSpy.mock.calls[1]?.[0])).toBe(
-        `@OnQueueEvent("completed") handler FailingProcessor.onQueueCompleted failed (queue.event_handler_failed): ${text}`,
-      )
-      errorSpy.mockRestore()
-    },
-  )
+
+      @OnQueueEvent('completed')
+      onQueueCompleted(): unknown {
+        return body()
+      }
+    }
+
+    const { worker, qe } = bind(new FailingProcessor())
+    const workerListener = worker.on.mock.calls.find(([ev]) => ev === 'completed')?.[1]
+    const queueListener = qe.on.mock.calls.find(([ev]) => ev === 'completed')?.[1]
+
+    expect(() => workerListener?.({ id: '1' })).not.toThrow()
+    expect(() => queueListener?.({ jobId: '1' })).not.toThrow()
+    await settle()
+    process.off('unhandledRejection', unhandled)
+
+    expect(unhandled).not.toHaveBeenCalled()
+    expect(errorSpy).toHaveBeenCalledTimes(2)
+    expect(loggedEvents(errorSpy)).toEqual([
+      {
+        event: 'QUEUE_EVENT_HANDLER_FAILED',
+        message: `@OnWorkerEvent("completed") handler FailingProcessor.onCompleted failed (queue.event_handler_failed)`,
+        decorator: '@OnWorkerEvent',
+        eventName: 'completed',
+        err: expect.anything() as unknown,
+      },
+      {
+        event: 'QUEUE_EVENT_HANDLER_FAILED',
+        message: `@OnQueueEvent("completed") handler FailingProcessor.onQueueCompleted failed (queue.event_handler_failed)`,
+        decorator: '@OnQueueEvent',
+        eventName: 'completed',
+        err: expect.anything() as unknown,
+      },
+    ])
+    errorSpy.mockRestore()
+  })
 
   it('still calls a healthy handler with its arguments and its own `this`', () => {
     // Wrapping the listener must not change what a working handler receives.

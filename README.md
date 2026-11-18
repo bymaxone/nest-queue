@@ -84,10 +84,11 @@ peer dependencies, so you control exact versions and the supply-chain surface st
 error-code catalog without pulling in `bullmq`, `ioredis`, or `@nestjs/*`. Nothing under
 that subpath imports a runtime dependency.
 
-| Subpath        | Import                         | Purpose                                                   |       Dependencies        |
-| -------------- | ------------------------------ | --------------------------------------------------------- | :-----------------------: |
-| **`.`**        | `@bymax-one/nest-queue`        | Full server surface: module, services, decorators, types  | NestJS · BullMQ · ioredis |
-| **`./shared`** | `@bymax-one/nest-queue/shared` | Job-status union, error codes, metric and scheduler types |           none            |
+| Subpath               | Import                                | Purpose                                                                      |                                  Dependencies                                  |
+| --------------------- | ------------------------------------- | ---------------------------------------------------------------------------- | :----------------------------------------------------------------------------: |
+| **`.`**               | `@bymax-one/nest-queue`               | Full server surface: module, services, decorators, types                     |                           NestJS · BullMQ · ioredis                            |
+| **`./shared`**        | `@bymax-one/nest-queue/shared`        | Job-status union, error codes, metric and scheduler types                    |                                      none                                      |
+| **`./observability`** | `@bymax-one/nest-queue/observability` | Prometheus metrics, a readiness indicator and OpenTelemetry spans (optional) | the main entry · `@bymax-one/nest-core` · `prom-client` · `@opentelemetry/api` |
 
 ```
 @bymax-one/nest-queue          (server — NestJS + BullMQ + ioredis)
@@ -101,11 +102,12 @@ Both subpaths ship ESM **and** CommonJS with declarations for each format, so a
 
 ### Peer dependency matrix
 
-| Subpath      | Required peers                                                                                             |
-| ------------ | ---------------------------------------------------------------------------------------------------------- |
-| `.` (server) | `@nestjs/common ^11.0.16`, `@nestjs/core ^11.1.18`, `bullmq ^6.0`, `ioredis ^6.0`, `reflect-metadata ^0.2` |
-| `./shared`   | None                                                                                                       |
-| Optional     | `bullmq-otel ^2` (OpenTelemetry)                                                                           |
+| Subpath           | Required peers                                                                                                                                                        |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.` (server)      | `@nestjs/common ^11.0.16`, `@nestjs/core ^11.1.18`, `bullmq ^6.0`, `ioredis ^6.0`, `reflect-metadata ^0.2`                                                            |
+| `./shared`        | None                                                                                                                                                                  |
+| `./observability` | The main entry's peers, plus `@bymax-one/nest-core ^1.6.10`, `prom-client ^15` and `@opentelemetry/api ^1.9` (all optional: install them only to import this subpath) |
+| Optional          | `bullmq-otel ^2` (OpenTelemetry)                                                                                                                                      |
 
 > [!IMPORTANT]
 > `reflect-metadata` is a **global polyfill the application owns** — import it once at
@@ -458,6 +460,86 @@ BymaxQueueModule.forRoot({
   telemetry: new BullMQOtel({ tracerName: 'my-service' }),
 })
 ```
+
+---
+
+## 🔭 Observability
+
+The main entry imports no metrics or tracing library. What watches the queue is an observer registered on `QueueObserverRegistry`, and the optional `@bymax-one/nest-queue/observability` subpath ships one that feeds Prometheus through `@bymax-one/nest-core`, a readiness indicator, and OpenTelemetry spans. Import its module next to `BymaxQueueModule`:
+
+```typescript
+import { Module } from '@nestjs/common'
+import { BymaxQueueModule } from '@bymax-one/nest-queue'
+import { BymaxQueueObservabilityModule } from '@bymax-one/nest-queue/observability'
+
+@Module({
+  imports: [
+    BymaxQueueModule.forRoot({
+      connection: { url: process.env.REDIS_URL ?? 'redis://localhost:6379' },
+      metrics: { enabled: true },
+    }),
+    BymaxQueueObservabilityModule,
+  ],
+})
+export class AppModule {}
+```
+
+### Metrics
+
+`QueueMetricsContributor` registers them on the registry `@bymax-one/nest-core` serves, when the application enables its metrics endpoint. Labels come from closed sets: the queue name you configured, the outcome and the state. No job id, job name, data or error text is ever a label.
+
+| Metric                             | Type      | Labels             | Meaning                                                                                                                                                                                                                                                           |
+| ---------------------------------- | --------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bymax_queue_jobs_total`           | counter   | `queue`, `outcome` | Attempts that ended in this process: `completed`, `failed` (the last attempt, or an `UnrecoverableError`) or `retried` (BullMQ runs the job again). There is no `dead_lettered`: a dead-letter queue is a recipe in this README, not something the library knows. |
+| `bymax_queue_job_duration_seconds` | histogram | `queue`            | Time the processor ran for one attempt, with the default `prom-client` buckets.                                                                                                                                                                                   |
+| `bymax_queue_depth`                | gauge     | `queue`, `state`   | Jobs in a queue by `waiting`, `active`, `delayed` or `failed`, read from `MetricsService`, so a scrape reads Redis at most once per `metrics.cacheTtlMs`. It has no samples while `metrics.enabled` is off or Redis does not answer.                              |
+
+A job that a worker hands back to BullMQ with `DelayedError`, `WaitingError`, `WaitingChildrenError` or `RateLimitError` is not counted: it did not fail. A sandboxed worker runs in another process and is not observed.
+
+### Readiness
+
+`QueueHealthIndicator` (named `queue`, also exported as `QUEUE_HEALTH_INDICATOR_NAME`) sends one `PING` on the connection the queue works through and answers `up`, or `down` after two seconds or on any error. It reports the connection mode and never an error text, and it sends and reads no job. `@bymax-one/nest-core` discovers it when its health auto-discovery is on.
+
+### Traces
+
+`QueueTracingObserver` opens the spans. `queue.enqueue` (producer) wraps `enqueue`, `enqueueBulk` and each tree of `FlowService.add` and `addBulk`; `queue.process` (consumer) wraps each attempt of a job. Their attribute is `bymax.queue.name`; a failed span carries the library's error code (or `error`) as its status message and never the text of the error. An attempt the processor hands back to BullMQ with `DelayedError`, `WaitingChildrenError`, `RateLimitError` or `WaitingError` is normal flow, not a failure: its `queue.process` span has no error status and the attribute `bymax.queue.outcome` is `delayed`, `waiting_children`, `rate_limited` or `waiting`. The W3C trace context of `queue.enqueue` is stored with the job in `opts.telemetry.metadata`, apart from its data, and `queue.process` continues it, so a request, the job it enqueued and the work the job does read as one trace. With no OpenTelemetry SDK registered the API does nothing and no header is stored.
+
+A job that already carries metadata keeps it, and `queue.process` continues the trace it holds: BullMQ's telemetry writes the same JSON of W3C headers, so metadata it wrote is a parent like any other. If you set the module's own `telemetry` option (BullMQ's `bullmq-otel`), BullMQ stores its own metadata and the library leaves it alone; the spans above are still opened. Propagation uses the global propagator, so an `OTEL_PROPAGATORS` setting that leaves out `tracecontext` breaks it; that is a host choice the library does not override.
+
+### Log events
+
+Every operational log line is an object handed to the Nest `Logger`, `{ event, message, ...fields }`, with fields of closed or numeric values only, so `@bymax-one/nest-logger` writes them as data and Nest's console logger prints them readably. `message` holds the library's own text only. When an error caused the event, it is carried as the error itself under `err`, where a logger that knows errors serialises and redacts it, and never as text in `message`.
+
+| Code                          | Level | When                                                                                                  | Fields                          |
+| ----------------------------- | ----- | ----------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `QUEUE_SHUTDOWN_COMPLETE`     | log   | The module finished closing its workers, queues, flow producer and connection                         | `durationMs`, `forcedWorkers`   |
+| `QUEUE_WORKER_DRAIN_TIMEOUT`  | warn  | A worker did not drain within the shutdown budget and was stopped                                     | `queue`, `drainTimeoutMs`       |
+| `QUEUE_WORKER_CLOSE_FAILED`   | warn  | A worker failed to close and was stopped                                                              | `queue`, `err`                  |
+| `QUEUE_DRAIN_FAILED`          | warn  | A queue could not be drained on shutdown (`drainOnShutdown`)                                          | `queue`, `err`                  |
+| `QUEUE_OBSERVER_FAILED`       | warn  | An observer threw from `jobFinished`; it is ignored and the job is not affected                       | `hook`                          |
+| `QUEUE_CLIENT_ERROR`          | error | A Redis connection the module uses emitted an error                                                   | `role`, `err`                   |
+| `QUEUE_EMITTER_ERROR`         | error | A `Queue`, `Worker`, `QueueEvents` or `FlowProducer` emitted an error                                 | `kind`, `queue`, `err`          |
+| `QUEUE_EVENT_HANDLER_FAILED`  | error | An `@OnWorkerEvent` or `@OnQueueEvent` handler threw or rejected                                      | `decorator`, `eventName`, `err` |
+| `QUEUE_CONCURRENCY_DEFAULTED` | warn  | A `@Processor` that gave no concurrency got the default                                               | `queue`, `concurrency`          |
+| `QUEUE_UNBOUNDED_RETRIES`     | warn  | The shared client has `maxRetriesPerRequest: null`, so a command waits for as long as an outage lasts | none                            |
+
+### Your own observer
+
+```typescript
+import { QueueObserverRegistry } from '@bymax-one/nest-queue'
+import type { QueueObserver } from '@bymax-one/nest-queue'
+
+export function observe(observers: QueueObserverRegistry): () => void {
+  const observer: QueueObserver = {
+    jobFinished: ({ queue, outcome, durationSeconds }) => {
+      console.log(queue, outcome, durationSeconds)
+    },
+  }
+  return observers.register(observer)
+}
+```
+
+A hook must not throw: `traceEnqueue` and `traceProcess` run on the path of a job, and a throw from `jobFinished` is ignored.
 
 ---
 
@@ -882,6 +964,7 @@ const all: readonly QueueMetrics[] = await this.metricsService.getAll()
 | `FlowService.addBulk(flows)`, `getProducer()`, `close()`                                                                              | Add up to 1 000 flows at once; the underlying BullMQ `FlowProducer`; close it (a no-op while flows are disabled) |
 | `MetricsService.invalidate(queue?)`                                                                                                   | Drop the cached snapshot of one queue, or of all of them                                                         |
 | `QueueEventsRegistry`                                                                                                                 | The shared `QueueEvents` per queue (`getOrCreate`, `list`), used by `@OnQueueEvent`                              |
+| `QueueObserverRegistry`, `QueueObserver`, `JobFinishedEvent`, `JobOutcome`, `QueueObserveInfo`, `TraceCarrier`                        | Where an observer registers, and the hooks, events and types it works with (see Observability)                   |
 | `BYMAX_QUEUE_OPTIONS`, `BYMAX_QUEUE_RESOLVED_OPTIONS`                                                                                 | Injection tokens for the options as given and with the defaults applied                                          |
 | `BYMAX_QUEUE_REDIS_CLIENT`, `BYMAX_QUEUE_CONNECTION_MODE`                                                                             | Injection tokens for the Queue-role ioredis client and for `'mode-a-byo'` or `'mode-b-owned'`                    |
 | `DEFAULT_WORKER_CONCURRENCY`, `MAX_WORKER_CONCURRENCY`                                                                                | The worker concurrency used when none is given, and its ceiling                                                  |

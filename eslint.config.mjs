@@ -76,6 +76,12 @@ export default tseslint.config(
     },
   },
   {
+    // A Nest module that only lists providers is a decorated class with no members, which is the
+    // whole of what the framework needs from it.
+    files: ['src/observability/observability.module.ts'],
+    rules: { '@typescript-eslint/no-extraneous-class': ['error', { allowWithDecorator: true }] },
+  },
+  {
     // AGENTS.md: a function over 50 lines is a finding for what a change introduces. Lines are
     // counted raw (blank lines and comments included), the way a reviewer reads the file. Tests are
     // out of scope: their unit is the body of a single `it`, and `describe` callbacks are grouping

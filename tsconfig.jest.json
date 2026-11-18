@@ -12,7 +12,8 @@
     "baseUrl": ".",
     "paths": {
       "@bymax-one/nest-queue": ["./src/server/index.ts"],
-      "@bymax-one/nest-queue/shared": ["./src/shared/index.ts"]
+      "@bymax-one/nest-queue/shared": ["./src/shared/index.ts"],
+      "@bymax-one/nest-queue/observability": ["./src/observability/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "test/e2e/**/*.ts"],

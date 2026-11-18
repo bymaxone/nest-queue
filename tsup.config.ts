@@ -23,4 +23,17 @@ const common: Options = {
 export default defineConfig([
   { entry: { 'server/index': 'src/server/index.ts' }, ...common },
   { entry: { 'shared/index': 'src/shared/index.ts' }, ...common },
+  {
+    // The optional entry imports the main entry as a package, never a copy of it: the observer
+    // registry the host's module provides and the one this entry injects must be one class.
+    entry: { 'observability/index': 'src/observability/index.ts' },
+    ...common,
+    external: [
+      ...(common.external ?? []),
+      '@bymax-one/nest-queue',
+      /^@bymax-one\/nest-core(\/|$)/,
+      'prom-client',
+      /^@opentelemetry\//,
+    ],
+  },
 ])

@@ -6,6 +6,7 @@
  * @layer server/lifecycle
  */
 
+import { loggedEvents, loggedMessages } from '../utils/log-lines'
 import { Logger } from '@nestjs/common'
 import type { Queue, QueueEvents, Worker } from 'bullmq'
 import type { Redis } from 'ioredis'
@@ -117,6 +118,11 @@ async function closeApp(lifecycle: QueueLifecycle): Promise<void> {
   await lifecycle.onApplicationShutdown()
 }
 
+/** An event whose message contains `part`. */
+function saying(part: string): unknown {
+  return expect.objectContaining({ message: expect.stringContaining(part) as string })
+}
+
 let warnSpy: jest.SpyInstance
 let logSpy: jest.SpyInstance
 
@@ -187,10 +193,9 @@ describe('QueueLifecycle shutdown — happy path', () => {
     expect(workerClose).toHaveBeenCalledWith()
     expect(queueDrain).not.toHaveBeenCalled()
     expect(logSpy).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /Queue shutdown complete in .* \(0 worker\(s\) stopped without draining\)/,
-      ),
+      expect.objectContaining({ event: 'QUEUE_SHUTDOWN_COMPLETE', forcedWorkers: 0 }),
     )
+    expect(logSpy).toHaveBeenCalledWith(saying('(0 worker(s) stopped without draining)'))
   })
 
   it('is a no-op-safe sweep when nothing was registered', async () => {
@@ -209,9 +214,12 @@ describe('QueueLifecycle shutdown — happy path', () => {
 
     await closeApp(lifecycle)
 
-    expect(logSpy).toHaveBeenCalledWith(
-      'Queue shutdown complete in 0ms (0 worker(s) stopped without draining)',
-    )
+    expect(logSpy).toHaveBeenCalledWith({
+      event: 'QUEUE_SHUTDOWN_COMPLETE',
+      message: 'Queue shutdown complete in 0ms (0 worker(s) stopped without draining)',
+      durationMs: 0,
+      forcedWorkers: 0,
+    })
     jest.useRealTimers()
   })
 })
@@ -242,18 +250,21 @@ describe('QueueLifecycle shutdown — bounded drain', () => {
 
     expect(close).toHaveBeenCalledWith()
     expect(close).toHaveBeenCalledWith(true)
+    expect(warnSpy).toHaveBeenCalledWith(saying(QUEUE_ERROR_CODES.SHUTDOWN_TIMEOUT_EXCEEDED))
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining(QUEUE_ERROR_CODES.SHUTDOWN_TIMEOUT_EXCEEDED),
+      expect.objectContaining({
+        event: 'QUEUE_WORKER_DRAIN_TIMEOUT',
+        queue: 'slow',
+        drainTimeoutMs: 5000,
+      }),
     )
     // The warning must name the offending worker and quote the elapsed drain budget…
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('"slow"'))
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('5000ms drain budget'))
+    expect(warnSpy).toHaveBeenCalledWith(saying('"slow"'))
+    expect(warnSpy).toHaveBeenCalledWith(saying('5000ms drain budget'))
     // …and explain the at-least-once consequence (the job stalls and is retried).
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('stalled and is retried'))
+    expect(warnSpy).toHaveBeenCalledWith(saying('stalled and is retried'))
     expect(connectionDestroy).toHaveBeenCalledTimes(1)
-    expect(logSpy).toHaveBeenCalledWith(
-      expect.stringContaining('1 worker(s) stopped without draining'),
-    )
+    expect(logSpy).toHaveBeenCalledWith(saying('1 worker(s) stopped without draining'))
     jest.useRealTimers()
   })
 
@@ -364,7 +375,8 @@ describe('QueueLifecycle shutdown — stopping a worker', () => {
   })
 
   it('stops a worker whose pause fails the same way, with the real cause in the log', async () => {
-    const pause = jest.fn().mockRejectedValue(new Error('Connection is closed.'))
+    const pauseError = new Error('Connection is closed.')
+    const pause = jest.fn().mockRejectedValue(pauseError)
     const close = jest.fn().mockResolvedValue(undefined)
     const { lifecycle } = makeLifecycle({
       workers: new Map([['email', makeWorker(close, pause)]]),
@@ -373,7 +385,9 @@ describe('QueueLifecycle shutdown — stopping a worker', () => {
     await lifecycle.onModuleDestroy()
 
     expect(close.mock.calls).toEqual([[true]])
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Connection is closed.'))
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'QUEUE_WORKER_CLOSE_FAILED', err: pauseError }),
+    )
   })
 
   it('does not let a forced close that never settles hold the shutdown for more than a second', async () => {
@@ -409,7 +423,7 @@ describe('QueueLifecycle shutdown — stopping a worker', () => {
     await jest.advanceTimersByTimeAsync(1000)
     await pending
 
-    const lines = warnSpy.mock.calls.map(([line]) => String(line))
+    const lines = loggedMessages(warnSpy)
     expect(lines.some((line) => line.includes('forcing close'))).toBe(false)
     expect(
       lines.some((line) => line.includes('is stopped without waiting for its in-flight job')),
@@ -560,10 +574,11 @@ describe('QueueLifecycle shutdown — why a worker was forced', () => {
     // A close() that rejects with a real error (Redis went away during shutdown) is not a drain
     // that ran out of budget; calling it one sends the operator after the wrong cause. The worker
     // is still force-closed, and the log carries the real reason.
+    const closeError = new Error('Connection is closed.')
     const close = jest
       .fn()
       .mockImplementation((force?: boolean) =>
-        force === true ? Promise.resolve() : Promise.reject(new Error('Connection is closed.')),
+        force === true ? Promise.resolve() : Promise.reject(closeError),
       )
     const { lifecycle } = makeLifecycle({
       workers: new Map([['email', makeWorker(close)]]),
@@ -573,10 +588,11 @@ describe('QueueLifecycle shutdown — why a worker was forced', () => {
     await closeApp(lifecycle)
 
     expect(close).toHaveBeenCalledWith(true)
-    const lines = warnSpy.mock.calls.map(([line]) => String(line))
-    expect(
-      lines.some((line) => line.includes('"email"') && line.includes('Connection is closed.')),
-    ).toBe(true)
+    const lines = loggedMessages(warnSpy)
+    // The real reason is the error the event carries, never text in the message.
+    expect(loggedEvents(warnSpy)[0]).toMatchObject({ err: closeError })
+    expect(lines.join('\n')).not.toContain('Connection is closed.')
+    expect(lines.some((line) => line.includes('"email"'))).toBe(true)
     expect(lines.some((line) => line.includes('failed to close'))).toBe(true)
     expect(
       lines.some((line) =>
@@ -586,9 +602,11 @@ describe('QueueLifecycle shutdown — why a worker was forced', () => {
       ),
     ).toBe(true)
     expect(lines.some((line) => line.includes('drain budget'))).toBe(false)
-    expect(logSpy).toHaveBeenCalledWith(
-      expect.stringContaining('1 worker(s) stopped without draining'),
-    )
+    expect(loggedEvents(warnSpy).map((logged) => logged.event)).toEqual([
+      'QUEUE_WORKER_CLOSE_FAILED',
+    ])
+    expect(loggedEvents(warnSpy)[0]).toMatchObject({ queue: 'email' })
+    expect(logSpy).toHaveBeenCalledWith(saying('1 worker(s) stopped without draining'))
   })
 })
 
@@ -612,7 +630,8 @@ describe('QueueLifecycle shutdown — conditional drain', () => {
     // drainOnShutdown promises the waiting jobs are removed; a drain that fails leaves them in
     // Redis, so that has to be visible, while the rest of the shutdown must still run.
     const queueClose = jest.fn().mockResolvedValue(undefined)
-    const queueDrain = jest.fn().mockRejectedValue(new Error('drain failed'))
+    const drainError = new Error('drain failed')
+    const queueDrain = jest.fn().mockRejectedValue(drainError)
     const { lifecycle, queuesCloseAll, connectionDestroy } = makeLifecycle({
       queues: new Map([['email', makeQueue(queueClose, queueDrain)]]),
       resolved: makeResolved({ drainOnShutdown: true }),
@@ -620,11 +639,13 @@ describe('QueueLifecycle shutdown — conditional drain', () => {
 
     await closeApp(lifecycle)
 
-    const lines = warnSpy.mock.calls.map(([line]) => String(line))
-    expect(lines.some((line) => line.includes('"email"') && line.includes('drain failed'))).toBe(
-      true,
-    )
+    const lines = loggedMessages(warnSpy)
+    expect(lines.some((line) => line.includes('"email"'))).toBe(true)
+    expect(lines.join('\n')).not.toContain('drain failed')
     expect(lines.some((line) => line.includes('drainOnShutdown'))).toBe(true)
+    expect(loggedEvents(warnSpy)).toEqual([
+      expect.objectContaining({ event: 'QUEUE_DRAIN_FAILED', queue: 'email', err: drainError }),
+    ])
     expect(queuesCloseAll).toHaveBeenCalledTimes(1)
     expect(connectionDestroy).toHaveBeenCalledTimes(1)
   })
@@ -747,9 +768,12 @@ describe('QueueLifecycle shutdown — the two hooks', () => {
     await lifecycle.onApplicationShutdown()
 
     expect(logSpy).toHaveBeenCalledTimes(1)
-    expect(logSpy).toHaveBeenCalledWith(
-      'Queue shutdown complete in 500ms (1 worker(s) stopped without draining)',
-    )
+    expect(logSpy).toHaveBeenCalledWith({
+      event: 'QUEUE_SHUTDOWN_COMPLETE',
+      message: 'Queue shutdown complete in 500ms (1 worker(s) stopped without draining)',
+      durationMs: 500,
+      forcedWorkers: 1,
+    })
     jest.useRealTimers()
   })
 
@@ -765,9 +789,12 @@ describe('QueueLifecycle shutdown — the two hooks', () => {
     expect(flowDestroy).toHaveBeenCalledTimes(1)
     expect(queuesCloseAll).toHaveBeenCalledTimes(1)
     expect(connectionDestroy).toHaveBeenCalledTimes(1)
-    expect(logSpy).toHaveBeenCalledWith(
-      'Queue shutdown complete in 0ms (0 worker(s) stopped without draining)',
-    )
+    expect(logSpy).toHaveBeenCalledWith({
+      event: 'QUEUE_SHUTDOWN_COMPLETE',
+      message: 'Queue shutdown complete in 0ms (0 worker(s) stopped without draining)',
+      durationMs: 0,
+      forcedWorkers: 0,
+    })
     jest.useRealTimers()
   })
 })

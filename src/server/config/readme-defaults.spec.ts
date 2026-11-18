@@ -10,6 +10,7 @@ import type { Telemetry } from 'bullmq'
 import { BymaxQueueModule } from '../bymax-queue.module'
 import { DEFAULT_JOB_OPTIONS } from '../constants/default-options'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
+import { QUEUE_LOG_EVENTS } from '../utils/log-event'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
 import { applyDefaults } from './resolved-options'
 
@@ -160,9 +161,47 @@ describe('README export coverage', () => {
 
   // The README is the only place a consumer learns what the package exports, and a public name it
   // never mentions is one nobody can find. Naming it anywhere counts, so the check stays cheap.
-  it.each(['../index.ts', '../../shared/index.ts'])('names every export of %s', (entry) => {
-    const missing = exportedNames(entry).filter((name) => !new RegExp(`\\b${name}\\b`).test(readme))
+  it.each(['../index.ts', '../../shared/index.ts', '../../observability/index.ts'])(
+    'names every export of %s',
+    (entry) => {
+      const missing = exportedNames(entry).filter(
+        (name) => !new RegExp(`\\b${name}\\b`).test(readme),
+      )
 
-    expect(missing).toEqual([])
+      expect(missing).toEqual([])
+    },
+  )
+})
+
+describe('README log events', () => {
+  // A code a log line carries and the README does not list is one an operator cannot look up, and a
+  // listed code no line carries is an alert rule that never fires.
+  const documented = tableRows(section('🔭 Observability')).filter(([code = '']) =>
+    code.startsWith('`QUEUE_'),
+  )
+
+  it('lists each log event the library writes exactly once', () => {
+    const listed = documented.map(([code = '']) => code.replaceAll('`', ''))
+
+    expect(listed.sort()).toEqual(Object.values(QUEUE_LOG_EVENTS).sort())
+  })
+
+  it('names for each event the level it is logged at', () => {
+    const levels = Object.fromEntries(
+      documented.map(([code = '', level = '']) => [code.replaceAll('`', ''), level]),
+    )
+
+    expect(levels).toEqual({
+      QUEUE_SHUTDOWN_COMPLETE: 'log',
+      QUEUE_WORKER_DRAIN_TIMEOUT: 'warn',
+      QUEUE_WORKER_CLOSE_FAILED: 'warn',
+      QUEUE_DRAIN_FAILED: 'warn',
+      QUEUE_OBSERVER_FAILED: 'warn',
+      QUEUE_CLIENT_ERROR: 'error',
+      QUEUE_EMITTER_ERROR: 'error',
+      QUEUE_EVENT_HANDLER_FAILED: 'error',
+      QUEUE_CONCURRENCY_DEFAULTED: 'warn',
+      QUEUE_UNBOUNDED_RETRIES: 'warn',
+    })
   })
 })

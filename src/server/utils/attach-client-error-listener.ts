@@ -5,30 +5,11 @@
  */
 
 import type { Logger } from '@nestjs/common'
-import { describeError } from './describe-error'
+import { logFailure, QUEUE_LOG_EVENTS } from './log-event'
 
 /** The slice of an ioredis client this helper needs. */
 interface ErrorEmitter {
   on(event: 'error', listener: (err: unknown) => void): unknown
-}
-
-/**
- * What went wrong, for a log line: the error's message, or, when it has none, its name and code.
- *
- * Node reports a refused connection to a host with two addresses as an `AggregateError` whose
- * `message` is empty and whose `code` is `ECONNREFUSED`. Only the message, the name and the code
- * are read: the nested errors name addresses, and a connection URL can carry credentials.
- */
-function describeClientError(err: unknown): string {
-  const message = describeError(err)
-  if (message !== '') return message
-  try {
-    const { name, code } = err as { name?: unknown; code?: unknown }
-    const label = typeof name === 'string' && name !== '' ? name : 'unknown error'
-    return typeof code === 'string' ? `${label} [${code}]` : label
-  } catch {
-    return 'unknown error'
-  }
 }
 
 /**
@@ -60,6 +41,13 @@ export function attachClientErrorListener(
   // `emit('error', value)` accepts any value, so the listener must not assume an `Error`: a throw
   // inside it escapes `emit` to the client's caller.
   client.on('error', (err: unknown) => {
-    logger.error(`Redis connection (${role}) emitted an error: ${describeClientError(err)}`)
+    logger.error(
+      logFailure(
+        QUEUE_LOG_EVENTS.CLIENT_ERROR,
+        `Redis connection (${role}) emitted an error`,
+        err,
+        { role },
+      ),
+    )
   })
 }

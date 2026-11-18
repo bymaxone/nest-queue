@@ -449,12 +449,28 @@ function checkChangelog() {
   )
 }
 
+/**
+ * The reader that tells a hand-back from a failure is shared source, inlined into the bundles that
+ * use it, and not part of any entry's API: the declarations of the main entry must not name it.
+ */
+function checkInternalNames() {
+  for (const file of ['dist/server/index.d.ts', 'dist/server/index.d.cts']) {
+    const text = readFileSync(join(ROOT, file), 'utf8')
+    for (const name of ['handBackOf', 'HandBack']) {
+      if (new RegExp(`\\b${name}\\b`).test(text)) {
+        fail('internal', `${file} names ${name}, which is internal and must not be published`)
+      }
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 
 console.log(`Published-surface gate — ${PKG.name}@${PKG.version}`)
 await checkLinks()
 checkChangelog()
 checkSnippets(fail)
+checkInternalNames()
 
 if (failures.length > 0) {
   console.error(`\n✖ ${failures.length} problem(s):\n`)

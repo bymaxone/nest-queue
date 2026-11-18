@@ -3,6 +3,7 @@
  * @layer server/services
  */
 
+import { loggedEvents } from '../utils/log-lines'
 import { EventEmitter } from 'node:events'
 import { inspect } from 'node:util'
 import { Logger } from '@nestjs/common'
@@ -70,12 +71,14 @@ describe('ConnectionResolver — Mode A (bring your own client)', () => {
     await new ConnectionResolver(optionsWith({ client: asRedis(client) })).init()
 
     expect(warn).toHaveBeenCalledTimes(1)
-    expect(warn.mock.calls[0]?.[0]).toBe(
-      'The shared client has maxRetriesPerRequest: null, so a command issued while Redis is ' +
+    expect(warn.mock.calls[0]?.[0]).toEqual({
+      event: 'QUEUE_UNBOUNDED_RETRIES',
+      message:
+        'The shared client has maxRetriesPerRequest: null, so a command issued while Redis is ' +
         'unreachable stays queued in the client for as long as the outage lasts. QueueService calls ' +
         'are bounded by enqueueTimeoutMs and the caller is released, but the command is not ' +
         'cancelled. Give the client a finite limit to fail fast.',
-    )
+    })
     warn.mockRestore()
   })
 
@@ -642,10 +645,13 @@ describe('ConnectionResolver — error events after startup', () => {
     client.emit('error', new Error('ECONNREFUSED'))
     client.emit('error', new Error('ECONNREFUSED'))
 
-    expect(lines.mock.calls.map((call: unknown[]): unknown => call[0])).toEqual([
-      'Redis connection (owned) emitted an error: ECONNREFUSED',
-      'Redis connection (owned) emitted an error: ECONNREFUSED',
-    ])
+    const refused = {
+      event: 'QUEUE_CLIENT_ERROR',
+      message: 'Redis connection (owned) emitted an error',
+      role: 'owned',
+      err: new Error('ECONNREFUSED'),
+    }
+    expect(loggedEvents(lines)).toEqual([refused, refused])
   })
 
   it('attaches the logger when the client is created, before startup can fail', async () => {
@@ -675,7 +681,12 @@ describe('ConnectionResolver — error events after startup', () => {
     expect(probe.listenerCount('error')).toBe(1)
     // A late error on the probe is the library's to report, under its own label.
     probe.emit('error', new Error('ECONNRESET'))
-    expect(lines).toHaveBeenCalledWith('Redis connection (probe) emitted an error: ECONNRESET')
+    expect(lines).toHaveBeenCalledWith({
+      event: 'QUEUE_CLIENT_ERROR',
+      message: 'Redis connection (probe) emitted an error',
+      role: 'probe',
+      err: new Error('ECONNRESET'),
+    })
   })
 })
 

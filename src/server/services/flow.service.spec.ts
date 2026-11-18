@@ -196,9 +196,13 @@ describe('FlowService — close', () => {
       expect(() => {
         producer.emit('error', new Error('Connection is closed'))
       }).not.toThrow()
-      expect(logSpy).toHaveBeenCalledWith(
-        'FlowProducer for queue "*" emitted an error: Connection is closed',
-      )
+      expect(logSpy).toHaveBeenCalledWith({
+        event: 'QUEUE_EMITTER_ERROR',
+        message: 'FlowProducer for queue "*" emitted an error',
+        kind: 'FlowProducer',
+        queue: '*',
+        err: new Error('Connection is closed'),
+      })
     } finally {
       logSpy.mockRestore()
     }

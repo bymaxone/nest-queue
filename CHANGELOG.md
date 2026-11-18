@@ -17,7 +17,12 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ## [1.2.26] — 2026-11-17
 
-Against 1.2.25 the declared types do not change; the built package differs in the error message of `INVALID_OPTIONS` and in how module options are read.
+Against 1.2.25 the declared types of the main entry gain the observer types and `QueueObserverRegistry` (see the note below), and a new optional subpath `@bymax-one/nest-queue/observability` is added; the built package also differs in the error message of `INVALID_OPTIONS`, in how module options are read, and in the shape of the library's log lines.
+
+### Added
+
+- **Observability, as an optional subpath.** `@bymax-one/nest-queue/observability` exports `BymaxQueueObservabilityModule`, `QueueMetricsContributor`, `QueueHealthIndicator` (named `queue`, exported with `QUEUE_HEALTH_INDICATOR_NAME`) and `QueueTracingObserver`. Metrics: `bymax_queue_jobs_total{queue,outcome}` (`completed`, `failed`, `retried`; there is no `dead_lettered`, since a dead-letter queue is a README recipe and not something the library knows), `bymax_queue_job_duration_seconds{queue}` and `bymax_queue_depth{queue,state}` (read from the cached `MetricsService` snapshot, empty while `metrics.enabled` is off). Spans: `queue.enqueue` and `queue.process`, whose attributes are `bymax.queue.name` and, for an attempt the processor handed back to BullMQ (`DelayedError`, `WaitingChildrenError`, `RateLimitError`, `WaitingError`), `bymax.queue.outcome` (`delayed`, `waiting_children`, `rate_limited`, `waiting`), with no error status; the W3C trace context of the enqueue span is stored with the job in `opts.telemetry.metadata`, apart from its data, and the worker continues it, so a request, its job and the work the job does are one trace. With no OpenTelemetry SDK nothing is stored. BullMQ's own `telemetry` option, when set, keeps its metadata. The readiness indicator sends one `PING`, bounded at two seconds, and reports no error text. `@bymax-one/nest-core ^1.6.10`, `prom-client ^15` and `@opentelemetry/api ^1.9` are optional peers, needed only to import this subpath; the main entry imports none of them.
+- **`QueueObserverRegistry` and the observer types** (`QueueObserver`, `JobFinishedEvent`, `JobOutcome`, `QueueObserveInfo`, `TraceCarrier`) in the main entry, so a host can register its own observer: hooks wrap the enqueue and each attempt of a job and hear how an attempt ended.
 
 ### Fixed
 
@@ -28,6 +33,8 @@ Against 1.2.25 the declared types do not change; the built package differs in th
 
 ### Changed
 
+- **The library's log lines are objects.** Each operational log line is now `{ event, message, ...fields }` handed to the Nest `Logger`, with the library's own text in `message`, fields of closed or numeric values only, and, when an error caused the line, that error as the value under `err` instead of its text interpolated into the message (the README lists each event's code, level, trigger and fields). `@bymax-one/nest-logger` writes the fields as data and Nest's console logger prints the object readably.
+- A flow tree whose node is shared by several parents is checked and copied once, so a tree that reuses one child definition at every level costs the number of nodes, not the number of paths to them.
 - The README says that `enqueueBulk` is not atomic: when it rejects, for example with `STORAGE_FULL`, some of its jobs may already be stored, so retry it with stable `jobId`s.
 
 #### Apply to a derived backend
@@ -35,6 +42,8 @@ Against 1.2.25 the declared types do not change; the built package differs in th
 - `defaultJobOptions: { attempts: null }`, and the same for `delay`, `priority`, `backoff`, `removeOnComplete` and `removeOnFail`, was refused at bootstrap with `INVALID_OPTIONS` (`received null`) in 1.2.25 and is now accepted as "not given", like `undefined`. A `null` nested inside a value (`backoff: { delay: null }`, `removeOnFail: { count: null }`) is still refused.
 - `FlowService.add` and `FlowService.addBulk` throw `INVALID_OPTIONS` (400, `details: { reason }`) for a tree that is not well formed, where they used to throw a `TypeError` or loop: a node that is not an object, `children` that is not an array, a node that is its own ancestor. They send BullMQ a copy of the tree, and `enqueue` and `enqueueBulk` a copy of the options, so a host that relied on BullMQ reading its own objects (a getter that changes, a node mutated while the call was pending) now gets the values the call checked.
 - A host that read `.cause` of a `CONNECTION_TIMEOUT`, of a `BULK_ENQUEUE_FAILED` from `enqueueBulk` or `FlowService.addBulk`, to read `.command` off the ioredis error gets an error with the same name and message and no `command`.
+- `QueueObserverRegistry` and the observer types are new exports of the main entry; `QueueService`, `FlowService` and `WorkerRegistry` take it as an optional last constructor parameter, which Nest provides. A host that constructs them by hand needs no change.
+- A host or a log pipeline that matched the text of one of the library's log lines as a plain string receives an object now: read `message`, or match on `event`. A test that asserted "this text was not logged" against the old string must assert against the object, or it passes without checking anything. A pipeline that read the text of an error out of the message now reads the error itself from `err`.
 - A host that matches on the text of the `INVALID_OPTIONS` message ("Invalid module options") needs the new text; branch on `code`, which is unchanged.
 
 ---
