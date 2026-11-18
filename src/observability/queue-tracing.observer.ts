@@ -47,12 +47,19 @@ const HAND_BACKS: Readonly<Record<string, string>> = {
  * name of the error, and the span does the same: the job is not failed, whatever the error is.
  */
 function handBackOf(error: unknown): string | undefined {
-  const { name, message } = (typeof error === 'object' && error !== null ? error : {}) as {
-    name?: unknown
-    message?: unknown
+  try {
+    const { name, message } = (typeof error === 'object' && error !== null ? error : {}) as {
+      name?: unknown
+      message?: unknown
+    }
+    if (message === RATE_LIMIT_MESSAGE) return 'rate_limited'
+    return typeof name === 'string' && Object.hasOwn(HAND_BACKS, name)
+      ? HAND_BACKS[name]
+      : undefined
+  } catch {
+    // A member of the error that throws when read must not replace the error being reported.
+    return undefined
   }
-  if (message === RATE_LIMIT_MESSAGE) return 'rate_limited'
-  return typeof name === 'string' && Object.hasOwn(HAND_BACKS, name) ? HAND_BACKS[name] : undefined
 }
 
 /**

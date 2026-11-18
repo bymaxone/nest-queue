@@ -96,3 +96,23 @@ describe('handBackOf — pinned to BullMQ', () => {
     expect(handBackOf(new RateLimitError())).toBe('rate_limited')
   })
 })
+
+describe('failureOutcome — an error whose members throw when read', () => {
+  const hostile = (member: 'name' | 'message'): Error =>
+    Object.defineProperty(new Error('x'), member, {
+      get: () => {
+        throw new Error('getter failed')
+      },
+    })
+
+  it.each(['name', 'message'] as const)(
+    'reads an error whose %s getter throws as an ordinary failure, and never throws',
+    (member) => {
+      const error = hostile(member)
+
+      expect(handBackOf(error)).toBeUndefined()
+      expect(failureOutcome(jobWith(2, 3), error)).toBe('failed')
+      expect(failureOutcome(jobWith(0, 3), error)).toBe('retried')
+    },
+  )
+})

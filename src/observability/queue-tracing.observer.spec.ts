@@ -288,6 +288,27 @@ describe('QueueTracingObserver — process', () => {
     }
   })
 
+  it.each(['name', 'message'] as const)(
+    'rethrows the processor error as it is when its %s getter throws, and marks the span as a failure',
+    async (member) => {
+      const observer = new QueueTracingObserver(new QueueObserverRegistry())
+      const error = Object.defineProperty(new Error('x'), member, {
+        get: () => {
+          throw new Error('getter failed')
+        },
+      })
+
+      await expect(
+        observer.traceProcess({ queue: 'email' }, {}, () => Promise.reject(error)),
+      ).rejects.toBe(error)
+
+      expect(spanNamed('queue.process').status).toEqual({
+        code: SpanStatusCode.ERROR,
+        message: 'error',
+      })
+    },
+  )
+
   it('marks a failed attempt by code and rethrows the error as it is', async () => {
     const observer = new QueueTracingObserver(new QueueObserverRegistry())
     const error = new Error('payload SENTINEL')

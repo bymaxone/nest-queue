@@ -32,12 +32,29 @@ const HAND_BACKS: Readonly<Record<string, HandBack>> = {
  * @returns What the processor handed back, or `undefined` for a failure.
  */
 export function handBackOf(error: unknown): HandBack | undefined {
-  const { name, message } = (typeof error === 'object' && error !== null ? error : {}) as {
-    name?: unknown
-    message?: unknown
+  try {
+    const { name, message } = (typeof error === 'object' && error !== null ? error : {}) as {
+      name?: unknown
+      message?: unknown
+    }
+    if (message === RATE_LIMIT_MESSAGE) return 'rate_limited'
+    return typeof name === 'string' && Object.hasOwn(HAND_BACKS, name)
+      ? HAND_BACKS[name]
+      : undefined
+  } catch {
+    // Reading a member of what a processor threw can itself throw (a getter): that must never
+    // replace the processor's own error, so the error is read as an ordinary failure.
+    return undefined
   }
-  if (message === RATE_LIMIT_MESSAGE) return 'rate_limited'
-  return typeof name === 'string' && Object.hasOwn(HAND_BACKS, name) ? HAND_BACKS[name] : undefined
+}
+
+/** Whether the error is BullMQ's `UnrecoverableError`, which fails the job whatever attempts remain. */
+function isUnrecoverable(error: unknown): boolean {
+  try {
+    return error instanceof Error && error.name === 'UnrecoverableError'
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -60,6 +77,6 @@ export function optionsOf(job: Job): JobsOptions | undefined {
  */
 export function failureOutcome(job: Job, error: unknown): JobOutcome | undefined {
   if (handBackOf(error) !== undefined) return undefined
-  if (error instanceof Error && error.name === 'UnrecoverableError') return 'failed'
+  if (isUnrecoverable(error)) return 'failed'
   return job.attemptsMade + 1 < (optionsOf(job)?.attempts ?? 1) ? 'retried' : 'failed'
 }
