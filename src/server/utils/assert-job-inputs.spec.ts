@@ -419,6 +419,17 @@ describe('assertJobInputs — objects that hold their values as inherited getter
     expect(assertFlowTree({ name: 'n', queueName: 'q', children: [] }, 'flow').children).toEqual([])
   })
 
+  it.each(['backoff', 'removeOnComplete', 'removeOnFail'])(
+    'still refuses an array for %s, as an array and not as an empty object',
+    (key) => {
+      const refused = refusal(() => assertJobInputs(asOptions({ [key]: [] }), 'options'))
+
+      expect(refused?.code).toBe(QUEUE_ERROR_CODES.INVALID_OPTIONS)
+      expect((refused?.details as { reason: string }).reason).toContain(`options.${key}`)
+      expect((refused?.details as { reason: string }).reason).toContain('an array')
+    },
+  )
+
   it('gives a tree node without options no options key', () => {
     const copy = assertFlowTree({ name: 'n', queueName: 'q' }, 'flow')
 

@@ -69,14 +69,15 @@ function setValuesOf<T>(group: T, known: readonly string[]): T {
 /**
  * Copy the keys of a group as the caller gave them: every own enumerable key with its value, `undefined`
  * and `null` included, and every `known` key that is not own and holds a value, so an inherited getter
- * counts. Each is read once. A value that is not an object is returned as it is.
+ * counts. Each is read once. A value that is not an object, and an array, is returned as it is, for
+ * validation to judge.
  *
  * @param group - A group of options, such as the options of one job.
  * @param known - The keys to read by property access even when the group does not hold them as its own.
  * @returns A plain copy the caller can validate and send on without a second read.
  */
 export function readKeys<T>(group: T, known: readonly string[]): T {
-  if (typeof group !== 'object' || group === null) return group
+  if (typeof group !== 'object' || group === null || Array.isArray(group)) return group
   const source = group as Record<string, unknown>
   const copy: Record<string, unknown> = {}
   for (const key of Object.keys(source)) defineValue(copy, key, source[key])
