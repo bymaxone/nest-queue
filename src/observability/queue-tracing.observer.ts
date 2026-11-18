@@ -26,12 +26,45 @@ function failureOf(error: unknown): string {
   return typeof code === 'string' ? code : 'error'
 }
 
-/** Run `run` in `span`, ending it and marking it failed, by code only, when `run` rejects. */
+/** The message of BullMQ's `RateLimitError`, which its worker reads a manual rate limit by. */
+const RATE_LIMIT_MESSAGE = 'bullmq:rateLimitExceeded'
+
+/** The names BullMQ's worker reads as control flow, and the span outcome of each. */
+const HAND_BACKS: Readonly<Record<string, string>> = {
+  DelayedError: 'delayed',
+  WaitingChildrenError: 'waiting_children',
+  WaitingError: 'waiting',
+}
+
+/**
+ * What a processor that hands the job back to BullMQ says it did, as the closed value of the span's
+ * `bymax.queue.outcome`. BullMQ's worker reads a rate limit by its message and the other three by the
+ * name of the error, and the span does the same: the job is not failed, whatever the error is.
+ */
+function handBackOf(error: unknown): string | undefined {
+  const { name, message } = (typeof error === 'object' && error !== null ? error : {}) as {
+    name?: unknown
+    message?: unknown
+  }
+  if (message === RATE_LIMIT_MESSAGE) return 'rate_limited'
+  return typeof name === 'string' && Object.hasOwn(HAND_BACKS, name) ? HAND_BACKS[name] : undefined
+}
+
+/**
+ * Run `run` in `span` and end it. A rejection marks the span failed, by code only, unless it is a
+ * control-flow error of BullMQ, which ends the span with no error status and says what happened in
+ * `bymax.queue.outcome`.
+ */
 async function inSpan<T>(span: Span, run: () => Promise<T>): Promise<T> {
   try {
     return await run()
   } catch (error) {
-    span.setStatus({ code: SpanStatusCode.ERROR, message: failureOf(error) })
+    const handedBack = handBackOf(error)
+    if (handedBack === undefined) {
+      span.setStatus({ code: SpanStatusCode.ERROR, message: failureOf(error) })
+    } else {
+      span.setAttribute('bymax.queue.outcome', handedBack)
+    }
     throw error
   } finally {
     span.end()
@@ -40,7 +73,8 @@ async function inSpan<T>(span: Span, run: () => Promise<T>): Promise<T> {
 
 /**
  * Opens `queue.enqueue` and `queue.process` spans. Attributes are `bymax.queue.name` (the configured
- * queue name) only: no job id, name, data or error text is put on a span.
+ * queue name) and, for an attempt the processor handed back to BullMQ, `bymax.queue.outcome`: no job
+ * id, name, data or error text is put on a span.
  */
 @Injectable()
 export class QueueTracingObserver implements QueueObserver, OnModuleInit {

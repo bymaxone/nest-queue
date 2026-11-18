@@ -5,6 +5,7 @@
  * @layer server/observability
  */
 
+import { DelayedError, RateLimitError, WaitingChildrenError, WaitingError } from 'bullmq'
 import type { Job } from 'bullmq'
 import { observeAttempt } from './observe-attempt'
 import { QueueObserverRegistry } from './queue-observer'
@@ -95,6 +96,21 @@ describe('observeAttempt', () => {
     await expect(
       observeAttempt(registry, 'email', jobWith(undefined), () => Promise.reject(delayed)),
     ).rejects.toBe(delayed)
+
+    expect(finished).toEqual([])
+  })
+
+  it.each([
+    ['DelayedError', new DelayedError()],
+    ['WaitingChildrenError', new WaitingChildrenError()],
+    ['RateLimitError', new RateLimitError()],
+    ['WaitingError', new WaitingError()],
+  ])('counts nothing when the processor hands the job back with %s', async (_name, error) => {
+    const { registry, finished } = recording()
+
+    await expect(
+      observeAttempt(registry, 'email', jobWith(undefined, 2, 3), () => Promise.reject(error)),
+    ).rejects.toBe(error)
 
     expect(finished).toEqual([])
   })

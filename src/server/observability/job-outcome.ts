@@ -9,13 +9,36 @@
 import type { Job, JobsOptions } from 'bullmq'
 import type { JobOutcome } from './queue-observer'
 
-/** The errors a processor throws to hand the job back to BullMQ, which is not a failure of the work. */
-const STATE_CHANGE_ERRORS: ReadonlySet<string> = new Set([
-  'DelayedError',
-  'WaitingError',
-  'WaitingChildrenError',
-  'RateLimitError',
-])
+/** What a processor says when it hands the job back to BullMQ instead of finishing or failing it. */
+export type HandBack = 'delayed' | 'waiting_children' | 'rate_limited' | 'waiting'
+
+/** The message of BullMQ's `RateLimitError`, which its worker reads a manual rate limit by. */
+const RATE_LIMIT_MESSAGE = 'bullmq:rateLimitExceeded'
+
+/** The names BullMQ's worker reads as control flow, and what each one means. */
+const HAND_BACKS: Readonly<Record<string, HandBack>> = {
+  DelayedError: 'delayed',
+  WaitingChildrenError: 'waiting_children',
+  WaitingError: 'waiting',
+}
+
+/**
+ * Whether a processor's error hands the job back to BullMQ, decided the way BullMQ's worker decides
+ * it in `handleFailed`: a rate limit by its message, the others by the name of the error (which is
+ * also how a second copy of the package is recognised). A spec pins the message and the names to
+ * BullMQ's own classes. An error BullMQ does not read as control flow is a failure of the work.
+ *
+ * @param error - What the processor threw.
+ * @returns What the processor handed back, or `undefined` for a failure.
+ */
+export function handBackOf(error: unknown): HandBack | undefined {
+  const { name, message } = (typeof error === 'object' && error !== null ? error : {}) as {
+    name?: unknown
+    message?: unknown
+  }
+  if (message === RATE_LIMIT_MESSAGE) return 'rate_limited'
+  return typeof name === 'string' && Object.hasOwn(HAND_BACKS, name) ? HAND_BACKS[name] : undefined
+}
 
 /**
  * The options of a job, typed as possibly absent: a job a host built by hand, to call a handler in
@@ -36,8 +59,8 @@ export function optionsOf(job: Job): JobsOptions | undefined {
  *   error that moves the job instead of failing it.
  */
 export function failureOutcome(job: Job, error: unknown): JobOutcome | undefined {
+  if (handBackOf(error) !== undefined) return undefined
   const name = error instanceof Error ? error.name : ''
-  if (STATE_CHANGE_ERRORS.has(name)) return undefined
   if (name === 'UnrecoverableError') return 'failed'
   return job.attemptsMade + 1 < (optionsOf(job)?.attempts ?? 1) ? 'retried' : 'failed'
 }

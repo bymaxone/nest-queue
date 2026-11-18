@@ -4,8 +4,15 @@
  * @layer server/observability
  */
 
+import {
+  DelayedError,
+  RATE_LIMIT_ERROR,
+  RateLimitError,
+  WaitingChildrenError,
+  WaitingError,
+} from 'bullmq'
 import type { Job } from 'bullmq'
-import { failureOutcome } from './job-outcome'
+import { failureOutcome, handBackOf } from './job-outcome'
 
 /** The part of a job the classification reads. */
 function jobWith(attemptsMade: number, attempts?: number): Job {
@@ -29,15 +36,56 @@ describe('failureOutcome', () => {
     expect(failureOutcome(jobWith(0, 5), error)).toBe('failed')
   })
 
-  it.each(['DelayedError', 'WaitingError', 'WaitingChildrenError', 'RateLimitError'])(
-    'reports nothing for %s, which moves the job instead of failing it',
+  it.each(['DelayedError', 'WaitingError', 'WaitingChildrenError'])(
+    'reports nothing for an error named %s, which BullMQ reads as moving the job',
     (name) => {
       expect(failureOutcome(jobWith(0, 3), Object.assign(new Error('x'), { name }))).toBeUndefined()
     },
   )
 
+  it.each([
+    ['DelayedError', new DelayedError()],
+    ['WaitingError', new WaitingError()],
+    ['WaitingChildrenError', new WaitingChildrenError()],
+    ['RateLimitError', new RateLimitError()],
+  ])('reports nothing for the real %s of BullMQ', (_name, error) => {
+    expect(failureOutcome(jobWith(0, 3), error)).toBeUndefined()
+    expect(failureOutcome(jobWith(2, 3), error)).toBeUndefined()
+  })
+
+  it('reads a control-flow error the way BullMQ does: a rate limit by its message, the others by name', () => {
+    // BullMQ's worker does not fail a job whose error carries the name, so neither does the count.
+    expect(failureOutcome(jobWith(0, 3), new Error(RATE_LIMIT_ERROR))).toBeUndefined()
+    expect(handBackOf(new Error(RATE_LIMIT_ERROR))).toBe('rate_limited')
+    expect(handBackOf(Object.assign(new Error('x'), { name: 'WaitingChildrenError' }))).toBe(
+      'waiting_children',
+    )
+    expect(handBackOf({ name: 'DelayedError' })).toBe('delayed')
+  })
+
+  it.each([
+    ['a name that only contains one', Object.assign(new Error('x'), { name: 'MyDelayedError' })],
+    ['a message that only mentions one', new Error('DelayedError')],
+    ['a string', 'DelayedError'],
+    ['null', null],
+    ['an object with no name', {}],
+  ])('counts %s as a failure of the work', (_label, error) => {
+    expect(handBackOf(error)).toBeUndefined()
+    expect(failureOutcome(jobWith(2, 3), error)).toBe('failed')
+  })
+
   it('classifies something that is not an Error by the attempts', () => {
     expect(failureOutcome(jobWith(0, 2), 'text')).toBe('retried')
     expect(failureOutcome(jobWith(1, 2), undefined)).toBe('failed')
+  })
+})
+
+describe('handBackOf — pinned to BullMQ', () => {
+  it('matches what BullMQ itself throws and reads, so a rename there fails here', () => {
+    expect(RATE_LIMIT_ERROR).toBe('bullmq:rateLimitExceeded')
+    expect(handBackOf(new DelayedError())).toBe('delayed')
+    expect(handBackOf(new WaitingChildrenError())).toBe('waiting_children')
+    expect(handBackOf(new WaitingError())).toBe('waiting')
+    expect(handBackOf(new RateLimitError())).toBe('rate_limited')
   })
 })

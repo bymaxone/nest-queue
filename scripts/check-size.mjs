@@ -14,8 +14,8 @@ import { brotliCompressSync } from 'node:zlib'
  * (417 B) keeps about 5% headroom.
  */
 const BUDGETS = {
-  'dist/server/index.mjs': 15_296,
-  'dist/observability/index.mjs': 1_935,
+  'dist/server/index.mjs': 15_401,
+  'dist/observability/index.mjs': 1_893,
   'dist/shared/index.mjs': 440,
 }
 

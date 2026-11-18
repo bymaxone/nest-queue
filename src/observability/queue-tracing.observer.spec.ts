@@ -8,7 +8,21 @@
 
 import 'reflect-metadata'
 import { HttpStatus } from '@nestjs/common'
-import { context, propagation, ROOT_CONTEXT, SpanKind, trace } from '@opentelemetry/api'
+import {
+  DelayedError,
+  RATE_LIMIT_ERROR,
+  RateLimitError,
+  WaitingChildrenError,
+  WaitingError,
+} from 'bullmq'
+import {
+  context,
+  propagation,
+  ROOT_CONTEXT,
+  SpanKind,
+  SpanStatusCode,
+  trace,
+} from '@opentelemetry/api'
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks'
 import { W3CTraceContextPropagator } from '@opentelemetry/core'
 import {
@@ -178,6 +192,57 @@ describe('QueueTracingObserver — process', () => {
     expect(spanNamed('side effect').parentSpanContext?.spanId).toBe(
       spanNamed('queue.process').spanContext().spanId,
     )
+  })
+
+  it.each([
+    ['DelayedError', () => new DelayedError(), 'delayed'],
+    ['WaitingChildrenError', () => new WaitingChildrenError(), 'waiting_children'],
+    ['RateLimitError', () => new RateLimitError(), 'rate_limited'],
+    ['WaitingError', () => new WaitingError(), 'waiting'],
+  ])(
+    'ends the span without an error status when the processor hands the job back with %s',
+    async (_name, make, outcome) => {
+      const observer = new QueueTracingObserver(new QueueObserverRegistry())
+      const error = make()
+
+      await expect(
+        observer.traceProcess({ queue: 'email' }, {}, () => Promise.reject(error)),
+      ).rejects.toBe(error)
+
+      const span = spanNamed('queue.process')
+      expect(span.status).toEqual({ code: SpanStatusCode.UNSET })
+      expect(span.attributes).toEqual({
+        'bymax.queue.name': 'email',
+        'bymax.queue.outcome': outcome,
+      })
+    },
+  )
+
+  it('reads a hand-back the way BullMQ does, and marks any other error as a failure whatever it is called', async () => {
+    const observer = new QueueTracingObserver(new QueueObserverRegistry())
+    const handBack = async (error: unknown): Promise<ReturnType<typeof spanNamed>> => {
+      exporter.reset()
+      await observer
+        .traceProcess({ queue: 'email' }, {}, () => Promise.reject(error as Error))
+        .catch(() => undefined)
+      return spanNamed('queue.process')
+    }
+
+    const byMessage = await handBack(new Error(RATE_LIMIT_ERROR))
+    expect(byMessage.attributes['bymax.queue.outcome']).toBe('rate_limited')
+    const byName = await handBack(Object.assign(new Error('x'), { name: 'DelayedError' }))
+    expect(byName.attributes['bymax.queue.outcome']).toBe('delayed')
+    expect(byName.status).toEqual({ code: SpanStatusCode.UNSET })
+    for (const other of [
+      new Error('DelayedError'),
+      Object.assign(new Error('x'), { name: 'MyDelayedError' }),
+      'text',
+      null,
+    ]) {
+      const failed = await handBack(other)
+      expect(failed.status.code).toBe(SpanStatusCode.ERROR)
+      expect(failed.attributes['bymax.queue.outcome']).toBeUndefined()
+    }
   })
 
   it('marks a failed attempt by code and rethrows the error as it is', async () => {
