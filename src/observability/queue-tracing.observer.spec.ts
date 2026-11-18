@@ -132,6 +132,33 @@ describe('QueueTracingObserver — enqueue', () => {
   })
 
   it.each([
+    [
+      'a getResponse that is not a function',
+      Object.assign(new Error('original'), { getResponse: 'x' }),
+    ],
+    [
+      'a getResponse that throws',
+      Object.assign(new Error('original'), {
+        getResponse: () => {
+          throw new Error('inspection failed')
+        },
+      }),
+    ],
+    ['null', null],
+  ])('rethrows the original failure as it is when inspecting %s fails', async (_label, error) => {
+    const observer = new QueueTracingObserver(new QueueObserverRegistry())
+
+    await expect(
+      observer.traceEnqueue({ queue: 'email' }, {}, () => Promise.reject(error as Error)),
+    ).rejects.toBe(error)
+
+    expect(spanNamed('queue.enqueue').status).toEqual({
+      code: SpanStatusCode.ERROR,
+      message: 'error',
+    })
+  })
+
+  it.each([
     ['an Error', new Error('connect ECONNREFUSED 10.0.0.1:6379')],
     ['an Error with a plain message', new Error('text')],
     [

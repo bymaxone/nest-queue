@@ -1,8 +1,8 @@
 /**
  * @fileoverview What a spec reads back from a spied Nest `Logger`: the object events the library
- * logs, never the text of a string. A line that is not an event object fails the read, so a spec
- * cannot pass by looking for text in a message the library no longer writes that way, and a negative
- * check runs against the whole object, fields included.
+ * logs, never the text of a string. A call whose first argument is not an event object with a string
+ * `event` and `message` fails the read, so a text check cannot pass vacuously against an object, and
+ * a negative check runs against the whole serialised call, fields included.
  * @layer server/utils
  */
 

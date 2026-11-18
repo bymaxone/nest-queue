@@ -16,14 +16,19 @@ import type { QueueObserveInfo, QueueObserver, TraceCarrier } from '@bymax-one/n
 /** The tracer name, the package the spans come from. */
 const TRACER_NAME = '@bymax-one/nest-queue'
 
-/** What the span of a failed operation reports: the library's error code, or only that it failed. */
+/**
+ * What the span of a failed operation reports: the library's error code, or only that it failed.
+ * Reading it must never replace the failure being reported, so an error that is not one of the
+ * library's (no callable `getResponse`, or one that throws or answers something else) is `error`.
+ */
 function failureOf(error: unknown): string {
-  const response =
-    typeof error === 'object' && error !== null && 'getResponse' in error
-      ? (error as { getResponse: () => unknown }).getResponse()
-      : undefined
-  const code = (response as { error?: { code?: unknown } } | undefined)?.error?.code
-  return typeof code === 'string' ? code : 'error'
+  try {
+    const code = (error as { getResponse: () => { error: { code: unknown } } }).getResponse().error
+      .code
+    return typeof code === 'string' ? code : 'error'
+  } catch {
+    return 'error'
+  }
 }
 
 /** The message of BullMQ's `RateLimitError`, which its worker reads a manual rate limit by. */
