@@ -46,6 +46,11 @@ const TOP_LEVEL_KEYS = [
   'enqueueTimeoutMs',
 ] as const satisfies readonly (keyof BymaxQueueModuleOptions)[]
 
+/** Put `value` at `key` as an own data property, which `__proto__` too becomes, not a prototype. */
+function defineValue(copy: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(copy, key, { value, enumerable: true, writable: true, configurable: true })
+}
+
 /**
  * Copy the set values of a group: every own enumerable key and every `known` key, each read once by
  * property access. A value that is not an object is returned as it is, for validation to judge.
@@ -56,7 +61,58 @@ function setValuesOf<T>(group: T, known: readonly string[]): T {
   const copy: Record<string, unknown> = {}
   for (const key of new Set([...Object.keys(source), ...known])) {
     const value = source[key]
-    if (value !== undefined && value !== null) copy[key] = value
+    if (value !== undefined && value !== null) defineValue(copy, key, value)
+  }
+  return copy as T
+}
+
+/**
+ * Copy the keys of a group as the caller gave them: every own enumerable key with its value, `undefined`
+ * and `null` included, and every `known` key that is not own and holds a value, so an inherited getter
+ * counts. Each is read once. A value that is not an object, and an array, is returned as it is, for
+ * validation to judge.
+ *
+ * @param group - A group of options, such as the options of one job.
+ * @param known - The keys to read by property access even when the group does not hold them as its own.
+ * @returns A plain copy the caller can validate and send on without a second read.
+ */
+export function readKeys<T>(group: T, known: readonly string[]): T {
+  if (typeof group !== 'object' || group === null || Array.isArray(group)) return group
+  const source = group as Record<string, unknown>
+  const copy: Record<string, unknown> = {}
+  for (const key of Object.keys(source)) defineValue(copy, key, source[key])
+  for (const key of known) {
+    if (Object.hasOwn(copy, key)) continue
+    const value = source[key]
+    if (value !== undefined) defineValue(copy, key, value)
+  }
+  return copy as T
+}
+
+/** The keys of the objects a job's options may hold. */
+const NESTED_JOB_OPTION_KEYS: readonly (readonly [string, readonly string[]])[] = [
+  ['backoff', ['type', 'delay', 'jitter']],
+  ['removeOnComplete', ['age', 'count']],
+  ['removeOnFail', ['age', 'count']],
+  ['parent', ['id', 'queue']],
+]
+
+/**
+ * Read the options of one job once, with the objects they hold, so what is validated is what BullMQ is
+ * handed even when a value is a getter that answers differently the second time.
+ *
+ * @param options - The options of one job, as the caller gave them.
+ * @returns A plain copy, or `options` itself when it is not an object.
+ */
+export function snapshotJobOptions<T extends JobsOptions | undefined>(options: T): T {
+  const copy = readKeys<Record<string, unknown> | null | undefined>(options as never, [
+    ...JOB_OPTION_KEYS,
+    'jobId',
+    'parent',
+  ])
+  if (typeof copy !== 'object' || copy === null) return copy as T
+  for (const [name, known] of NESTED_JOB_OPTION_KEYS) {
+    if (name in copy) copy[name] = readKeys(copy[name], known)
   }
   return copy as T
 }

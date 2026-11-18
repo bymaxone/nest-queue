@@ -126,3 +126,46 @@ describe('QueueService — job options BullMQ would not honour', () => {
     expect(queue.add).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('QueueService — the options that were checked are the options that are sent', () => {
+  /** Options whose `attempts` answers 3 the first time it is read and -1 after. */
+  function flipping(): JobsOptions {
+    let reads = 0
+    return {
+      get attempts(): number {
+        reads += 1
+        return reads === 1 ? 3 : -1
+      },
+    }
+  }
+
+  it("enqueue sends BullMQ the copy it checked, not the caller's object", async () => {
+    const { service, queue } = makeService()
+    const given = flipping()
+
+    await service.enqueue('email', 'send', {}, given)
+
+    const sent = (queue.add.mock.calls as unknown[][])[0]?.[2] as JobsOptions
+    expect(sent).not.toBe(given)
+    expect(sent.attempts).toBe(3)
+    expect(sent.attempts).toBe(3)
+  })
+
+  it('enqueueBulk sends the copy of each job, and none for a job that gave no options', async () => {
+    const { service, queue } = makeService()
+
+    await service.enqueueBulk('email', [
+      { name: 'a', data: 1, options: flipping() },
+      { name: 'b', data: 2 },
+    ])
+
+    const sent = (queue.addBulk.mock.calls as unknown[][])[0]?.[0] as {
+      name: string
+      opts?: JobsOptions
+    }[]
+    expect(sent[0]?.opts?.attempts).toBe(3)
+    expect(sent[0]?.opts?.attempts).toBe(3)
+    expect(sent[1]).toEqual({ name: 'b', data: 2 })
+    expect('opts' in (sent[1] ?? {})).toBe(false)
+  })
+})
