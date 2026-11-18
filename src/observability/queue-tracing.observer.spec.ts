@@ -309,6 +309,23 @@ describe('QueueTracingObserver — process', () => {
     },
   )
 
+  it('reads the rate-limit message when the name getter throws, as BullMQ does', async () => {
+    const observer = new QueueTracingObserver(new QueueObserverRegistry())
+    const error = Object.defineProperty(new Error(RATE_LIMIT_ERROR), 'name', {
+      get: () => {
+        throw new Error('getter failed')
+      },
+    })
+
+    await expect(
+      observer.traceProcess({ queue: 'email' }, {}, () => Promise.reject(error)),
+    ).rejects.toBe(error)
+
+    const span = spanNamed('queue.process')
+    expect(span.status).toEqual({ code: SpanStatusCode.UNSET })
+    expect(span.attributes['bymax.queue.outcome']).toBe('rate_limited')
+  })
+
   it('marks a failed attempt by code and rethrows the error as it is', async () => {
     const observer = new QueueTracingObserver(new QueueObserverRegistry())
     const error = new Error('payload SENTINEL')

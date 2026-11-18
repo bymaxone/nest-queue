@@ -32,18 +32,23 @@ const HAND_BACKS: Readonly<Record<string, HandBack>> = {
  * @returns What the processor handed back, or `undefined` for a failure.
  */
 export function handBackOf(error: unknown): HandBack | undefined {
+  if (typeof error !== 'object' || error === null) return undefined
+  // BullMQ reads the message first and the name after it, and each read is guarded on its own, so a
+  // member that throws never hides the other one.
+  if (memberOf(error, 'message') === RATE_LIMIT_MESSAGE) return 'rate_limited'
+  const name = memberOf(error, 'name')
+  return typeof name === 'string' && Object.hasOwn(HAND_BACKS, name) ? HAND_BACKS[name] : undefined
+}
+
+/**
+ * A member of what a processor threw. Reading it can itself throw (a getter), and that must never
+ * replace the processor's own error, so an unreadable member reads as absent.
+ */
+function memberOf(error: object, key: 'name' | 'message'): unknown {
   try {
-    const { name, message } = (typeof error === 'object' && error !== null ? error : {}) as {
-      name?: unknown
-      message?: unknown
-    }
-    if (message === RATE_LIMIT_MESSAGE) return 'rate_limited'
-    return typeof name === 'string' && Object.hasOwn(HAND_BACKS, name)
-      ? HAND_BACKS[name]
-      : undefined
+    return (error as Record<string, unknown>)[key]
   } catch {
-    // Reading a member of what a processor threw can itself throw (a getter): that must never
-    // replace the processor's own error, so the error is read as an ordinary failure below.
+    // An unreadable member is absent.
   }
   return undefined
 }
@@ -51,9 +56,9 @@ export function handBackOf(error: unknown): HandBack | undefined {
 /** Whether the error is BullMQ's `UnrecoverableError`, which fails the job whatever attempts remain. */
 function isUnrecoverable(error: unknown): boolean {
   try {
-    return error instanceof Error && error.name === 'UnrecoverableError'
+    return error instanceof Error && memberOf(error, 'name') === 'UnrecoverableError'
   } catch {
-    // An unreadable name is not the name of an unrecoverable error.
+    // A rejection whose prototype chain throws on `instanceof` is not an unrecoverable error.
   }
   return false
 }

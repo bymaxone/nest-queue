@@ -116,3 +116,33 @@ describe('failureOutcome — an error whose members throw when read', () => {
     },
   )
 })
+
+describe('handBackOf — a member that throws does not hide the other', () => {
+  const throwing = (member: 'name' | 'message', rest: object): Error =>
+    Object.defineProperty(Object.assign(new Error('x'), rest), member, {
+      get: () => {
+        throw new Error('getter failed')
+      },
+    })
+
+  it('reads the rate-limit message when the name throws, as BullMQ does', () => {
+    const error = throwing('name', { message: RATE_LIMIT_ERROR })
+
+    expect(handBackOf(error)).toBe('rate_limited')
+    expect(failureOutcome(jobWith(0, 3), error)).toBeUndefined()
+  })
+
+  it('reads a hand-back name when the message throws', () => {
+    expect(handBackOf(throwing('message', { name: 'DelayedError' }))).toBe('delayed')
+  })
+
+  it('does not take an Error whose prototype chain throws on instanceof for an unrecoverable one', () => {
+    const hostile = new Proxy(new Error('x'), {
+      getPrototypeOf: () => {
+        throw new Error('trap failed')
+      },
+    })
+
+    expect(failureOutcome(jobWith(0, 3), hostile)).toBe('retried')
+  })
+})
