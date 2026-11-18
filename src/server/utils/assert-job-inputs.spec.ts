@@ -340,10 +340,10 @@ describe('assertJobInputs — the options are read once', () => {
   })
 
   it('keeps a key the caller set to undefined or null as it was given, and adds none it did not set', () => {
-    const given: Record<string, unknown> = { delay: undefined, jobId: 'a' }
+    const given: Record<string, unknown> = { delay: undefined, jobId: 'a', custom: null }
     const copy = assertJobInputs(given, 'options')
 
-    expect(copy).toStrictEqual({ delay: undefined, jobId: 'a' })
+    expect(copy).toStrictEqual({ delay: undefined, jobId: 'a', custom: null })
     expect(Object.keys(assertJobInputs({}, 'options') ?? {})).toEqual([])
   })
 
