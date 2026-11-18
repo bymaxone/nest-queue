@@ -243,6 +243,36 @@ describe('assertFlowTree — a tree that is not well formed', () => {
     expect(reasonOf(node({ children: [shared, shared] }))).toBeUndefined()
   })
 
+  it('checks and copies a node that several parents share once, however many paths lead to it', () => {
+    const levels = 20
+    let reads = 0
+    let shared: FlowJob = node({ opts: { attempts: 2 } })
+    for (let level = 0; level < levels; level += 1) {
+      const below = shared
+      shared = node({
+        children: [below, below],
+        get opts(): JobsOptions {
+          reads += 1
+          return { attempts: 2 }
+        },
+      })
+    }
+
+    const copy = assertFlowTree(shared, 'flow')
+
+    expect(reads).toBe(levels)
+    expect(copy.children?.[0]).toBe(copy.children?.[1])
+    expect(copy.children?.[0]).not.toBe(shared.children?.[0])
+  })
+
+  it('still refuses a loop that runs through a node some other branch already reached', () => {
+    const shared = node({ children: [] })
+    const holder = node({ children: [shared] })
+    ;(shared.children as FlowJob[]).push(holder)
+
+    expect(reasonOf(node({ children: [holder, shared] }))).toContain('repeats a node above it')
+  })
+
   it('returns a copy of the tree, and leaves the one it was given as it was', () => {
     const grandchild = node({ opts: { attempts: 2 } })
     const flow = node({ children: [node({ children: [grandchild] })] })

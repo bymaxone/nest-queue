@@ -67,11 +67,22 @@ function isAbove(pending: PendingNode, node: unknown): boolean {
   return false
 }
 
+/** The node of `pending`, refused when it is not an object or is one of the nodes above it. */
+function checkedNode(pending: PendingNode): object {
+  const { node, path } = pending
+  if (typeof node !== 'object' || node === null || Array.isArray(node)) {
+    invalid(`${path} must be an object, received ${received(node)}`)
+  }
+  if (isAbove(pending, node)) invalid(`${path} repeats a node above it, a loop`)
+  return node
+}
+
 /**
  * Read a flow tree once and apply {@link assertJobInputs} to the root and every descendant, however
  * deep, each named by its path (`flow.children[0].children[1].opts`). A node that is not an object,
  * `children` that is not an array, and a node that is its own ancestor are refused: BullMQ would
- * walk a loop without end. The walk is iterative, so a deep tree cannot overflow the stack.
+ * walk a loop without end. A node used under several parents is checked and copied once. The walk is
+ * iterative, so a deep tree cannot overflow the stack.
  *
  * @param flow - The root of a flow tree.
  * @param path - What to call the root in a refusal, such as `flow` or `flows[2]`.
@@ -81,6 +92,9 @@ function isAbove(pending: PendingNode, node: unknown): boolean {
  */
 export function assertFlowTree(flow: FlowJob, path: string): FlowJob {
   let root: FlowJob | undefined
+  // A node that several parents share is read and copied once, so a tree that reuses one child
+  // definition at every level costs the number of nodes, not the number of paths to them.
+  const copies = new WeakMap<object, FlowJob>()
   const pending: PendingNode[] = [
     {
       node: flow,
@@ -92,11 +106,14 @@ export function assertFlowTree(flow: FlowJob, path: string): FlowJob {
     },
   ]
   for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
-    if (typeof next.node !== 'object' || next.node === null || Array.isArray(next.node)) {
-      invalid(`${next.path} must be an object, received ${received(next.node)}`)
+    const node = checkedNode(next)
+    const known = copies.get(node)
+    if (known !== undefined) {
+      next.place(known)
+      continue
     }
-    if (isAbove(next, next.node)) invalid(`${next.path} repeats a node above it, a loop`)
-    const copy = readKeys(next.node as FlowJob, FLOW_NODE_KEYS)
+    const copy = readKeys(node as FlowJob, FLOW_NODE_KEYS)
+    copies.set(node, copy)
     const options = snapshotJobOptions(copy.opts)
     checkJobInputs(options, `${next.path}.opts`)
     if (options !== undefined) copy.opts = options
