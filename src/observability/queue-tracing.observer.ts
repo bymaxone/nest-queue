@@ -10,7 +10,7 @@
 import { context, propagation, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api'
 import type { Span } from '@opentelemetry/api'
 import { Injectable, type OnModuleInit, Inject } from '@nestjs/common'
-import { QueueObserverRegistry } from '@bymax-one/nest-queue'
+import { handBackOf, QueueObserverRegistry } from '@bymax-one/nest-queue'
 import type { QueueObserveInfo, QueueObserver, TraceCarrier } from '@bymax-one/nest-queue'
 
 /** The tracer name, the package the spans come from. */
@@ -29,39 +29,6 @@ function failureOf(error: unknown): string {
   } catch {
     return 'error'
   }
-}
-
-/** The message of BullMQ's `RateLimitError`, which its worker reads a manual rate limit by. */
-const RATE_LIMIT_MESSAGE = 'bullmq:rateLimitExceeded'
-
-/** The names BullMQ's worker reads as control flow, and the span outcome of each. */
-const HAND_BACKS: Readonly<Record<string, string>> = {
-  DelayedError: 'delayed',
-  WaitingChildrenError: 'waiting_children',
-  WaitingError: 'waiting',
-}
-
-/**
- * What a processor that hands the job back to BullMQ says it did, as the closed value of the span's
- * `bymax.queue.outcome`. BullMQ's worker reads a rate limit by its message and the other three by the
- * name of the error, and the span does the same: the job is not failed, whatever the error is.
- */
-function handBackOf(error: unknown): string | undefined {
-  // BullMQ reads the message first and the name after it, and each read is guarded on its own, so a
-  // member that throws, or a value that has none (`null`), never hides the other one.
-  if (memberOf(error, 'message') === RATE_LIMIT_MESSAGE) return 'rate_limited'
-  const name = memberOf(error, 'name')
-  return typeof name === 'string' && Object.hasOwn(HAND_BACKS, name) ? HAND_BACKS[name] : undefined
-}
-
-/** A member of the error that throws when read must not replace the error being reported. */
-function memberOf(error: unknown, key: 'name' | 'message'): unknown {
-  try {
-    return (error as Record<string, unknown>)[key]
-  } catch {
-    // An unreadable member is absent.
-  }
-  return undefined
 }
 
 /**

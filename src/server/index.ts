@@ -27,6 +27,8 @@ export type {
 } from './services/worker-registry.service'
 export { QueueEventsRegistry } from './services/queue-events-registry.service'
 export { QueueObserverRegistry } from './observability/queue-observer'
+export { handBackOf } from './observability/job-outcome'
+export type { HandBack } from './observability/job-outcome'
 export type {
   JobFinishedEvent,
   JobOutcome,

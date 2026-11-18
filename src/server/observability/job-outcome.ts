@@ -30,6 +30,9 @@ const HAND_BACKS: Readonly<Record<string, HandBack>> = {
  *
  * @param error - What the processor threw.
  * @returns What the processor handed back, or `undefined` for a failure.
+ * @example
+ * handBackOf(new DelayedError()) // 'delayed'
+ * handBackOf(new Error('boom')) // undefined
  */
 export function handBackOf(error: unknown): HandBack | undefined {
   // BullMQ reads the message first and the name after it, and each read is guarded on its own, so a

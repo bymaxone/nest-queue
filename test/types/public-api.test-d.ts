@@ -26,6 +26,8 @@ import type {
   BYMAX_QUEUE_CONNECTION_MODE,
   BYMAX_QUEUE_RESOLVED_OPTIONS,
   FlowService,
+  HandBack,
+  handBackOf,
   JobFinishedEvent,
   JobOutcome,
   JobSchedulerRepeatOptions,
@@ -286,4 +288,12 @@ export type _FinishedEventCarriesQueueOutcomeAndDuration = Expect<
 export type _CarrierIsAStringRecord = Expect<Equal<TraceCarrier, Record<string, string>>>
 export type _RegisterReturnsTheRemover = Expect<
   Equal<ReturnType<QueueObserverRegistry['register']>, () => void>
+>
+
+// The reader that tells a hand-back from a failure answers a closed set, or nothing.
+export type _HandBackIsClosed = Expect<
+  Equal<HandBack, 'delayed' | 'waiting_children' | 'rate_limited' | 'waiting'>
+>
+export type _HandBackOfAnswersTheClosedSet = Expect<
+  Equal<ReturnType<typeof handBackOf>, HandBack | undefined>
 >
