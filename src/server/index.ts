@@ -21,8 +21,19 @@ export { FlowService } from './services/flow.service'
 export { MetricsService } from './services/metrics.service'
 export { ConnectionResolver } from './services/connection-resolver.service'
 export { WorkerRegistry } from './services/worker-registry.service'
-export type { ProgrammaticWorkerConfig, SandboxedWorkerConfig } from './services/worker-registry.service'
+export type {
+  ProgrammaticWorkerConfig,
+  SandboxedWorkerConfig,
+} from './services/worker-registry.service'
 export { QueueEventsRegistry } from './services/queue-events-registry.service'
+export { QueueObserverRegistry } from './observability/queue-observer'
+export type {
+  JobFinishedEvent,
+  JobOutcome,
+  QueueObserveInfo,
+  QueueObserver,
+  TraceCarrier,
+} from './observability/queue-observer'
 
 // Advanced (type-only): the graceful-shutdown orchestrator is registered and run
 // automatically by BymaxQueueModule. It is surfaced as a type for advanced

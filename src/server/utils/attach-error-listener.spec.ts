@@ -8,12 +8,13 @@ import { EventEmitter } from 'node:events'
 import { runInNewContext } from 'node:vm'
 import { Logger } from '@nestjs/common'
 import { attachDefaultErrorListener } from './attach-error-listener'
+import { loggedEvents } from './log-lines'
 
 /** A real Nest logger whose `error` is spied on, so no cast is needed to satisfy `Logger`. */
 function makeLogger(): { logger: Logger; lines: () => unknown[] } {
   const logger = new Logger('attach-error-listener.spec')
   const spy = jest.spyOn(logger, 'error').mockImplementation(() => undefined)
-  return { logger, lines: () => spy.mock.calls.map((call: unknown[]): unknown => call[0]) }
+  return { logger, lines: () => loggedEvents(spy) }
 }
 
 describe('attachDefaultErrorListener', () => {
@@ -41,6 +42,13 @@ describe('attachDefaultErrorListener', () => {
     attachDefaultErrorListener(emitter, logger, 'Worker', 'email')
 
     expect(() => emitter.emit('error', value)).not.toThrow()
-    expect(lines()).toEqual([`Worker for queue "email" emitted an error: ${expected}`])
+    expect(lines()).toEqual([
+      {
+        event: 'QUEUE_EMITTER_ERROR',
+        message: `Worker for queue "email" emitted an error: ${expected}`,
+        kind: 'Worker',
+        queue: 'email',
+      },
+    ])
   })
 })

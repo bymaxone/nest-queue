@@ -10,7 +10,7 @@
  */
 
 import { isAbsolute, extname } from 'node:path'
-import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common'
+import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import { Worker } from 'bullmq'
 import type { Job, WorkerOptions as BullWorkerOptions } from 'bullmq'
 import type { Redis } from 'ioredis'
@@ -18,6 +18,8 @@ import { ConnectionResolver } from './connection-resolver.service'
 import { duplicateConnection } from '../utils/duplicate-connection'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { withDeadline } from '../utils/with-deadline'
+import { observeAttempt } from '../observability/observe-attempt'
+import { QueueObserverRegistry } from '../observability/queue-observer'
 import { isTimerDelayMs } from '../utils/timer-delay'
 import { workerOptionProblem } from '../utils/worker-option-problem'
 import { isAbandoned } from '../utils/abandoned-workers'
@@ -113,6 +115,9 @@ export class WorkerRegistry {
   constructor(
     @Inject(ConnectionResolver) private readonly connection: ConnectionResolver,
     @Inject(BYMAX_QUEUE_RESOLVED_OPTIONS) private readonly options: ResolvedQueueOptions,
+    @Optional()
+    @Inject(QueueObserverRegistry)
+    private readonly observers?: QueueObserverRegistry,
   ) {}
 
   /**
@@ -142,7 +147,12 @@ export class WorkerRegistry {
     try {
       worker = new Worker<TData, TResult>(
         queueName,
-        toProcessor(handler, options?.jobTimeoutMs, () => isAbandoned(worker)),
+        toProcessor(
+          handler,
+          options?.jobTimeoutMs,
+          () => isAbandoned(worker),
+          this.observers === undefined ? undefined : { registry: this.observers, queue: queueName },
+        ),
         bullOpts,
       )
     } catch (cause) {
@@ -488,8 +498,14 @@ function toProcessor<TData, TResult>(
   handler: (job: Job<TData, TResult>, signal?: AbortSignal) => Promise<TResult>,
   timeoutMs: number | undefined,
   abandoned: () => boolean,
+  observe?: { registry: QueueObserverRegistry; queue: string },
 ): (job: Job<TData, TResult>, token?: string, signal?: AbortSignal) => Promise<TResult> {
-  const run = adaptHandler(handler, timeoutMs)
+  const adapted = adaptHandler(handler, timeoutMs)
+  const run: typeof adapted =
+    observe === undefined
+      ? adapted
+      : (job, token, signal) =>
+          observeAttempt(observe.registry, observe.queue, job, () => adapted(job, token, signal))
   return (job, token, signal) =>
     run(job, token, signal).then(
       (value) => (abandoned() ? new Promise<never>(() => undefined) : value),

@@ -6,6 +6,7 @@
 
 import type { Logger } from '@nestjs/common'
 import { describeError } from './describe-error'
+import { logEvent, QUEUE_LOG_EVENTS } from './log-event'
 
 /** The slice of an ioredis client this helper needs. */
 interface ErrorEmitter {
@@ -60,6 +61,12 @@ export function attachClientErrorListener(
   // `emit('error', value)` accepts any value, so the listener must not assume an `Error`: a throw
   // inside it escapes `emit` to the client's caller.
   client.on('error', (err: unknown) => {
-    logger.error(`Redis connection (${role}) emitted an error: ${describeClientError(err)}`)
+    logger.error(
+      logEvent(
+        QUEUE_LOG_EVENTS.CLIENT_ERROR,
+        `Redis connection (${role}) emitted an error: ${describeClientError(err)}`,
+        { role },
+      ),
+    )
   })
 }

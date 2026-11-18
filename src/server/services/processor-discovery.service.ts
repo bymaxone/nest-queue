@@ -28,6 +28,7 @@ import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { DEFAULT_WORKER_CONCURRENCY } from '../constants/default-options'
 import { describeError } from '../utils/describe-error'
+import { logEvent, QUEUE_LOG_EVENTS } from '../utils/log-event'
 
 /** Stable code in the log line of a failing `@OnWorkerEvent` / `@OnQueueEvent` handler. */
 const EVENT_HANDLER_FAILED = 'queue.event_handler_failed'
@@ -201,9 +202,13 @@ export class ProcessorDiscoveryService implements OnModuleInit {
 
     if (_warnedNoConcurrency) {
       this.logger.warn(
-        `Queue "${queueName}": concurrency was not specified — ` +
-          `defaulting to concurrency=${String(DEFAULT_WORKER_CONCURRENCY)}. ` +
-          'Set an explicit concurrency for production workloads.',
+        logEvent(
+          QUEUE_LOG_EVENTS.CONCURRENCY_DEFAULTED,
+          `Queue "${queueName}": concurrency was not specified — ` +
+            `defaulting to concurrency=${String(DEFAULT_WORKER_CONCURRENCY)}. ` +
+            'Set an explicit concurrency for production workloads.',
+          { queue: queueName, concurrency: DEFAULT_WORKER_CONCURRENCY },
+        ),
       )
     }
   }
@@ -259,9 +264,13 @@ export class ProcessorDiscoveryService implements OnModuleInit {
   ): (...args: unknown[]) => void {
     const report = (cause: unknown): void => {
       this.logger.error(
-        `${origin.decorator}("${origin.eventName}") handler ` +
-          `${instance.constructor.name}.${String(origin.methodKey)} failed ` +
-          `(${EVENT_HANDLER_FAILED}): ${describeError(cause)}`,
+        logEvent(
+          QUEUE_LOG_EVENTS.EVENT_HANDLER_FAILED,
+          `${origin.decorator}("${origin.eventName}") handler ` +
+            `${instance.constructor.name}.${String(origin.methodKey)} failed ` +
+            `(${EVENT_HANDLER_FAILED}): ${describeError(cause)}`,
+          { decorator: origin.decorator, eventName: origin.eventName },
+        ),
       )
     }
     return (...args: unknown[]): void => {

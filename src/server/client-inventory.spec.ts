@@ -7,6 +7,7 @@
  * @layer server
  */
 
+import { loggedEvents, loggedText } from './utils/log-lines'
 import { Logger } from '@nestjs/common'
 import { Redis } from 'ioredis'
 import type { RedisOptions } from 'ioredis'
@@ -192,13 +193,15 @@ describe('the client inventory — what the log line carries', () => {
       client.emit('error', new Error('connect ECONNREFUSED'))
     }
 
-    const logged = lines.mock.calls.map((call: unknown[]): unknown => call[0])
+    const logged = loggedEvents(lines)
     expect(logged.length).toBeGreaterThan(0)
     expect(
-      logged.some((line) => typeof line === 'string' && line.includes('Redis connection (')),
+      logged.every((line) => ['QUEUE_CLIENT_ERROR', 'QUEUE_EMITTER_ERROR'].includes(line.event)),
     ).toBe(true)
-    expect(JSON.stringify(logged)).not.toContain('SENTINEL')
-    expect(JSON.stringify(logged)).not.toContain('user:')
+    expect(logged.some((line) => line.event === 'QUEUE_CLIENT_ERROR')).toBe(true)
+    expect(logged.some((line) => line.message.includes('Redis connection ('))).toBe(true)
+    expect(loggedText(lines)).not.toContain('SENTINEL')
+    expect(loggedText(lines)).not.toContain('user:')
     await close()
   })
 
@@ -214,12 +217,10 @@ describe('the client inventory — what the log line carries', () => {
     await resolver.init().catch(() => undefined)
     roots.push(resolver.getClient())
 
-    const owned = lines.mock.calls
-      .map((call: unknown[]): unknown => call[0])
-      .filter((line) => typeof line === 'string' && line.includes('(owned)'))
+    const owned = loggedEvents(lines).filter((line) => line.role === 'owned')
     expect(owned.length).toBeGreaterThan(0)
-    expect(owned.join('\n')).toMatch(/emitted an error: \S/)
-    expect(owned.join('\n')).not.toContain('SENTINEL')
+    expect(owned.map((line) => line.message).join('\n')).toMatch(/emitted an error: \S/)
+    expect(loggedText(lines)).not.toContain('SENTINEL')
   })
 })
 

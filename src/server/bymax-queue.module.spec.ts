@@ -22,6 +22,7 @@ import { FlowService } from './services/flow.service'
 import { MetricsService } from './services/metrics.service'
 import { WorkerRegistry } from './services/worker-registry.service'
 import { QueueEventsRegistry } from './services/queue-events-registry.service'
+import { QueueObserverRegistry } from './observability/queue-observer'
 import { QueueException } from './errors/queue-exception'
 import type {
   BymaxQueueModuleOptions,
@@ -116,6 +117,7 @@ describe('BymaxQueueModule.forRoot', () => {
       FlowService,
       MetricsService,
       ConnectionResolver,
+      QueueObserverRegistry,
       WorkerRegistry,
       QueueEventsRegistry,
       BYMAX_QUEUE_OPTIONS,
@@ -131,8 +133,8 @@ describe('BymaxQueueModule.forRoot', () => {
     const provider = findProvider(dynamic.providers ?? [], FlowService) as FactoryProvider
     const resolver = { getClient: jest.fn() } as unknown as ConnectionResolver
 
-    expect(provider.inject).toEqual([ConnectionResolver])
-    expect(provider.useFactory(resolver)).toBeInstanceOf(FlowService)
+    expect(provider.inject).toEqual([ConnectionResolver, QueueObserverRegistry])
+    expect(provider.useFactory(resolver, new QueueObserverRegistry())).toBeInstanceOf(FlowService)
   })
 
   it('registers the metrics service via a queue-service-bound factory', () => {
@@ -338,7 +340,11 @@ describe('BymaxQueueModule.forRootAsync', () => {
     const dynamic = BymaxQueueModule.forRootAsync({ useFactory: () => baseOptionsClientMode() })
     const flow = findProvider(dynamic.providers ?? [], FlowService) as FactoryProvider
     const metrics = findProvider(dynamic.providers ?? [], MetricsService) as FactoryProvider
-    expect(flow.inject).toEqual([ConnectionResolver, BYMAX_QUEUE_RESOLVED_OPTIONS])
+    expect(flow.inject).toEqual([
+      ConnectionResolver,
+      BYMAX_QUEUE_RESOLVED_OPTIONS,
+      QueueObserverRegistry,
+    ])
     expect(metrics.inject).toEqual([QueueService, BYMAX_QUEUE_RESOLVED_OPTIONS])
 
     // The factories must construct the real services from the injected resolved options,
@@ -352,12 +358,15 @@ describe('BymaxQueueModule.forRootAsync', () => {
     const flowFactory = flow.useFactory as (
       c: ConnectionResolver,
       r: ResolvedQueueOptions,
+      o: QueueObserverRegistry,
     ) => unknown
     const metricsFactory = metrics.useFactory as (
       q: QueueService,
       r: ResolvedQueueOptions,
     ) => unknown
-    expect(flowFactory(resolverStub, resolved)).toBeInstanceOf(FlowService)
+    expect(flowFactory(resolverStub, resolved, new QueueObserverRegistry())).toBeInstanceOf(
+      FlowService,
+    )
     expect(metricsFactory(queueServiceStub, resolved)).toBeInstanceOf(MetricsService)
   })
 

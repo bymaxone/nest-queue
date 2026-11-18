@@ -35,6 +35,7 @@ import { WorkerRegistry } from './services/worker-registry.service'
 import { QueueEventsRegistry } from './services/queue-events-registry.service'
 import { ProcessorDiscoveryService } from './services/processor-discovery.service'
 import { QueueLifecycle } from './lifecycle/queue-lifecycle.service'
+import { QueueObserverRegistry } from './observability/queue-observer'
 
 /** Generated configurable-module artifacts; `forRoot`/`forRootAsync` register the module. */
 export const { ConfigurableModuleClass, MODULE_OPTIONS_TOKEN, OPTIONS_TYPE, ASYNC_OPTIONS_TYPE } =
@@ -87,15 +88,16 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
         { provide: BYMAX_QUEUE_RESOLVED_OPTIONS, useValue: resolved },
         {
           provide: FlowService,
-          useFactory: (conn: ConnectionResolver): FlowService =>
+          useFactory: (conn: ConnectionResolver, observers: QueueObserverRegistry): FlowService =>
             new FlowService(
               conn,
               resolved.flows.enabled,
               resolved.prefix,
               resolved.telemetry,
               resolved.enqueueTimeoutMs,
+              observers,
             ),
-          inject: [ConnectionResolver],
+          inject: [ConnectionResolver, QueueObserverRegistry],
         },
         {
           provide: MetricsService,
@@ -143,15 +145,20 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
         },
         {
           provide: FlowService,
-          useFactory: (conn: ConnectionResolver, resolved: ResolvedQueueOptions): FlowService =>
+          useFactory: (
+            conn: ConnectionResolver,
+            resolved: ResolvedQueueOptions,
+            observers: QueueObserverRegistry,
+          ): FlowService =>
             new FlowService(
               conn,
               resolved.flows.enabled,
               resolved.prefix,
               resolved.telemetry,
               resolved.enqueueTimeoutMs,
+              observers,
             ),
-          inject: [ConnectionResolver, BYMAX_QUEUE_RESOLVED_OPTIONS],
+          inject: [ConnectionResolver, BYMAX_QUEUE_RESOLVED_OPTIONS, QueueObserverRegistry],
         },
         {
           provide: MetricsService,
@@ -195,6 +202,7 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
         useFactory: (resolver: ConnectionResolver): QueueConnectionMode => resolver.getMode(),
         inject: [ConnectionResolver],
       },
+      QueueObserverRegistry,
       QueueService,
       WorkerRegistry,
       QueueEventsRegistry,
@@ -214,6 +222,7 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
       FlowService,
       MetricsService,
       ConnectionResolver,
+      QueueObserverRegistry,
       WorkerRegistry,
       QueueEventsRegistry,
       BYMAX_QUEUE_OPTIONS,

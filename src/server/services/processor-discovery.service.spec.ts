@@ -4,6 +4,7 @@
  * @layer server/services
  */
 
+import { loggedEvents } from '../utils/log-lines'
 import 'reflect-metadata'
 import { Logger } from '@nestjs/common'
 import type { DiscoveryService } from '@nestjs/core'
@@ -169,14 +170,17 @@ describe('ProcessorDiscoveryService.onModuleInit', () => {
       eventsReg,
     )
     svc.onModuleInit()
-    expect(loggerWarnSpy).toHaveBeenCalledWith(expect.stringContaining('email'))
+    const [defaulted] = loggedEvents(loggerWarnSpy)
+    expect(loggedEvents(loggerWarnSpy)).toHaveLength(1)
+    expect(defaulted).toMatchObject({
+      event: 'QUEUE_CONCURRENCY_DEFAULTED',
+      queue: 'email',
+      concurrency: 2,
+    })
+    expect(defaulted?.message).toContain('email')
     // The warning must state the fallback value and the production-tuning advice.
-    expect(loggerWarnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('defaulting to concurrency='),
-    )
-    expect(loggerWarnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('explicit concurrency for production workloads'),
-    )
+    expect(defaulted?.message).toContain('defaulting to concurrency=')
+    expect(defaulted?.message).toContain('explicit concurrency for production workloads')
     loggerWarnSpy.mockRestore()
   })
 
@@ -629,16 +633,20 @@ describe('ProcessorDiscoveryService — a failing @OnWorkerEvent / @OnQueueEvent
 
       expect(unhandled).not.toHaveBeenCalled()
       expect(errorSpy).toHaveBeenCalledTimes(2)
-      for (const [line] of errorSpy.mock.calls) {
-        expect(String(line)).toContain('queue.event_handler_failed')
-        expect(String(line)).toContain(text)
-      }
-      expect(String(errorSpy.mock.calls[0]?.[0])).toBe(
-        `@OnWorkerEvent("completed") handler FailingProcessor.onCompleted failed (queue.event_handler_failed): ${text}`,
-      )
-      expect(String(errorSpy.mock.calls[1]?.[0])).toBe(
-        `@OnQueueEvent("completed") handler FailingProcessor.onQueueCompleted failed (queue.event_handler_failed): ${text}`,
-      )
+      expect(loggedEvents(errorSpy)).toEqual([
+        {
+          event: 'QUEUE_EVENT_HANDLER_FAILED',
+          message: `@OnWorkerEvent("completed") handler FailingProcessor.onCompleted failed (queue.event_handler_failed): ${text}`,
+          decorator: '@OnWorkerEvent',
+          eventName: 'completed',
+        },
+        {
+          event: 'QUEUE_EVENT_HANDLER_FAILED',
+          message: `@OnQueueEvent("completed") handler FailingProcessor.onQueueCompleted failed (queue.event_handler_failed): ${text}`,
+          decorator: '@OnQueueEvent',
+          eventName: 'completed',
+        },
+      ])
       errorSpy.mockRestore()
     },
   )

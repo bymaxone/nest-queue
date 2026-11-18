@@ -9,12 +9,22 @@
 import { EventEmitter } from 'node:events'
 import { Logger } from '@nestjs/common'
 import { attachClientErrorListener } from './attach-client-error-listener'
+import { loggedEvents } from './log-lines'
+
+/** The event the listener logs for a connection `role` and the text that describes the error. */
+function clientError(role: string, text: string): object {
+  return {
+    event: 'QUEUE_CLIENT_ERROR',
+    message: `Redis connection (${role}) emitted an error: ${text}`,
+    role,
+  }
+}
 
 /** A real Nest logger whose `error` is spied on. */
 function makeLogger(): { logger: Logger; lines: () => unknown[] } {
   const logger = new Logger('attach-client-error-listener.spec')
   const spy = jest.spyOn(logger, 'error').mockImplementation(() => undefined)
-  return { logger, lines: () => spy.mock.calls.map((call: unknown[]): unknown => call[0]) }
+  return { logger, lines: () => loggedEvents(spy) }
 }
 
 describe('attachClientErrorListener', () => {
@@ -28,8 +38,8 @@ describe('attachClientErrorListener', () => {
     client.emit('error', new Error('ECONNRESET'))
 
     expect(lines()).toEqual([
-      'Redis connection (worker: email) emitted an error: ECONNREFUSED',
-      'Redis connection (worker: email) emitted an error: ECONNRESET',
+      clientError('worker: email', 'ECONNREFUSED'),
+      clientError('worker: email', 'ECONNRESET'),
     ])
     expect(client.listenerCount('error')).toBe(1)
   })
@@ -46,9 +56,7 @@ describe('attachClientErrorListener', () => {
 
     client.emit('error', refused)
 
-    expect(lines()).toEqual([
-      'Redis connection (owned) emitted an error: AggregateError [ECONNREFUSED]',
-    ])
+    expect(lines()).toEqual([clientError('owned', 'AggregateError [ECONNREFUSED]')])
   })
 
   it('does not reach into the error for anything but its message, name and code', () => {
@@ -85,7 +93,7 @@ describe('attachClientErrorListener', () => {
     attachClientErrorListener(client, logger, 'owned')
 
     expect(() => client.emit('error', value)).not.toThrow()
-    expect(lines()).toEqual([`Redis connection (owned) emitted an error: ${expected}`])
+    expect(lines()).toEqual([clientError('owned', expected)])
   })
 
   it.each([
@@ -99,6 +107,6 @@ describe('attachClientErrorListener', () => {
     attachClientErrorListener(client, logger, 'owned')
 
     expect(() => client.emit('error', value)).not.toThrow()
-    expect(lines()).toEqual([`Redis connection (owned) emitted an error: ${expected}`])
+    expect(lines()).toEqual([clientError('owned', expected)])
   })
 })

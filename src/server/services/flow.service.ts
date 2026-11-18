@@ -14,6 +14,8 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { timeoutException, withCommandTimeoutCode } from '../utils/command-timeout'
 import { withDeadline } from '../utils/with-deadline'
+import type { QueueObserverRegistry } from '../observability/queue-observer'
+import { stampFlow } from '../observability/trace-carrier'
 import { assertFlowTree } from '../utils/assert-job-inputs'
 import { batchTimeout, runFlowBulk } from '../utils/add-flow-trees'
 import {
@@ -45,6 +47,8 @@ export class FlowService {
   private readonly producer?: FlowProducer
   readonly #connection: ConnectionResolver
   readonly #deadlineMs: number
+  readonly #observers: QueueObserverRegistry | undefined
+  readonly #telemetry: boolean
 
   constructor(
     connection: ConnectionResolver,
@@ -52,8 +56,11 @@ export class FlowService {
     prefix: string,
     telemetry?: Telemetry,
     enqueueTimeoutMs: number = DEFAULT_ENQUEUE_TIMEOUT_MS,
+    observers?: QueueObserverRegistry,
   ) {
     this.#connection = connection
+    this.#observers = observers
+    this.#telemetry = telemetry !== undefined
     this.#deadlineMs = enqueueTimeoutMs
     if (enabled) {
       this.producer = new FlowProducer({
@@ -90,7 +97,7 @@ export class FlowService {
   async add(flow: FlowJob): Promise<JobNode> {
     const producer = this.requireProducer()
     const checked = assertFlowTree(flow, 'flow')
-    return this.bounded('addFlow', producer.add(checked))
+    return this.bounded('addFlow', this.addTree(producer, checked))
   }
 
   /**
@@ -125,13 +132,30 @@ export class FlowService {
     const run = runFlowBulk(
       checked,
       (flow) =>
-        withCommandTimeoutCode('addFlowBulk', () => this.commandTimeout(), producer.add(flow)),
+        withCommandTimeoutCode(
+          'addFlowBulk',
+          () => this.commandTimeout(),
+          this.addTree(producer, flow),
+        ),
       'addFlowBulk',
       MAX_FLOW_TREES_IN_FLIGHT,
     )
     return withDeadline(run.done, this.#deadlineMs, () =>
       batchTimeout('addFlowBulk', this.#deadlineMs, run),
     )
+  }
+
+  /**
+   * Add one tree inside the observers' enqueue span, storing the trace headers they write with every
+   * node, unless BullMQ's own telemetry is configured, which stores its own.
+   */
+  private addTree(producer: FlowProducer, flow: FlowJob): Promise<JobNode> {
+    const add = (): Promise<JobNode> => producer.add(flow)
+    if (this.#observers === undefined) return add()
+    return this.#observers.traceEnqueue({ queue: flow.queueName, job: flow.name }, (carrier) => {
+      if (!this.#telemetry) stampFlow(flow, carrier)
+      return add()
+    })
   }
 
   /**

@@ -26,13 +26,18 @@ import type {
   BYMAX_QUEUE_CONNECTION_MODE,
   BYMAX_QUEUE_RESOLVED_OPTIONS,
   FlowService,
+  JobFinishedEvent,
+  JobOutcome,
   JobSchedulerRepeatOptions,
   JobStatus,
   JOB_STATUS,
   QueueErrorCode,
   QueueMetrics,
+  QueueObserver,
+  QueueObserverRegistry,
   QueueService,
   QUEUE_ERROR_CODES,
+  TraceCarrier,
 } from '@bymax-one/nest-queue'
 import type {
   JobStatus as SharedJobStatus,
@@ -266,4 +271,19 @@ export type _AsyncFactoryStillAcceptsVariadicUnknown = Expect<
     { useFactory: (...args: unknown[]) => BymaxQueueModuleOptions },
     BymaxQueueModuleAsyncOptions
   >
+>
+
+// The observer hooks a host implements: every hook is optional, and the process hook hands the
+// carrier stored with the job as read-only.
+export type _ObserverHooksAreOptional = Expect<Extends<Partial<QueueObserver>, QueueObserver>>
+export type _OutcomeIsClosed = Expect<Equal<JobOutcome, 'completed' | 'failed' | 'retried'>>
+export type _FinishedEventCarriesQueueOutcomeAndDuration = Expect<
+  Equal<
+    JobFinishedEvent,
+    { readonly queue: string; readonly outcome: JobOutcome; readonly durationSeconds: number }
+  >
+>
+export type _CarrierIsAStringRecord = Expect<Equal<TraceCarrier, Record<string, string>>>
+export type _RegisterReturnsTheRemover = Expect<
+  Equal<ReturnType<QueueObserverRegistry['register']>, () => void>
 >
