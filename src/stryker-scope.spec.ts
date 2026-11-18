@@ -28,7 +28,7 @@ const EXCLUSIONS: readonly Exclusion[] = [
     kind: 'barrel',
     reason:
       'Re-exports only: there is no statement to mutate, and a barrel that gains logic fails this spec.',
-    files: ['src/server/index.ts', 'src/shared/index.ts'],
+    files: ['src/server/index.ts', 'src/shared/index.ts', 'src/observability/index.ts'],
   },
   {
     kind: 'types',
@@ -238,8 +238,14 @@ const listed = excluded(shipped)
 describe('mutation scope', () => {
   /** An empty closure would make every other check pass vacuously. */
   it('finds the shipped source from the package entries', () => {
-    expect(entries()).toHaveLength(2)
-    expect(shipped).toEqual(expect.arrayContaining(['src/server/index.ts', 'src/shared/index.ts']))
+    expect(entries()).toHaveLength(3)
+    expect(shipped).toEqual(
+      expect.arrayContaining([
+        'src/server/index.ts',
+        'src/shared/index.ts',
+        'src/observability/index.ts',
+      ]),
+    )
     expect(shipped.length).toBeGreaterThan(30)
   })
 

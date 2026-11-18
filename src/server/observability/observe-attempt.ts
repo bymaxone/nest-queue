@@ -5,7 +5,7 @@
  */
 
 import type { Job } from 'bullmq'
-import { failureOutcome } from './job-outcome'
+import { failureOutcome, optionsOf } from './job-outcome'
 import type { QueueObserverRegistry } from './queue-observer'
 import { readTraceMetadata } from './trace-carrier'
 
@@ -29,7 +29,7 @@ export async function observeAttempt<TResult>(
   try {
     const result = await registry.traceProcess(
       { queue, job: job.name },
-      readTraceMetadata(job.opts.telemetry?.metadata),
+      readTraceMetadata(optionsOf(job)?.telemetry?.metadata),
       run,
     )
     registry.jobFinished({ queue, outcome: 'completed', durationSeconds: seconds() })

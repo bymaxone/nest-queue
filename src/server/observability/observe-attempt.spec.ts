@@ -98,4 +98,19 @@ describe('observeAttempt', () => {
 
     expect(finished).toEqual([])
   })
+
+  it('observes a job built by hand with no options, as a host does to call a handler in its own test', async () => {
+    const { registry, finished, seen } = recording()
+    const bare = { name: 'send', attemptsMade: 0 } as unknown as Job
+
+    await expect(
+      observeAttempt(registry, 'email', bare, () => Promise.resolve('ok')),
+    ).resolves.toBe('ok')
+    await expect(
+      observeAttempt(registry, 'email', bare, () => Promise.reject(new Error('boom'))),
+    ).rejects.toThrow('boom')
+
+    expect(seen).toMatchObject([{ carrier: {} }, { carrier: {} }])
+    expect(finished).toMatchObject([{ outcome: 'completed' }, { outcome: 'failed' }])
+  })
 })
