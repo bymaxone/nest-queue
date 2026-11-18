@@ -113,4 +113,13 @@ describe('observeAttempt', () => {
     expect(seen).toMatchObject([{ carrier: {} }, { carrier: {} }])
     expect(finished).toMatchObject([{ outcome: 'completed' }, { outcome: 'failed' }])
   })
+
+  it('continues the trace of metadata that was already stored with the job, whoever wrote it', async () => {
+    const { registry, seen } = recording()
+    const written = JSON.stringify({ traceparent: 'tp', tracestate: 'a=b' })
+
+    await observeAttempt(registry, 'email', jobWith(written), () => Promise.resolve())
+
+    expect(seen).toMatchObject([{ carrier: { traceparent: 'tp', tracestate: 'a=b' } }])
+  })
 })

@@ -195,7 +195,7 @@ describe('QueueTracingObserver — process', () => {
 })
 
 describe('QueueTracingObserver — lifecycle', () => {
-  it('registers itself on module init and is removed on module destroy', async () => {
+  it('registers itself on module init, and exposes no onModuleDestroy that would race the drain', async () => {
     const registry = new QueueObserverRegistry()
     const observer = new QueueTracingObserver(registry)
     expect(registry.active).toBe(false)
@@ -206,16 +206,9 @@ describe('QueueTracingObserver — lifecycle', () => {
       Object.assign(carrier, written)
       return Promise.resolve()
     })
+
     expect(registry.active).toBe(true)
     expect(Object.keys(carrier)).toEqual(['traceparent'])
-
-    observer.onModuleDestroy()
-    expect(registry.active).toBe(false)
-  })
-
-  it('does nothing when destroyed before it was initialised', () => {
-    expect(() => {
-      new QueueTracingObserver(new QueueObserverRegistry()).onModuleDestroy()
-    }).not.toThrow()
+    expect('onModuleDestroy' in observer).toBe(false)
   })
 })

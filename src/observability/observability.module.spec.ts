@@ -42,6 +42,5 @@ describe('BymaxQueueObservabilityModule', () => {
     await moduleRef.init()
     expect(moduleRef.get(QueueObserverRegistry).active).toBe(true)
     await moduleRef.close()
-    expect(moduleRef.get(QueueObserverRegistry).active).toBe(false)
   })
 })

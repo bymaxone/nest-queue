@@ -9,7 +9,7 @@
 
 import { context, propagation, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api'
 import type { Span } from '@opentelemetry/api'
-import { Injectable, type OnModuleDestroy, type OnModuleInit, Inject } from '@nestjs/common'
+import { Injectable, type OnModuleInit, Inject } from '@nestjs/common'
 import { QueueObserverRegistry } from '@bymax-one/nest-queue'
 import type { QueueObserveInfo, QueueObserver, TraceCarrier } from '@bymax-one/nest-queue'
 
@@ -43,20 +43,17 @@ async function inSpan<T>(span: Span, run: () => Promise<T>): Promise<T> {
  * queue name) only: no job id, name, data or error text is put on a span.
  */
 @Injectable()
-export class QueueTracingObserver implements QueueObserver, OnModuleInit, OnModuleDestroy {
-  #unregister: (() => void) | undefined
-
+export class QueueTracingObserver implements QueueObserver, OnModuleInit {
   /** @param observers - Where this observer registers itself, on module init. */
   constructor(@Inject(QueueObserverRegistry) private readonly observers: QueueObserverRegistry) {}
 
-  /** Start observing the queue. */
+  /**
+   * Start observing the queue. It is not removed on shutdown: `QueueLifecycle` is the only class that
+   * exposes `onModuleDestroy`, so the observer keeps tracing the enqueues a handler makes while
+   * the workers drain, and goes with the registry when the module does.
+   */
   onModuleInit(): void {
-    this.#unregister = this.observers.register(this)
-  }
-
-  /** Stop observing the queue. */
-  onModuleDestroy(): void {
-    this.#unregister?.()
+    this.observers.register(this)
   }
 
   /**

@@ -504,7 +504,7 @@ A job that a worker hands back to BullMQ with `DelayedError`, `WaitingError`, `W
 
 `QueueTracingObserver` opens the spans. `queue.enqueue` (producer) wraps `enqueue`, `enqueueBulk` and each tree of `FlowService.add` and `addBulk`; `queue.process` (consumer) wraps each attempt of a job. Their only attribute is `bymax.queue.name`; a failed span carries the library's error code (or `error`) as its status message and never the text of the error. The W3C trace context of `queue.enqueue` is stored with the job in `opts.telemetry.metadata`, apart from its data, and `queue.process` continues it, so a request, the job it enqueued and the work the job does read as one trace. With no OpenTelemetry SDK registered the API does nothing and no header is stored.
 
-If you set the module's own `telemetry` option (BullMQ's `bullmq-otel`), BullMQ stores its own metadata and the library leaves it alone; the spans above are still opened. Propagation uses the global propagator, so an `OTEL_PROPAGATORS` setting that leaves out `tracecontext` breaks it; that is a host choice the library does not override.
+A job that already carries metadata keeps it, and `queue.process` continues the trace it holds: BullMQ's telemetry writes the same JSON of W3C headers, so metadata it wrote is a parent like any other. If you set the module's own `telemetry` option (BullMQ's `bullmq-otel`), BullMQ stores its own metadata and the library leaves it alone; the spans above are still opened. Propagation uses the global propagator, so an `OTEL_PROPAGATORS` setting that leaves out `tracecontext` breaks it; that is a host choice the library does not override.
 
 ### Log events
 
