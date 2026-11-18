@@ -10,6 +10,11 @@ const config: Config = {
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['<rootDir>/src/**/*.spec.ts'],
+  moduleNameMapper: {
+    '^@bymax-one/nest-queue/shared$': '<rootDir>/src/shared/index.ts',
+    '^@bymax-one/nest-queue/observability$': '<rootDir>/src/observability/index.ts',
+    '^@bymax-one/nest-queue$': '<rootDir>/src/server/index.ts',
+  },
   moduleFileExtensions: ['ts', 'js', 'json'],
   transform: {
     '^.+\\.ts$': [
@@ -23,11 +28,7 @@ const config: Config = {
   restoreMocks: true,
   passWithNoTests: true,
   maxWorkers: '50%',
-  collectCoverageFrom: [
-    'src/**/*.ts',
-    '!src/**/*.spec.ts',
-    '!src/**/index.ts',
-  ],
+  collectCoverageFrom: ['src/**/*.ts', '!src/**/*.spec.ts', '!src/**/index.ts'],
   coveragePathIgnorePatterns: ['/node_modules/', '/dist/'],
 }
 

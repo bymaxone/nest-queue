@@ -44,12 +44,25 @@
         "default": "./dist/shared/index.cjs"
       }
     },
+    "./observability": {
+      "import": {
+        "types": "./dist/observability/index.d.ts",
+        "default": "./dist/observability/index.mjs"
+      },
+      "require": {
+        "types": "./dist/observability/index.d.cts",
+        "default": "./dist/observability/index.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "typesVersions": {
     "*": {
       "shared": [
         "./dist/shared/index.d.cts"
+      ],
+      "observability": [
+        "./dist/observability/index.d.cts"
       ]
     }
   },
@@ -83,27 +96,44 @@
   },
   "dependencies": {},
   "peerDependencies": {
+    "@bymax-one/nest-core": "^1.6.10",
     "@nestjs/common": "^11.0.16",
     "@nestjs/core": "^11.1.18",
+    "@opentelemetry/api": "^1.9.0",
     "bullmq": "^6.0.0",
     "bullmq-otel": "^2.0.0",
     "ioredis": "^6.0.0",
+    "prom-client": "^15.0.0",
     "reflect-metadata": "^0.2.0"
   },
   "peerDependenciesMeta": {
+    "@bymax-one/nest-core": {
+      "optional": true
+    },
+    "@opentelemetry/api": {
+      "optional": true
+    },
     "bullmq-otel": {
+      "optional": true
+    },
+    "prom-client": {
       "optional": true
     }
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
     "@bymax-one/nest-cache": "1.2.8",
+    "@bymax-one/nest-core": "1.6.10",
     "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^21.2.0",
     "@eslint/js": "^10.0.1",
     "@nestjs/common": "^11.1.28",
     "@nestjs/core": "^11.1.28",
     "@nestjs/testing": "^11.1.28",
+    "@opentelemetry/api": "1.9.0",
+    "@opentelemetry/context-async-hooks": "2.0.1",
+    "@opentelemetry/core": "2.0.1",
+    "@opentelemetry/sdk-trace-base": "2.0.1",
     "@stryker-mutator/core": "^10.0.0",
     "@stryker-mutator/jest-runner": "^10.0.0",
     "@types/jest": "^30.0.0",
@@ -117,6 +147,7 @@
     "jest-environment-node": "^30.4.1",
     "lint-staged": "^17.2.0",
     "prettier": "^3.9.6",
+    "prom-client": "15.1.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "testcontainers": "^12.0.4",

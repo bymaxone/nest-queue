@@ -29,6 +29,7 @@ const config: Config = {
   forceExit: true,
   moduleNameMapper: {
     '^@bymax-one/nest-queue/shared$': '<rootDir>/src/shared/index.ts',
+    '^@bymax-one/nest-queue/observability$': '<rootDir>/src/observability/index.ts',
     '^@bymax-one/nest-queue$': '<rootDir>/src/server/index.ts',
   },
 }
