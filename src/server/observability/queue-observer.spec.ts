@@ -184,3 +184,192 @@ describe('QueueObserverRegistry — jobFinished and removal', () => {
     expect(heard).toEqual(['first', 'second', 'second'])
   })
 })
+
+/** The hook types, without the `undefined` an optional member adds. */
+type FinishedHook = NonNullable<QueueObserver['jobFinished']>
+
+/** A hook typed to return nothing that returns something anyway, as an `async` function does. */
+const asHook = (hook: () => unknown): FinishedHook => hook
+type TraceHook = NonNullable<QueueObserver['traceEnqueue']>
+
+/** Let every microtask and the next macrotask run, so a rejection nobody caught has surfaced. */
+const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+
+describe('QueueObserverRegistry — a hook that returns a promise', () => {
+  const event = { queue: 'q', outcome: 'completed', durationSeconds: 0.5 } as const
+  let unhandled: jest.Mock
+
+  beforeEach(() => {
+    unhandled = jest.fn()
+    process.on('unhandledRejection', unhandled)
+  })
+
+  afterEach(() => {
+    process.off('unhandledRejection', unhandled)
+  })
+
+  const rejecting = (): Promise<void> => Promise.reject(new Error('SENTINEL-async-observer'))
+
+  it('logs a rejecting jobFinished as an event and leaves no unhandled rejection', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+    const registry = new QueueObserverRegistry()
+    registry.register({ jobFinished: asHook(rejecting) })
+    const heard: unknown[] = []
+    registry.register({ jobFinished: (finished) => heard.push(finished) })
+
+    registry.jobFinished(event)
+    await settle()
+
+    expect(unhandled).not.toHaveBeenCalled()
+    expect(heard).toEqual([event])
+    expect(loggedEvents(warn)).toStrictEqual([
+      {
+        event: 'QUEUE_OBSERVER_FAILED',
+        message:
+          'A queue observer threw from jobFinished; it is ignored and the job is not affected',
+        hook: 'jobFinished',
+      },
+    ])
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('SENTINEL')
+  })
+
+  it('logs a thenable that is not a Promise, and one whose then throws', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+    const registry = new QueueObserverRegistry()
+    const thenable = {
+      then: (_resolve: () => void, reject: (reason: unknown) => void) => {
+        reject(new Error('thenable'))
+      },
+    }
+    const throwing = {
+      get then(): never {
+        throw new Error('getter')
+      },
+    }
+    registry.register({ jobFinished: asHook(() => thenable) })
+    registry.register({ jobFinished: asHook(() => throwing) })
+
+    registry.jobFinished(event)
+    await settle()
+
+    expect(unhandled).not.toHaveBeenCalled()
+    expect(loggedEvents(warn)).toHaveLength(2)
+  })
+
+  it('says nothing for a jobFinished that resolves', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+    const registry = new QueueObserverRegistry()
+    registry.register({ jobFinished: asHook(() => Promise.resolve()) })
+
+    registry.jobFinished(event)
+    await settle()
+
+    expect(warn).not.toHaveBeenCalled()
+  })
+})
+
+describe.each(['traceEnqueue', 'traceProcess'] as const)(
+  'QueueObserverRegistry — %s that fails',
+  (hook) => {
+    const operate = (
+      registry: QueueObserverRegistry,
+      run: () => Promise<string>,
+    ): Promise<string> =>
+      hook === 'traceEnqueue'
+        ? registry.traceEnqueue({ queue: 'q' }, run)
+        : registry.traceProcess({ queue: 'q' }, {}, run)
+    const observe = (trace: TraceHook): QueueObserver =>
+      hook === 'traceEnqueue' ? { traceEnqueue: trace } : { traceProcess: trace }
+    const logged = (warn: jest.SpyInstance): unknown =>
+      loggedEvents(warn).map((line) => [line.event, line.hook])
+
+    it.each([
+      [
+        'throws before it runs the operation',
+        (): never => {
+          throw new Error('sync')
+        },
+      ],
+      ['rejects before it runs the operation', () => Promise.reject(new Error('async'))],
+    ])('still runs the operation once when the observer %s', async (_name, trace) => {
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+      const registry = new QueueObserverRegistry()
+      registry.register(observe(trace))
+      const run = jest.fn(() => Promise.resolve('result'))
+
+      await expect(operate(registry, run)).resolves.toBe('result')
+
+      expect(run).toHaveBeenCalledTimes(1)
+      expect(logged(warn)).toStrictEqual([['QUEUE_OBSERVER_FAILED', hook]])
+    })
+
+    it('returns the operation result when the observer fails after running it', async () => {
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+      const registry = new QueueObserverRegistry()
+      registry.register(
+        observe(async (_info, _carrier, run) => {
+          await run()
+          throw new Error('after')
+        }),
+      )
+
+      await expect(operate(registry, () => Promise.resolve('result'))).resolves.toBe('result')
+
+      expect(logged(warn)).toStrictEqual([['QUEUE_OBSERVER_FAILED', hook]])
+    })
+
+    it('passes the error of the operation through as it is, and logs only an observer that replaces it', async () => {
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+      const own = new Error('the processor failed')
+      const recorded: unknown[] = []
+      const registry = new QueueObserverRegistry()
+      registry.register(observe((_info, _carrier, run) => run()))
+      const rethrowing = registry.register(
+        observe((_info, _carrier, run) =>
+          // A tracing wrapper records the error and rethrows it.
+          run().catch((error: unknown) => {
+            recorded.push(error)
+            throw error
+          }),
+        ),
+      )
+
+      await expect(operate(registry, () => Promise.reject(own))).rejects.toBe(own)
+      expect(recorded).toEqual([own])
+      expect(warn).not.toHaveBeenCalled()
+      rethrowing()
+      registry.register(
+        observe(async (_info, _carrier, run) => {
+          await run().catch(() => undefined)
+          throw new Error('replacement')
+        }),
+      )
+
+      await expect(operate(registry, () => Promise.reject(own))).rejects.toBe(own)
+      expect(logged(warn)).toStrictEqual([['QUEUE_OBSERVER_FAILED', hook]])
+    })
+  },
+)
+
+describe('QueueObserverRegistry — the event each observer receives', () => {
+  it('hands every observer its own frozen copy, so one cannot change what the next one hears', () => {
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+    const registry = new QueueObserverRegistry()
+    const seen: unknown[] = []
+    registry.register({
+      jobFinished: (event) => {
+        seen.push(event)
+        ;(event as { outcome: string }).outcome = 'failed'
+      },
+    })
+    registry.register({ jobFinished: (event) => seen.push(event) })
+    const original = { queue: 'q', outcome: 'completed', durationSeconds: 0.5 } as const
+
+    registry.jobFinished(original)
+
+    expect(seen).toEqual([original, original])
+    expect(seen[0]).not.toBe(seen[1])
+    expect(Object.isFrozen(seen[1])).toBe(true)
+    expect(original.outcome).toBe('completed')
+  })
+})

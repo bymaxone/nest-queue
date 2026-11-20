@@ -12,6 +12,7 @@ import {
   WaitingError,
 } from 'bullmq'
 import type { Job } from 'bullmq'
+import { runInNewContext } from 'node:vm'
 import { handBackOf } from '../../shared/hand-back'
 import { failureOutcome } from './job-outcome'
 
@@ -35,6 +36,17 @@ describe('failureOutcome', () => {
     const error = Object.assign(new Error('x'), { name: 'UnrecoverableError' })
 
     expect(failureOutcome(jobWith(0, 5), error)).toBe('failed')
+  })
+
+  it('says failed for an unrecoverable error built in another realm, which BullMQ reads by name', () => {
+    // `instanceof Error` is false for an error from a vm context or a second copy of the package.
+    const foreign: unknown = runInNewContext(
+      "const e = new Error('x'); e.name = 'UnrecoverableError'; e",
+    )
+
+    expect(foreign instanceof Error).toBe(false)
+    expect(failureOutcome(jobWith(0, 5), foreign)).toBe('failed')
+    expect(failureOutcome(jobWith(0, 5), { name: 'UnrecoverableError' })).toBe('failed')
   })
 
   it.each(['DelayedError', 'WaitingError', 'WaitingChildrenError'])(

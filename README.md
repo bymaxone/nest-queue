@@ -96,7 +96,7 @@ that subpath imports a runtime dependency.
         └── re-exports ──▶ @bymax-one/nest-queue/shared   (zero dependencies)
 ```
 
-Both subpaths ship ESM **and** CommonJS with declarations for each format, so a
+All three entry points ship ESM **and** CommonJS with declarations for each format, so a
 `require()` consumer receives CommonJS declarations rather than ESM ones. The
 `pnpm check:exports` gate verifies this against the packed tarball.
 
@@ -494,6 +494,8 @@ export class AppModule {}
 | `bymax_queue_job_duration_seconds` | histogram | `queue`            | Time the processor ran for one attempt, with the default `prom-client` buckets.                                                                                                                                                                                   |
 | `bymax_queue_depth`                | gauge     | `queue`, `state`   | Jobs in a queue by `waiting`, `active`, `delayed` or `failed`, read from `MetricsService`, so a scrape reads Redis at most once per `metrics.cacheTtlMs`. It has no samples while `metrics.enabled` is off or Redis does not answer.                              |
 
+`bymax_queue_depth` has four series per queue, and each time the cached snapshot is refreshed the library asks Redis for the counts of every queue it has opened: about seven commands per queue, measured on BullMQ 6.3.4 and Redis 7. A scrape inside `metrics.cacheTtlMs` costs none, so with many queues raise `metrics.cacheTtlMs` to spread the reads, or leave `metrics.enabled` off to have no depth samples at all.
+
 A job that a worker hands back to BullMQ with `DelayedError`, `WaitingError`, `WaitingChildrenError` or `RateLimitError` is not counted: it did not fail. A sandboxed worker runs in another process and is not observed.
 
 ### Readiness
@@ -539,7 +541,7 @@ export function observe(observers: QueueObserverRegistry): () => void {
 }
 ```
 
-A hook must not throw: `traceEnqueue` and `traceProcess` run on the path of a job, and a throw from `jobFinished` is ignored.
+A hook must not break the job it watches, and the registry holds it to that. A hook that throws, or that returns a promise which rejects (an `async` function is accepted for any hook), is ignored and logged as `QUEUE_OBSERVER_FAILED` with the hook's name; nothing it threw is logged. For `traceEnqueue` and `traceProcess` that means the enqueue or the attempt still runs once, and the error of the enqueue or of the processor reaches the caller as it is, whatever the observer does. Each observer receives its own frozen copy of the `jobFinished` event, so one observer cannot change what the next one hears. A promise returned by `jobFinished` is not awaited.
 
 ---
 
@@ -1109,8 +1111,9 @@ do not pick them up:
   and does not support BullMQ 5. See the BullMQ version policy in [`CHANGELOG.md`](CHANGELOG.md).
 - **No Redis Cluster sharding** — BullMQ's cluster support is not exercised by this library.
 - **No built-in DLQ helper** — use the `@OnWorkerEvent('failed')` pattern above.
-- **No Prometheus metrics export** — `getMetrics()` returns snapshots; publish them
-  via `prom-client` in your own health endpoint.
+- **Prometheus metrics are opt-in** — the main entry exports none; `getMetrics()` returns
+  snapshots, and the optional `@bymax-one/nest-queue/observability` subpath registers the
+  metrics on the registry `@bymax-one/nest-core` serves (see Observability).
 
 ---
 
