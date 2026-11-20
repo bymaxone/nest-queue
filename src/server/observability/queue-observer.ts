@@ -173,9 +173,9 @@ export class QueueObserverRegistry {
 
   /**
    * Run one observer's trace hook so that a failure of the observer never fails the operation. The
-   * operation runs at most once however the observer behaves; when the hook throws or rejects before
-   * calling `once` the operation still runs, and when it fails after calling it the operation's own
-   * outcome is returned. What the operation itself rejects with passes through untouched.
+   * operation runs once however the observer behaves: before the hook, when the hook throws or
+   * rejects without calling `once`, or when it returns without calling it. What the operation itself
+   * rejects with reaches the caller untouched, and an observer that fails is logged.
    *
    * @param hook - The hook, for the log line.
    * @param call - Calls the observer's hook with `once` as the operation.
@@ -187,33 +187,30 @@ export class QueueObserverRegistry {
     next: () => Promise<T>,
   ): Promise<T> {
     let started: Promise<T> | undefined
-    // The promise constructor turns a synchronous throw of the operation into the rejection stored here,
-    // so `started` is set once the operation has been called, however it fails.
+    // The promise constructor turns a synchronous throw of the operation into the rejection stored
+    // here, so `started` is set once the operation has been called, however it fails.
     const once = (): Promise<T> =>
       (started ??= new Promise<T>((resolve) => {
         resolve(next())
       }))
+    let traced: T | undefined
+    let failure: { readonly error: unknown } | undefined
     try {
-      const traced = (await call(once)) as T
-      if (started !== undefined) return traced
-      // An observer that returns without running the operation has not done what a trace hook is for.
-      this.#failed(hook)
-      return await once()
+      traced = await call(once)
     } catch (error) {
-      if (started === undefined) {
-        this.#failed(hook)
-        return once()
-      }
-      // The operation ran, so its own outcome decides, not the observer's.
-      let outcome: T
-      try {
-        outcome = await started
-      } catch (own) {
-        if (own !== error) this.#failed(hook)
-        throw own
-      }
+      failure = { error }
+    }
+    // The observer ran the operation and did not fail: what it returns is the result.
+    if (failure === undefined && started !== undefined) return traced as T
+    // The observer failed, or returned without running the operation. The operation's own outcome decides.
+    try {
+      const outcome = await once()
       this.#failed(hook)
       return outcome
+    } catch (error) {
+      // An observer that rethrew the error of the operation is only passing it on.
+      if (failure?.error !== error) this.#failed(hook)
+      throw error
     }
   }
 
