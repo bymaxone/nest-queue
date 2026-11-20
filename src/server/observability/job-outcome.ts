@@ -10,14 +10,13 @@ import type { Job, JobsOptions } from 'bullmq'
 import { handBackOf, memberOf } from '../../shared/hand-back'
 import type { JobOutcome } from './queue-observer'
 
-/** Whether the error is BullMQ's `UnrecoverableError`, which fails the job whatever attempts remain. */
+/**
+ * Whether the error is BullMQ's `UnrecoverableError`, which fails the job whatever attempts remain.
+ * BullMQ recognises it by `instanceof` or by name, and the name is what an error from another realm
+ * or a second copy of the package carries, so the name alone is read here.
+ */
 function isUnrecoverable(error: unknown): boolean {
-  try {
-    return error instanceof Error && memberOf(error, 'name') === 'UnrecoverableError'
-  } catch {
-    // A rejection whose prototype chain throws on `instanceof` is not an unrecoverable error.
-  }
-  return false
+  return memberOf(error, 'name') === 'UnrecoverableError'
 }
 
 /**

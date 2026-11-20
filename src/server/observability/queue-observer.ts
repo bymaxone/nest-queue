@@ -34,7 +34,9 @@ export interface JobFinishedEvent {
 }
 
 /**
- * Watches the queue. Every hook is optional. A hook must not throw: it runs on the path of a job.
+ * Watches the queue. Every hook is optional. A hook runs on the path of a job and must not break it:
+ * one that throws or rejects is ignored and logged as `QUEUE_OBSERVER_FAILED`, and the job, the enqueue
+ * and the error of the processor are not affected.
  *
  * @example
  * registry.register({
@@ -63,7 +65,10 @@ export interface QueueObserver {
     carrier: Readonly<TraceCarrier>,
     run: () => Promise<T>,
   ): Promise<T>
-  /** Hear how an attempt ended. */
+  /**
+   * Hear how an attempt ended. The event is a frozen copy made for this observer. A promise the hook
+   * returns is not awaited: its rejection is logged, and nothing waits for it to settle.
+   */
   jobFinished?(event: JobFinishedEvent): void
 }
 
@@ -105,8 +110,12 @@ export class QueueObserverRegistry {
     const carrier: TraceCarrier = {}
     const inner = (): Promise<T> => run(carrier)
     return this.#observers.reduceRight<() => Promise<T>>(
-      (next, observer) => () =>
-        observer.traceEnqueue === undefined ? next() : observer.traceEnqueue(info, carrier, next),
+      (next, observer) => () => {
+        const hook = observer.traceEnqueue?.bind(observer)
+        return hook === undefined
+          ? next()
+          : this.#guarded('traceEnqueue', (once) => hook<T>(info, carrier, once), next)
+      },
       inner,
     )()
   }
@@ -124,34 +133,103 @@ export class QueueObserverRegistry {
     run: () => Promise<T>,
   ): Promise<T> {
     return this.#observers.reduceRight<() => Promise<T>>(
-      (next, observer) => () =>
-        observer.traceProcess === undefined ? next() : observer.traceProcess(info, carrier, next),
+      (next, observer) => () => {
+        const hook = observer.traceProcess?.bind(observer)
+        return hook === undefined
+          ? next()
+          : this.#guarded('traceProcess', (once) => hook<T>(info, carrier, once), next)
+      },
       run,
     )()
   }
 
   /**
-   * Tell every observer how an attempt ended. An observer that throws is ignored and the throw is
-   * logged as `QUEUE_OBSERVER_FAILED`, since the job has already finished and its result must not
-   * change.
+   * Tell every observer how an attempt ended. An observer that throws, or returns a promise that
+   * rejects, is ignored and the failure is logged as `QUEUE_OBSERVER_FAILED`, since the job has
+   * already finished and its result must not change. Each observer gets a frozen copy of the event.
    *
    * @param event - The outcome of the attempt.
    */
   jobFinished(event: JobFinishedEvent): void {
     for (const observer of [...this.#observers]) {
       try {
-        observer.jobFinished?.(event)
+        const returned: unknown = observer.jobFinished?.(Object.freeze({ ...event }))
+        // A hook typed to return nothing can still be an `async` function, and its rejection would
+        // reach no one: the registry does not await it, so it is caught here.
+        Promise.resolve(returned).catch(() => {
+          this.#failed('jobFinished')
+        })
       } catch {
-        // An observer is not allowed to fail a job. What it threw is not logged: it is the
-        // observer's own value, and an event carries closed values only.
-        this.logger.warn(
-          logEvent(
-            QUEUE_LOG_EVENTS.OBSERVER_FAILED,
-            'A queue observer threw from jobFinished; it is ignored and the job is not affected',
-            { hook: 'jobFinished' },
-          ),
-        )
+        this.#failed('jobFinished')
       }
     }
+  }
+
+  /**
+   * Run one observer's trace hook so that a failure of the observer never fails the operation. The
+   * operation runs once however the observer behaves: when the hook throws or rejects without calling
+   * `once`, or returns without calling it, the operation runs afterwards in its place. What the
+   * operation itself rejects with reaches the caller untouched, and an observer that fails is logged.
+   * The operation's promise always has a handler here, so an observer that starts it and does not
+   * await it can never leave an unhandled rejection that ends the process, and its rejection reaches
+   * the caller even when the observer returned a result of its own.
+   *
+   * @param hook - The hook, for the log line.
+   * @param call - Calls the observer's hook with `once` as the operation.
+   * @param next - The rest of the chain, ending in the operation.
+   */
+  async #guarded<T>(
+    hook: 'traceEnqueue' | 'traceProcess',
+    call: (once: () => Promise<T>) => Promise<T> | undefined,
+    next: () => Promise<T>,
+  ): Promise<T> {
+    let started: Promise<T> | undefined
+    // The promise constructor turns a synchronous throw of the operation into the rejection stored
+    // here, so `started` is set once the operation has been called, however it fails.
+    const once = (): Promise<T> => {
+      if (started === undefined) {
+        started = new Promise<T>((resolve) => {
+          resolve(next())
+        })
+        started.catch(() => undefined)
+      }
+      return started
+    }
+    let traced: T | undefined
+    let failure: { readonly error: unknown } | undefined
+    try {
+      traced = await call(once)
+    } catch (error) {
+      failure = { error }
+    }
+    if (failure === undefined && started !== undefined) {
+      // The observer ran the operation and did not fail, so what it returns is the result. The
+      // operation is waited for first: its rejection reaches the caller whatever the observer did
+      // with it, since a job whose processor failed must not be reported as done.
+      await started
+      return traced as T
+    }
+    // The observer failed, or returned without running the operation. The operation's own outcome decides.
+    try {
+      const outcome = await once()
+      this.#failed(hook)
+      return outcome
+    } catch (error) {
+      // An observer that rethrew the error of the operation is only passing it on.
+      if (failure?.error !== error) this.#failed(hook)
+      throw error
+    }
+  }
+
+  #failed(hook: string): void {
+    // An observer is not allowed to fail a job. What it threw is not logged: it is the observer's
+    // own value, and an event carries closed values only.
+    this.logger.warn(
+      logEvent(
+        QUEUE_LOG_EVENTS.OBSERVER_FAILED,
+        `A queue observer threw from ${hook}; it is ignored and the job is not affected`,
+        { hook },
+      ),
+    )
   }
 }
