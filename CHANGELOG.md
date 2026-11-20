@@ -15,7 +15,7 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
-## [1.2.26] — 2026-11-18
+## [1.2.26] — 2026-11-20
 
 Against 1.2.25 the declared types of the main entry gain the observer types and `QueueObserverRegistry` (see the note below), and a new optional subpath `@bymax-one/nest-queue/observability` is added; the built package also differs in the error message of `INVALID_OPTIONS`, in how module options are read, and in the shape of the library's log lines.
 
