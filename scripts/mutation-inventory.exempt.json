@@ -20,6 +20,10 @@
     "reason": "Reads DEFAULT_JOB_OPTIONS from src/server/constants, which the mutation scope excludes by design (the constant tables are mutated by pnpm mutation:const-tables), and feeds it to BullMQ's own backoff strategy; it executes no code the run mutates, so it can kill no mutant."
   },
   {
+    "file": "src/server/observability/queue-observer.process.spec.ts",
+    "reason": "Bundles the observer registry with esbuild and runs it in a child process to count the unhandled rejections that process reports, which Jest cannot observe; the registry runs in the child, so it executes no code the run mutates and can kill no mutant."
+  },
+  {
     "file": "src/spec-headers.spec.ts",
     "reason": "Reads the tracked spec files and their leading comments to require a header tag; it executes no code under src, so it can kill no mutant."
   },

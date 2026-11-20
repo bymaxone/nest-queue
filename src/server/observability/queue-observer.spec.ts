@@ -197,20 +197,9 @@ const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolv
 
 describe('QueueObserverRegistry — a hook that returns a promise', () => {
   const event = { queue: 'q', outcome: 'completed', durationSeconds: 0.5 } as const
-  let unhandled: jest.Mock
-
-  beforeEach(() => {
-    unhandled = jest.fn()
-    process.on('unhandledRejection', unhandled)
-  })
-
-  afterEach(() => {
-    process.off('unhandledRejection', unhandled)
-  })
-
   const rejecting = (): Promise<void> => Promise.reject(new Error('SENTINEL-async-observer'))
 
-  it('logs a rejecting jobFinished as an event and leaves no unhandled rejection', async () => {
+  it('logs a rejecting jobFinished as an event', async () => {
     const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
     const registry = new QueueObserverRegistry()
     registry.register({ jobFinished: asHook(rejecting) })
@@ -220,7 +209,6 @@ describe('QueueObserverRegistry — a hook that returns a promise', () => {
     registry.jobFinished(event)
     await settle()
 
-    expect(unhandled).not.toHaveBeenCalled()
     expect(heard).toEqual([event])
     expect(loggedEvents(warn)).toStrictEqual([
       {
@@ -252,7 +240,6 @@ describe('QueueObserverRegistry — a hook that returns a promise', () => {
     registry.jobFinished(event)
     await settle()
 
-    expect(unhandled).not.toHaveBeenCalled()
     expect(loggedEvents(warn)).toHaveLength(2)
   })
 
@@ -390,26 +377,51 @@ describe.each(['traceEnqueue', 'traceProcess'] as const)(
         },
       ],
     ])(
-      'lets the error of the operation reach the caller, with no unhandled rejection, when the observer %s',
+      'lets the error of the operation reach the caller when the observer %s',
       async (_name, trace) => {
-        const unhandled = jest.fn()
-        process.on('unhandledRejection', unhandled)
-        try {
-          const own = new Error('the processor failed')
-          const registry = new QueueObserverRegistry()
-          registry.register(observe(trace))
+        const own = new Error('the processor failed')
+        const registry = new QueueObserverRegistry()
+        registry.register(observe(trace))
 
-          await expect(
-            operate(registry, () => new Promise((_resolve, reject) => setImmediate(reject, own))),
-          ).rejects.toBe(own)
-          await settle()
-
-          expect(unhandled).not.toHaveBeenCalled()
-        } finally {
-          process.off('unhandledRejection', unhandled)
-        }
+        await expect(
+          operate(registry, () => new Promise((_resolve, reject) => setImmediate(reject, own))),
+        ).rejects.toBe(own)
+        await settle()
       },
     )
+
+    it('returns the observer result once an operation it did not await has settled', async () => {
+      const own = new Error('rejected while the observer was busy')
+      const registry = new QueueObserverRegistry()
+      registry.register(
+        observe(async (_info, _carrier, run) => {
+          void run()
+          await settle()
+          return 'observer result' as never
+        }),
+      )
+
+      await expect(operate(registry, () => Promise.reject(own))).rejects.toBe(own)
+
+      const settled = jest.fn()
+      const slow = new QueueObserverRegistry()
+      slow.register(
+        observe((_info, _carrier, run) => (void run(), Promise.resolve('early') as never)),
+      )
+      await expect(
+        operate(
+          slow,
+          () =>
+            new Promise<string>((resolve) =>
+              setImmediate(() => {
+                settled()
+                resolve('late')
+              }),
+            ),
+        ),
+      ).resolves.toBe('early')
+      expect(settled).toHaveBeenCalledTimes(1)
+    })
 
     it('returns the operation result when the observer fails after running it', async () => {
       const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
