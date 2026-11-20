@@ -173,9 +173,11 @@ export class QueueObserverRegistry {
 
   /**
    * Run one observer's trace hook so that a failure of the observer never fails the operation. The
-   * operation runs once however the observer behaves: before the hook, when the hook throws or
-   * rejects without calling `once`, or when it returns without calling it. What the operation itself
-   * rejects with reaches the caller untouched, and an observer that fails is logged.
+   * operation runs once however the observer behaves: when the hook throws or rejects without calling
+   * `once`, or returns without calling it, the operation runs afterwards in its place. What the
+   * operation itself rejects with reaches the caller untouched, and an observer that fails is logged.
+   * The operation's promise always has a handler here, so an observer that starts it and does not
+   * await it can never leave an unhandled rejection that ends the process.
    *
    * @param hook - The hook, for the log line.
    * @param call - Calls the observer's hook with `once` as the operation.
@@ -189,10 +191,15 @@ export class QueueObserverRegistry {
     let started: Promise<T> | undefined
     // The promise constructor turns a synchronous throw of the operation into the rejection stored
     // here, so `started` is set once the operation has been called, however it fails.
-    const once = (): Promise<T> =>
-      (started ??= new Promise<T>((resolve) => {
-        resolve(next())
-      }))
+    const once = (): Promise<T> => {
+      if (started === undefined) {
+        started = new Promise<T>((resolve) => {
+          resolve(next())
+        })
+        started.catch(() => undefined)
+      }
+      return started
+    }
     let traced: T | undefined
     let failure: { readonly error: unknown } | undefined
     try {

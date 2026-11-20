@@ -374,6 +374,32 @@ describe.each(['traceEnqueue', 'traceProcess'] as const)(
       expect(logged(warn)).toStrictEqual([['QUEUE_OBSERVER_FAILED', hook]])
     })
 
+    it('leaves no unhandled rejection when the observer starts the operation, does not await it, and the operation then rejects', async () => {
+      const unhandled = jest.fn()
+      process.on('unhandledRejection', unhandled)
+      try {
+        const registry = new QueueObserverRegistry()
+        registry.register(
+          observe((_info, _carrier, run) => {
+            void run()
+            return Promise.resolve('returned early') as never
+          }),
+        )
+
+        await expect(
+          operate(
+            registry,
+            () => new Promise((_resolve, reject) => setImmediate(reject, new Error('late'))),
+          ),
+        ).resolves.toBe('returned early')
+        await settle()
+
+        expect(unhandled).not.toHaveBeenCalled()
+      } finally {
+        process.off('unhandledRejection', unhandled)
+      }
+    })
+
     it('returns the operation result when the observer fails after running it', async () => {
       const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
       const registry = new QueueObserverRegistry()
