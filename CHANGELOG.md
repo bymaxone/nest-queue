@@ -15,6 +15,15 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
+## [1.2.27] — 2026-11-20
+
+Against 1.2.26 the declared types do not change; the runtime of the main entry does.
+
+### Fixed
+
+- **A host logger that throws no longer escapes from the library.** A logger set with `app.useLogger` runs inside the listener of an `error` event, a shutdown step or a failure path, where a throw ended the process or failed the code that was reporting. A promise that such a logger returns is out of reach: Nest's `Logger` drops it before it reaches the library, so an asynchronous transport has to handle its own rejections.
+- **An observer that awaits the operation and resolves with nothing no longer replaces the result with `undefined`.** The result of the enqueue or of the attempt is returned in that case.
+
 ## [1.2.26] — 2026-11-20
 
 Against 1.2.25 the declared types of the main entry gain the observer types and `QueueObserverRegistry` (see the note below), and a new optional subpath `@bymax-one/nest-queue/observability` is added; the built package also differs in the error message of `INVALID_OPTIONS`, in how module options are read, and in the shape of the library's log lines.
@@ -1265,7 +1274,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.26...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.27...HEAD
+[1.2.27]: https://github.com/bymaxone/nest-queue/compare/v1.2.26...v1.2.27
 [1.2.26]: https://github.com/bymaxone/nest-queue/compare/v1.2.25...v1.2.26
 [1.2.25]: https://github.com/bymaxone/nest-queue/compare/v1.2.24...v1.2.25
 [1.2.24]: https://github.com/bymaxone/nest-queue/compare/v1.2.23...v1.2.24

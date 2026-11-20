@@ -7,7 +7,7 @@
  */
 
 import { Injectable, Logger } from '@nestjs/common'
-import { logEvent, QUEUE_LOG_EVENTS } from '../utils/log-event'
+import { logEvent, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
 
 /** How one attempt of a job ended. `retried` means BullMQ will run the job again. */
 export type JobOutcome = 'completed' | 'failed' | 'retried'
@@ -206,8 +206,12 @@ export class QueueObserverRegistry {
       // The observer ran the operation and did not fail, so what it returns is the result. The
       // operation is waited for first: its rejection reaches the caller whatever the observer did
       // with it, since a job whose processor failed must not be reported as done.
-      await started
-      return traced as T
+      const outcome = await started
+      // A hook that awaited the operation and resolved with nothing (`undefined`, written in
+      // JavaScript or cast) has not replaced the result, so the result of the operation is what the
+      // caller gets. `null` is a value and stays.
+      if (traced === undefined) return outcome
+      return traced
     }
     // The observer failed, or returned without running the operation. The operation's own outcome decides.
     try {
@@ -224,7 +228,9 @@ export class QueueObserverRegistry {
   #failed(hook: string): void {
     // An observer is not allowed to fail a job. What it threw is not logged: it is the observer's
     // own value, and an event carries closed values only.
-    this.logger.warn(
+    writeLog(
+      this.logger,
+      'warn',
       logEvent(
         QUEUE_LOG_EVENTS.OBSERVER_FAILED,
         `A queue observer threw from ${hook}; it is ignored and the job is not affected`,

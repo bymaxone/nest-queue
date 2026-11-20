@@ -24,7 +24,7 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { disconnectUnlessEnded } from '../utils/disconnect-unless-ended'
 import { quitWithin } from '../utils/quit-within'
 import { isCommandTimeout, unavailableException } from '../utils/command-timeout'
-import { logEvent, QUEUE_LOG_EVENTS } from '../utils/log-event'
+import { logEvent, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
 
 /**
  * The exact options shape ioredis 6's `Redis` constructor accepts.
@@ -206,7 +206,9 @@ export class ConnectionResolver {
       )
     }
     if (client.options.maxRetriesPerRequest === null) {
-      this.#logger.warn(
+      writeLog(
+        this.#logger,
+        'warn',
         logEvent(
           QUEUE_LOG_EVENTS.UNBOUNDED_RETRIES,
           'The shared client has maxRetriesPerRequest: null, so a command issued while Redis is ' +
