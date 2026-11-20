@@ -1,7 +1,7 @@
 /**
  * @fileoverview Unit tests for `writeLog`: the event reaches the logger at the level asked for, and
- * a logger that throws does not escape. What a logger that rejects does to the process is held by
- * the process spec next to this one, which can see it.
+ * a logger that throws does not escape. The path through Nest's own `Logger` is held by the process
+ * spec next to this one.
  * @layer test
  */
 
@@ -23,19 +23,18 @@ describe('writeLog', () => {
     },
   )
 
-  it('absorbs a logger that throws, and one that returns a rejecting promise', async () => {
+  it('absorbs a logger that throws', () => {
     const throwing = {
       log: jest.fn(),
       warn: () => {
         throw new Error('sync transport')
       },
-      error: () => Promise.reject(new Error('async transport')),
+      error: jest.fn(),
     }
 
     expect(() => {
       writeLog(throwing, 'warn', event)
-      writeLog(throwing, 'error', event)
     }).not.toThrow()
-    await new Promise((resolve) => setImmediate(resolve))
+    expect(throwing.log).not.toHaveBeenCalled()
   })
 })

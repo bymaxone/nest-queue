@@ -21,7 +21,7 @@ Against 1.2.26 the declared types do not change; the runtime of the main entry d
 
 ### Fixed
 
-- **A host logger that throws or rejects no longer escapes from the library.** Every log line of the library now goes through one function that absorbs a throw, a rejected promise and a thenable whose `then` throws. A logger set with `app.useLogger` can be asynchronous, and Nest does not await it, so a rejecting one left an unhandled rejection that ends a Node process, from inside the listener of an `error` event, a shutdown step or a failure path.
+- **A host logger that throws no longer escapes from the library.** Every log line of the library now goes through one function that absorbs the throw. A logger set with `app.useLogger` runs inside the listener of an `error` event, a shutdown step or a failure path, where a throw ended the process or failed the code that was reporting. A promise that such a logger returns is out of reach: Nest's `Logger` drops it before it reaches the library, so an asynchronous transport has to handle its own rejections.
 - **An observer that awaits the operation and resolves with nothing no longer replaces the result with `undefined`.** The result of the enqueue or of the attempt is returned in that case.
 
 ## [1.2.26] — 2026-11-20
