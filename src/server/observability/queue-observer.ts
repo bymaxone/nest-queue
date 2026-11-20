@@ -177,7 +177,8 @@ export class QueueObserverRegistry {
    * `once`, or returns without calling it, the operation runs afterwards in its place. What the
    * operation itself rejects with reaches the caller untouched, and an observer that fails is logged.
    * The operation's promise always has a handler here, so an observer that starts it and does not
-   * await it can never leave an unhandled rejection that ends the process.
+   * await it can never leave an unhandled rejection that ends the process, and its rejection reaches
+   * the caller even when the observer returned a result of its own.
    *
    * @param hook - The hook, for the log line.
    * @param call - Calls the observer's hook with `once` as the operation.
@@ -207,8 +208,13 @@ export class QueueObserverRegistry {
     } catch (error) {
       failure = { error }
     }
-    // The observer ran the operation and did not fail: what it returns is the result.
-    if (failure === undefined && started !== undefined) return traced as T
+    if (failure === undefined && started !== undefined) {
+      // The observer ran the operation and did not fail, so what it returns is the result. The
+      // operation is waited for first: its rejection reaches the caller whatever the observer did
+      // with it, since a job whose processor failed must not be reported as done.
+      await started
+      return traced as T
+    }
     // The observer failed, or returned without running the operation. The operation's own outcome decides.
     try {
       const outcome = await once()

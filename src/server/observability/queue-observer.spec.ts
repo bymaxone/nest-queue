@@ -374,31 +374,42 @@ describe.each(['traceEnqueue', 'traceProcess'] as const)(
       expect(logged(warn)).toStrictEqual([['QUEUE_OBSERVER_FAILED', hook]])
     })
 
-    it('leaves no unhandled rejection when the observer starts the operation, does not await it, and the operation then rejects', async () => {
-      const unhandled = jest.fn()
-      process.on('unhandledRejection', unhandled)
-      try {
-        const registry = new QueueObserverRegistry()
-        registry.register(
-          observe((_info, _carrier, run) => {
-            void run()
-            return Promise.resolve('returned early') as never
-          }),
-        )
+    it.each([
+      [
+        'starts the operation, does not await it and returns early',
+        (_info: unknown, _carrier: unknown, run: () => Promise<never>) => {
+          void run()
+          return Promise.resolve('returned early') as never
+        },
+      ],
+      [
+        'awaits the operation, swallows its error and returns a value of its own',
+        async (_info: unknown, _carrier: unknown, run: () => Promise<never>) => {
+          await run().catch(() => undefined)
+          return 'swallowed' as never
+        },
+      ],
+    ])(
+      'lets the error of the operation reach the caller, with no unhandled rejection, when the observer %s',
+      async (_name, trace) => {
+        const unhandled = jest.fn()
+        process.on('unhandledRejection', unhandled)
+        try {
+          const own = new Error('the processor failed')
+          const registry = new QueueObserverRegistry()
+          registry.register(observe(trace))
 
-        await expect(
-          operate(
-            registry,
-            () => new Promise((_resolve, reject) => setImmediate(reject, new Error('late'))),
-          ),
-        ).resolves.toBe('returned early')
-        await settle()
+          await expect(
+            operate(registry, () => new Promise((_resolve, reject) => setImmediate(reject, own))),
+          ).rejects.toBe(own)
+          await settle()
 
-        expect(unhandled).not.toHaveBeenCalled()
-      } finally {
-        process.off('unhandledRejection', unhandled)
-      }
-    })
+          expect(unhandled).not.toHaveBeenCalled()
+        } finally {
+          process.off('unhandledRejection', unhandled)
+        }
+      },
+    )
 
     it('returns the operation result when the observer fails after running it', async () => {
       const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
