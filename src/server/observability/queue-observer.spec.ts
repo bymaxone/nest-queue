@@ -436,6 +436,18 @@ describe.each(['traceEnqueue', 'traceProcess'] as const)(
       expect(settled).toHaveBeenCalledTimes(1)
     })
 
+    it('returns the result of the operation when an observer runs it and resolves with nothing', async () => {
+      const registry = new QueueObserverRegistry()
+      // A hook written in JavaScript, or cast, that awaits the operation and forgets to return it.
+      registry.register(
+        observe((async (_info: unknown, _carrier: unknown, run: () => Promise<unknown>) => {
+          await run()
+        }) as unknown as TraceHook),
+      )
+
+      await expect(operate(registry, () => Promise.resolve('result'))).resolves.toBe('result')
+    })
+
     it('returns the operation result when the observer fails after running it', async () => {
       const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
       const registry = new QueueObserverRegistry()

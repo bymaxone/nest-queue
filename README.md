@@ -510,7 +510,7 @@ A job that already carries metadata keeps it, and `queue.process` continues the 
 
 ### Log events
 
-Every operational log line is an object handed to the Nest `Logger`, `{ event, message, ...fields }`, with fields of closed or numeric values only, so `@bymax-one/nest-logger` writes them as data and Nest's console logger prints them readably. `message` holds the library's own text only. When an error caused the event, it is carried as the error itself under `err`, where a logger that knows errors serialises and redacts it, and never as text in `message`.
+Every operational log line is an object handed to the Nest `Logger`, `{ event, message, ...fields }`, with fields of closed or numeric values only, so `@bymax-one/nest-logger` writes them as data and Nest's console logger prints them readably. `message` holds the library's own text only. When an error caused the event, it is carried as the error itself under `err`, where a logger that knows errors serialises and redacts it, and never as text in `message`. A logger you set with `app.useLogger` may throw, or return a promise that rejects; the library absorbs both, so a failing logger never ends the process or fails the code that was reporting.
 
 | Code                          | Level | When                                                                                                  | Fields                          |
 | ----------------------------- | ----- | ----------------------------------------------------------------------------------------------------- | ------------------------------- |

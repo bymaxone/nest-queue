@@ -33,7 +33,7 @@ import { QueueService } from '../services/queue.service'
 import { WorkerRegistry } from '../services/worker-registry.service'
 import { QueueEventsRegistry } from '../services/queue-events-registry.service'
 import { disconnectUnlessEnded } from '../utils/disconnect-unless-ended'
-import { logEvent, logFailure, QUEUE_LOG_EVENTS } from '../utils/log-event'
+import { logEvent, logFailure, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
 
 /** How long a worker's forced close may take, in milliseconds, once the drain budget has ended. */
 const FORCE_CLOSE_GRACE_MS = 1000
@@ -101,7 +101,9 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
     await this.closeQueues()
     await this.teardownConnection()
     const durationMs = Date.now() - (this.startedAt ?? Date.now())
-    this.logger.log(
+    writeLog(
+      this.logger,
+      'log',
       logEvent(
         QUEUE_LOG_EVENTS.SHUTDOWN_COMPLETE,
         `Queue shutdown complete in ${String(durationMs)}ms ` +
@@ -137,7 +139,9 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
           abandonWorker(worker)
           const stopped =
             'it is stopped without waiting for its in-flight job, which becomes stalled and is retried'
-          this.logger.warn(
+          writeLog(
+            this.logger,
+            'warn',
             cause instanceof DrainTimeoutError
               ? logEvent(
                   QUEUE_LOG_EVENTS.WORKER_DRAIN_TIMEOUT,
@@ -202,7 +206,9 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
     if (!this.resolved.shutdown.drainOnShutdown) return
     for (const [name, queue] of this.queues.getCachedQueues()) {
       await queue.drain().catch((cause: unknown) => {
-        this.logger.warn(
+        writeLog(
+          this.logger,
+          'warn',
           logFailure(
             QUEUE_LOG_EVENTS.QUEUE_DRAIN_FAILED,
             `Queue "${name}" could not be drained on shutdown (drainOnShutdown); its waiting jobs remain`,

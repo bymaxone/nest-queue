@@ -27,7 +27,7 @@ import type {
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { DEFAULT_WORKER_CONCURRENCY } from '../constants/default-options'
-import { logEvent, logFailure, QUEUE_LOG_EVENTS } from '../utils/log-event'
+import { logEvent, logFailure, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
 
 /** Stable code in the log line of a failing `@OnWorkerEvent` / `@OnQueueEvent` handler. */
 const EVENT_HANDLER_FAILED = 'queue.event_handler_failed'
@@ -200,7 +200,9 @@ export class ProcessorDiscoveryService implements OnModuleInit {
     this.registeredQueues.add(queueName)
 
     if (_warnedNoConcurrency) {
-      this.logger.warn(
+      writeLog(
+        this.logger,
+        'warn',
         logEvent(
           QUEUE_LOG_EVENTS.CONCURRENCY_DEFAULTED,
           `Queue "${queueName}": concurrency was not specified — ` +
@@ -262,7 +264,9 @@ export class ProcessorDiscoveryService implements OnModuleInit {
     origin: { decorator: string; eventName: string; methodKey: string | symbol },
   ): (...args: unknown[]) => void {
     const report = (cause: unknown): void => {
-      this.logger.error(
+      writeLog(
+        this.logger,
+        'error',
         logFailure(
           QUEUE_LOG_EVENTS.EVENT_HANDLER_FAILED,
           `${origin.decorator}("${origin.eventName}") handler ` +
