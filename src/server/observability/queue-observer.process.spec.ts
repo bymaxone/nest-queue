@@ -57,19 +57,10 @@ describe('QueueObserverRegistry in a process of its own', () => {
   })
 
   it('reports no unhandled rejection and keeps the error of the operation, whatever the observers do', () => {
-    const bundle = join(directory, 'registry.cjs')
+    const bundle = join(directory, 'queue-observer.cjs')
     const built = spawnSync(
-      join(ROOT, 'node_modules', '.bin', 'esbuild'),
-      [
-        ENTRY,
-        `--outfile=${bundle}`,
-        '--bundle',
-        '--platform=node',
-        '--format=cjs',
-        '--external:@nestjs/common',
-        '--external:reflect-metadata',
-        '--log-level=silent',
-      ],
+      join(ROOT, 'node_modules', '.bin', 'tsup'),
+      [ENTRY, '--no-config', '--format', 'cjs', '--out-dir', directory, '--silent'],
       { cwd: ROOT, encoding: 'utf8' },
     )
     expect(built.status).toBe(0)

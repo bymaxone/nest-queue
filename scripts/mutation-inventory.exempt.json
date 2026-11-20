@@ -21,7 +21,7 @@
   },
   {
     "file": "src/server/observability/queue-observer.process.spec.ts",
-    "reason": "Bundles the observer registry with esbuild and runs it in a child process to count the unhandled rejections that process reports, which Jest cannot observe; the registry runs in the child, so it executes no code the run mutates and can kill no mutant."
+    "reason": "Bundles the observer registry with tsup and runs it in a child process to count the unhandled rejections that process reports, which Jest cannot observe; the registry runs in the child, so it executes no code the run mutates and can kill no mutant."
   },
   {
     "file": "src/spec-headers.spec.ts",
