@@ -438,11 +438,13 @@ describe.each(['traceEnqueue', 'traceProcess'] as const)(
 
     it('returns the result of the operation when an observer runs it and resolves with nothing', async () => {
       const registry = new QueueObserverRegistry()
-      // A hook written in JavaScript, or cast, that awaits the operation and forgets to return it.
+      // A hook that awaits the operation and resolves with nothing of its own, as one written in
+      // JavaScript does; the single assertion marks the one place the types are not honoured.
       registry.register(
-        observe((async (_info: unknown, _carrier: unknown, run: () => Promise<unknown>) => {
+        observe(async (_info, _carrier, run) => {
           await run()
-        }) as unknown as TraceHook),
+          return undefined as never
+        }),
       )
 
       await expect(operate(registry, () => Promise.resolve('result'))).resolves.toBe('result')
