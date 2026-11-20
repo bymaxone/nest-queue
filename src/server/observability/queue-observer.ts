@@ -110,14 +110,12 @@ export class QueueObserverRegistry {
     const carrier: TraceCarrier = {}
     const inner = (): Promise<T> => run(carrier)
     return this.#observers.reduceRight<() => Promise<T>>(
-      (next, observer) => () =>
-        observer.traceEnqueue === undefined
+      (next, observer) => () => {
+        const hook = observer.traceEnqueue?.bind(observer)
+        return hook === undefined
           ? next()
-          : this.#guarded(
-              'traceEnqueue',
-              (once) => observer.traceEnqueue?.(info, carrier, once),
-              next,
-            ),
+          : this.#guarded('traceEnqueue', (once) => hook<T>(info, carrier, once), next)
+      },
       inner,
     )()
   }
@@ -135,14 +133,12 @@ export class QueueObserverRegistry {
     run: () => Promise<T>,
   ): Promise<T> {
     return this.#observers.reduceRight<() => Promise<T>>(
-      (next, observer) => () =>
-        observer.traceProcess === undefined
+      (next, observer) => () => {
+        const hook = observer.traceProcess?.bind(observer)
+        return hook === undefined
           ? next()
-          : this.#guarded(
-              'traceProcess',
-              (once) => observer.traceProcess?.(info, carrier, once),
-              next,
-            ),
+          : this.#guarded('traceProcess', (once) => hook<T>(info, carrier, once), next)
+      },
       run,
     )()
   }
@@ -160,11 +156,9 @@ export class QueueObserverRegistry {
         const returned: unknown = observer.jobFinished?.(Object.freeze({ ...event }))
         // A hook typed to return nothing can still be an `async` function, and its rejection would
         // reach no one: the registry does not await it, so it is caught here.
-        if ((returned as PromiseLike<unknown> | undefined)?.then !== undefined) {
-          Promise.resolve(returned).catch(() => {
-            this.#failed('jobFinished')
-          })
-        }
+        Promise.resolve(returned).catch(() => {
+          this.#failed('jobFinished')
+        })
       } catch {
         this.#failed('jobFinished')
       }

@@ -46,13 +46,15 @@ describe('QueueObserverRegistry — enqueue', () => {
     expect(carrier).toEqual({ first: 'written', second: 'written' })
   })
 
-  it('skips an observer that has no enqueue hook', async () => {
+  it('skips an observer that has no enqueue hook, without logging it as a failure', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
     const registry = new QueueObserverRegistry()
     registry.register({ jobFinished: () => undefined })
 
     await expect(
       registry.traceEnqueue({ queue: 'q' }, () => Promise.resolve('done')),
     ).resolves.toBe('done')
+    expect(warn).not.toHaveBeenCalled()
     expect(registry.active).toBe(true)
   })
 
@@ -71,6 +73,17 @@ describe('QueueObserverRegistry — process', () => {
     await expect(
       new QueueObserverRegistry().traceProcess({ queue: 'q' }, {}, () => Promise.resolve(7)),
     ).resolves.toBe(7)
+  })
+
+  it('skips an observer that has no process hook, without logging it as a failure', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+    const registry = new QueueObserverRegistry()
+    registry.register({ jobFinished: () => undefined })
+
+    await expect(
+      registry.traceProcess({ queue: 'q' }, {}, () => Promise.resolve('done')),
+    ).resolves.toBe('done')
+    expect(warn).not.toHaveBeenCalled()
   })
 
   it('hands each observer the carrier stored with the job and wraps the attempt in order', async () => {

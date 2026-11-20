@@ -9,9 +9,21 @@ import { spawnSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { QueueObserverRegistry } from './queue-observer'
 
 const ROOT = join(__dirname, '..', '..', '..')
 const ENTRY = join(__dirname, 'queue-observer.ts')
+
+/**
+ * The mutant Stryker has switched on in this Jest process, as the environment variable the
+ * instrumented code of a child process reads it from. The bundle built below is instrumented in a
+ * mutation run, so the child runs the same mutant as this process does.
+ */
+function strykerMutant(): Record<string, string> {
+  const active = (globalThis as { __stryker__?: { activeMutant?: string } }).__stryker__
+    ?.activeMutant
+  return active === undefined ? {} : { __STRYKER_ACTIVE_MUTANT__: active }
+}
 
 /** What the child does: three observers that misbehave, each run through the registry. */
 const SCRIPT = `
@@ -56,7 +68,19 @@ describe('QueueObserverRegistry in a process of its own', () => {
     rmSync(directory, { recursive: true, force: true })
   })
 
-  it('reports no unhandled rejection and keeps the error of the operation, whatever the observers do', () => {
+  it('reports no unhandled rejection and keeps the error of the operation, whatever the observers do', async () => {
+    // The same operation in this process, which is what tells a mutation run that this spec
+    // exercises the registry and has to run for its mutants.
+    const own = new Error('the processor failed')
+    const here = new QueueObserverRegistry()
+    here.register({
+      traceEnqueue: (_info, _carrier, run) => {
+        void run()
+        return Promise.resolve('here') as never
+      },
+    })
+    await expect(here.traceEnqueue({ queue: 'q' }, () => Promise.reject(own))).rejects.toBe(own)
+
     const bundle = join(directory, 'queue-observer.cjs')
     const built = spawnSync(
       join(ROOT, 'node_modules', '.bin', 'tsup'),
@@ -70,7 +94,7 @@ describe('QueueObserverRegistry in a process of its own', () => {
     const run = spawnSync(process.execPath, [script, bundle], {
       cwd: ROOT,
       encoding: 'utf8',
-      env: { ...process.env, NODE_PATH: join(ROOT, 'node_modules') },
+      env: { ...process.env, ...strykerMutant(), NODE_PATH: join(ROOT, 'node_modules') },
     })
 
     expect(run.status).toBe(0)
