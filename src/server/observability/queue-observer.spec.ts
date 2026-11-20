@@ -319,6 +319,30 @@ describe.each(['traceEnqueue', 'traceProcess'] as const)(
       expect(logged(warn)).toHaveLength(2)
     })
 
+    it.each([
+      ['the observer returns without running it', () => Promise.resolve('skipped') as never],
+      [
+        'the observer runs it and lets the throw through',
+        (_i: unknown, _c: unknown, run: () => Promise<never>) => run(),
+      ],
+    ])(
+      'runs an operation that throws synchronously once, and passes its error through, when %s',
+      async (_name, trace) => {
+        jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+        const registry = new QueueObserverRegistry()
+        registry.register(observe(trace))
+        let calls = 0
+
+        const outcome = await operate(registry, () => {
+          calls += 1
+          throw new Error(`call ${String(calls)}`)
+        }).catch((error: unknown) => error)
+
+        expect(calls).toBe(1)
+        expect(outcome).toEqual(new Error('call 1'))
+      },
+    )
+
     it('returns the operation result when the observer fails after running it', async () => {
       const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
       const registry = new QueueObserverRegistry()

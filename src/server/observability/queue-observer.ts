@@ -187,7 +187,12 @@ export class QueueObserverRegistry {
     next: () => Promise<T>,
   ): Promise<T> {
     let started: Promise<T> | undefined
-    const once = (): Promise<T> => (started ??= next())
+    // The promise constructor turns a synchronous throw of the operation into the rejection stored here,
+    // so `started` is set once the operation has been called, however it fails.
+    const once = (): Promise<T> =>
+      (started ??= new Promise<T>((resolve) => {
+        resolve(next())
+      }))
     try {
       const traced = (await call(once)) as T
       if (started !== undefined) return traced
