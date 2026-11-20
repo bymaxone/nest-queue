@@ -26,7 +26,7 @@ Against 1.2.26 the declared types do not change; the runtime bundles of the main
 
 ### Changed
 
-- **The 1.2.26 notes are shorter.** Four sentences that listed values the code and the README already state were cut.
+- **The 1.2.26 notes are shorter.** Sentences that listed values the code and the README already state were cut.
 
 ## [1.2.26] — 2026-11-20
 
