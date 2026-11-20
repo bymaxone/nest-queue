@@ -96,7 +96,7 @@ that subpath imports a runtime dependency.
         └── re-exports ──▶ @bymax-one/nest-queue/shared   (zero dependencies)
 ```
 
-All three entry points ship ESM **and** CommonJS with declarations for each format, so a
+Every entry point ships ESM **and** CommonJS with declarations for each format, so a
 `require()` consumer receives CommonJS declarations rather than ESM ones. The
 `pnpm check:exports` gate verifies this against the packed tarball.
 
