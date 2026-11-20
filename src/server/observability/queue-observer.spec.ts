@@ -303,6 +303,22 @@ describe.each(['traceEnqueue', 'traceProcess'] as const)(
       expect(logged(warn)).toStrictEqual([['QUEUE_OBSERVER_FAILED', hook]])
     })
 
+    it('runs the operation once when the observer returns without running it, and passes its error through', async () => {
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+      const registry = new QueueObserverRegistry()
+      registry.register(observe(() => Promise.resolve('skipped') as never))
+      const run = jest.fn(() => Promise.resolve('result'))
+
+      await expect(operate(registry, run)).resolves.toBe('result')
+
+      expect(run).toHaveBeenCalledTimes(1)
+      expect(logged(warn)).toStrictEqual([['QUEUE_OBSERVER_FAILED', hook]])
+      const own = new Error('the processor failed')
+
+      await expect(operate(registry, () => Promise.reject(own))).rejects.toBe(own)
+      expect(logged(warn)).toHaveLength(2)
+    })
+
     it('returns the operation result when the observer fails after running it', async () => {
       const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
       const registry = new QueueObserverRegistry()
