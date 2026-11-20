@@ -17,7 +17,7 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ## [1.2.27] — 2026-11-20
 
-Against 1.2.26 the declared types do not change; the runtime bundles of the main entry (`server/index.mjs` and `server/index.cjs`) do, and the `observability` and `shared` bundles do not.
+Against 1.2.26 the declared types do not change; the runtime of the main entry does.
 
 ### Fixed
 
