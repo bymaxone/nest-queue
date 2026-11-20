@@ -541,7 +541,7 @@ export function observe(observers: QueueObserverRegistry): () => void {
 }
 ```
 
-A hook must not break the job it watches, and the registry holds it to that. A hook that throws, or that returns a promise which rejects (an `async` function is accepted for any hook), is ignored and logged as `QUEUE_OBSERVER_FAILED` with the hook's name; nothing it threw is logged. For `traceEnqueue` and `traceProcess` that means the enqueue or the attempt still runs once, and the error of the enqueue or of the processor reaches the caller as it is unless the observer returns a result of its own, and an operation the observer starts and does not await can never leave an unhandled rejection. Each observer receives its own frozen copy of the `jobFinished` event, so one observer cannot change what the next one hears. A promise returned by `jobFinished` is not awaited.
+A hook must not break the job it watches, and the registry holds it to that. A hook that throws, or that returns a promise which rejects (an `async` function is accepted for any hook), is ignored and logged as `QUEUE_OBSERVER_FAILED` with the hook's name; nothing it threw is logged. For `traceEnqueue` and `traceProcess` that means the enqueue or the attempt still runs once, and the error of the enqueue or of the processor reaches the caller as it is unless the observer runs it and returns a result of its own, and an operation the observer starts and does not await can never leave an unhandled rejection. Each observer receives its own frozen copy of the `jobFinished` event, so one observer cannot change what the next one hears. A promise returned by `jobFinished` is not awaited.
 
 ---
 
