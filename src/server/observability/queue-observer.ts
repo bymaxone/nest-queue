@@ -207,9 +207,11 @@ export class QueueObserverRegistry {
       // operation is waited for first: its rejection reaches the caller whatever the observer did
       // with it, since a job whose processor failed must not be reported as done.
       const outcome = await started
-      // A hook that awaited the operation and resolved with nothing (`undefined` or `null`; written in JavaScript, or cast)
-      // has not replaced the result, so the result of the operation is what the caller gets.
-      return traced ?? outcome
+      // A hook that awaited the operation and resolved with nothing (`undefined`, written in
+      // JavaScript or cast) has not replaced the result, so the result of the operation is what the
+      // caller gets. `null` is a value and stays.
+      if (traced === undefined) return outcome
+      return traced
     }
     // The observer failed, or returned without running the operation. The operation's own outcome decides.
     try {
