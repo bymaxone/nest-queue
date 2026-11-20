@@ -189,11 +189,7 @@ export class QueueObserverRegistry {
     let started: Promise<T> | undefined
     const once = (): Promise<T> => (started ??= next())
     try {
-      const traced = (await call(once)) as T
-      if (started !== undefined) return traced
-      // An observer that returns without running the operation has not done what a trace hook is for.
-      this.#failed(hook)
-      return await once()
+      return (await call(once)) as T
     } catch (error) {
       if (started === undefined) {
         this.#failed(hook)
