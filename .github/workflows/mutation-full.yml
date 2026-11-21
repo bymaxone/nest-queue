@@ -35,11 +35,12 @@ jobs:
     with:
       # The ceiling is per shard job. One job with one worker had tested 1604 of 1862 mutants after
       # 59 minutes, with about three hours still estimated, so one job no longer fits any ceiling
-      # worth setting. Four shards of two workers each ran in 604, 756, 786 and 811 seconds (run
-      # 44816318328, job durations including set-up), and 21 minutes is 1.5 times the slowest. A
-      # cancelled run leaves no score and no baseline for the week, so the ceiling stays a margin over
-      # the heaviest shard and not a figure to the minute; re-measure it when the source grows.
-      timeout-minutes: 21
+      # worth setting. Four shards of two workers each ran in 604, 756, 786 and 811 seconds on one
+      # run and in 592, 697, 844 and 917 seconds on the next (runs 44816318328 and 44880817336, job
+      # durations including set-up). 23 minutes is 1.5 times the slowest, 917 seconds. A cancelled
+      # run leaves no score and no baseline for the week, so the ceiling stays a margin over the
+      # heaviest shard and not a figure to the minute; re-measure it when the source grows.
+      timeout-minutes: 23
       # A unit test the cold run did not run fails the job: it would never be held to killing a
       # mutant, and the score cannot notice. The tooling specs that reach no source are listed in
       # scripts/mutation-inventory.exempt.json.
