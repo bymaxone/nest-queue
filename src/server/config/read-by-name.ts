@@ -44,3 +44,30 @@ export function readByName(source: object, key: string): unknown {
   const planted = level !== null && Object.hasOwn(level, key) && Reflect.get(level, key) === value
   return planted ? undefined : value
 }
+
+/**
+ * Copy every field of `source` that a read by name would find, once each: the own keys, symbols
+ * included, and those of every ancestor below the realm's root prototype, so a getter a class
+ * defines is a field of the copy, and a field the root prototype holds is not. The copy has no
+ * prototype. A value that is not an object, and an array, is returned as it is.
+ *
+ * @param source - A host object whose fields go on to a driver, such as the options of a client.
+ * @returns A plain copy with each field as an enumerable data property.
+ */
+export function copyFields<T>(source: T): T {
+  if (typeof source !== 'object' || source === null || Array.isArray(source)) return source
+  const copy: Record<PropertyKey, unknown> = Object.create(null) as Record<PropertyKey, unknown>
+  for (let level: object | null = source; level !== null && !isRealmRoot(level);) {
+    for (const key of Reflect.ownKeys(level)) {
+      if (key === 'constructor' || Object.hasOwn(copy, key)) continue
+      Object.defineProperty(copy, key, {
+        value: Reflect.get(source, key),
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      })
+    }
+    level = Reflect.getPrototypeOf(level)
+  }
+  return copy as T
+}

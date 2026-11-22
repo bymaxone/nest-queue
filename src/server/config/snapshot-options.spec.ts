@@ -6,9 +6,10 @@
  * @layer server/config
  */
 
+import type { JobsOptions } from 'bullmq'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
 import { applyDefaults } from './resolved-options'
-import { snapshotOptions } from './snapshot-options'
+import { snapshotJobOptions, snapshotOptions } from './snapshot-options'
 import { validateOptions } from './validate-options'
 
 const connection = { url: 'redis://localhost:6379' }
@@ -153,15 +154,33 @@ describe('the options are read once', () => {
     expect(resolved.defaultJobOptions.attempts).toBe(4)
   })
 
-  it('keeps the connection, the queue options and the telemetry by reference', () => {
-    const queueOptions = { settings: {} }
+  it('keeps the client and the telemetry by reference and reads the rest of the connection once', () => {
+    // The connection is a copy of what was read, so the resolver that dials Redis later reads that copy
+    // and never a getter of the host's object a second time; a client is an object nothing may copy.
+    const client = { status: 'ready' }
     const telemetry = { name: 't' }
+    const options = { host: 'redis.internal' }
 
-    const snapshot = snapshotOptions(optionsWith({ queueOptions, telemetry }))
+    const byClient = snapshotOptions(optionsWith({ connection: { client }, telemetry }))
+    const byUrl = snapshotOptions(optionsWith({ connection: { url: connection.url, options } }))
 
-    expect(snapshot.connection).toBe(connection)
-    expect(snapshot.queueOptions).toBe(queueOptions)
-    expect(snapshot.telemetry).toBe(telemetry)
+    expect((byClient.connection as { client: unknown }).client).toBe(client)
+    expect(byClient.telemetry).toBe(telemetry)
+    expect(byUrl.connection).not.toBe(connection)
+    expect({ ...byUrl.connection }).toEqual({
+      url: connection.url,
+      options: { host: 'redis.internal' },
+    })
+    expect((byUrl.connection as { options: unknown }).options).not.toBe(options)
+  })
+
+  it('copies the queue options once', () => {
+    const queueOptions = { settings: {} }
+
+    const snapshot = snapshotOptions(optionsWith({ queueOptions }))
+
+    expect(snapshot.queueOptions).not.toBe(queueOptions)
+    expect({ ...snapshot.queueOptions }).toEqual({ settings: {} })
   })
 
   it('leaves a group that is not an object for validation to judge', () => {
@@ -169,5 +188,41 @@ describe('the options are read once', () => {
 
     expect(snapshot.defaultJobOptions).toBe('nope')
     expect(snapshot.flows).toBe(7)
+  })
+})
+
+describe('a job option the host defined as a getter or a hidden field is not dropped', () => {
+  /** Every key BullMQ's `JobsOptions` has, which the copy must be able to read by name. */
+  const hidden: [string, unknown][] = [
+    ['deduplication', { id: 'once' }],
+    ['lifo', true],
+    ['keepLogs', 5],
+    ['stackTraceLimit', 3],
+    ['failParentOnFailure', true],
+    ['telemetry', { metadata: 'm' }],
+  ]
+
+  it.each(hidden)('keeps %s defined as a getter on a class prototype', (key, value) => {
+    class Options {
+      get [key](): unknown {
+        return value
+      }
+    }
+
+    expect({ ...snapshotJobOptions(new Options() as JobsOptions) }).toEqual({ [key]: value })
+  })
+
+  it.each(hidden)('keeps %s defined as a non-enumerable own field', (key, value) => {
+    const options = Object.defineProperty({}, key, { value, enumerable: false })
+
+    expect({ ...snapshotJobOptions(options as JobsOptions) }).toEqual({ [key]: value })
+  })
+
+  it.each(hidden)('keeps %s of the default job options defined as a hidden field', (key, value) => {
+    const defaults = Object.defineProperty({}, key, { value, enumerable: false })
+
+    const copy = snapshotOptions(optionsWith({ defaultJobOptions: defaults }))
+
+    expect({ ...copy.defaultJobOptions }).toEqual({ [key]: value })
   })
 })
