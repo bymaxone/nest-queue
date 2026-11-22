@@ -51,6 +51,16 @@ async function main() {
     .traceEnqueue({ queue: 'q' }, () => Promise.reject(own))
     .then(() => 'resolved', (error) => (error === own ? 'own error' : 'other error'))
   await settle()
+  const fail = () => { throw new Error('host transport') }
+  Logger.overrideLogger({ log: fail, warn: fail, error: fail })
+  const loud = new QueueObserverRegistry()
+  loud.register({
+    jobFinished: async () => { throw new Error('async observer') },
+    traceEnqueue: () => { throw new Error('sync hook') },
+  })
+  loud.jobFinished({ queue: 'q', outcome: 'completed', durationSeconds: 1 })
+  out.loud = await loud.traceEnqueue({ queue: 'q' }, () => Promise.resolve('done'))
+  await settle()
   out.unhandled = unhandled
   process.stdout.write(JSON.stringify(out))
 }
@@ -101,6 +111,9 @@ describe('QueueObserverRegistry in a process of its own', () => {
     expect(JSON.parse(run.stdout)).toEqual({
       unawaited: 'own error',
       busy: 'own error',
+      // A logger whose warn throws, as a host transport can: the observer's failure is logged through it
+      // and neither the enqueue nor the process is affected.
+      loud: 'done',
       unhandled: 0,
     })
   })
