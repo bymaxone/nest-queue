@@ -1,0 +1,55 @@
+/**
+ * @fileoverview One read of the options a host hands to a worker registration. They are the host's:
+ * a getter can answer differently the second time, the limiter can be an object that changes, and
+ * any read can throw. The options are copied once, before a connection is opened, so what is
+ * checked is what the BullMQ `Worker` is built from.
+ * @layer server/utils
+ */
+
+import { HttpStatus } from '@nestjs/common'
+import { guarded } from '../config/guarded-read'
+import { readKeysOf } from '../config/snapshot-options'
+import { QUEUE_ERROR_CODES } from '../constants/error-codes'
+import { QueueException } from '../errors/queue-exception'
+import type { WorkerOptions } from '../interfaces/worker-options.interface'
+
+/** Every option of the library's `WorkerOptions`, held to that type by the compiler. */
+const WORKER_OPTION_TABLE = {
+  concurrency: true,
+  limiter: true,
+  autorun: true,
+  lockDuration: true,
+  stalledInterval: true,
+  jobTimeoutMs: true,
+} as const satisfies Record<keyof WorkerOptions, true>
+const WORKER_OPTION_KEYS: readonly string[] = Object.keys(WORKER_OPTION_TABLE)
+
+/** A refusal of worker options the library cannot read. */
+function unreadable(what: string): QueueException {
+  return new QueueException(
+    QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
+    HttpStatus.INTERNAL_SERVER_ERROR,
+    { reason: `${what} could not be read` },
+  )
+}
+
+/**
+ * Copy the options of one worker registration, each read once, and the limiter with them.
+ *
+ * @param options - The options as the host gave them.
+ * @returns A plain copy, or `options` itself when it is not an object, for validation to judge.
+ * @throws {QueueException} `WORKER_REGISTRATION_FAILED`, with the host's error as the cause, when a read throws.
+ */
+export function snapshotWorkerOptions<T extends WorkerOptions | undefined>(options: T): T {
+  return guarded(
+    'the worker options',
+    () => {
+      const copy = readKeysOf(options as Record<string, unknown> | undefined, WORKER_OPTION_KEYS)
+      if (typeof copy === 'object' && 'limiter' in copy) {
+        copy.limiter = readKeysOf(copy.limiter, ['max', 'duration'])
+      }
+      return copy as T
+    },
+    unreadable,
+  )
+}

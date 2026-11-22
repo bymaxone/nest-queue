@@ -22,6 +22,7 @@ import { observeAttempt } from '../observability/observe-attempt'
 import { QueueObserverRegistry } from '../observability/queue-observer'
 import { isTimerDelayMs } from '../utils/timer-delay'
 import { workerOptionProblem } from '../utils/worker-option-problem'
+import { snapshotWorkerOptions } from '../utils/snapshot-worker-options'
 import { isAbandoned } from '../utils/abandoned-workers'
 import type { WorkerOptions } from '../interfaces/worker-options.interface'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
@@ -136,7 +137,8 @@ export class WorkerRegistry {
   register<TData = unknown, TResult = unknown>(
     config: ProgrammaticWorkerConfig<TData, TResult>,
   ): Worker<TData, TResult> {
-    const { queueName, handler, options } = config
+    const { queueName, handler } = config
+    const options = snapshotWorkerOptions(config.options)
     this.guardDuplicate(queueName)
     this.validateOptions(options)
 
@@ -190,7 +192,8 @@ export class WorkerRegistry {
    *   invalid or the BullMQ `Worker` constructor throws.
    */
   registerSandboxed(config: SandboxedWorkerConfig): Worker {
-    const { queueName, processorFile, options } = config
+    const { queueName, processorFile } = config
+    const options = snapshotWorkerOptions(config.options)
     if (options?.jobTimeoutMs !== undefined) {
       throw new QueueException(
         QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,

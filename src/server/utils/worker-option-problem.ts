@@ -5,6 +5,7 @@
 
 import { MAX_WORKER_CONCURRENCY } from '../constants/default-options'
 import type { WorkerOptions } from '../interfaces/worker-options.interface'
+import { kindOf } from './job-defaults-problem'
 import { MAX_TIMER_DELAY_MS } from './timer-delay'
 
 /**
@@ -18,7 +19,7 @@ const WORKER_TIMER_MIN_MS = 1000
 /** What a refusal reports: the reason and the value that caused it. */
 interface OptionProblem {
   reason: string
-  actual: number
+  actual?: number
   [detail: string]: unknown
 }
 
@@ -33,6 +34,13 @@ function countProblem(
   if (value < min) return { reason: `${name} must be >= ${String(min)}`, actual: value }
   if (value > max) return { reason: `${name} must be <= ${String(max)}`, actual: value }
   return undefined
+}
+
+/** The refusal for a switch that is not a boolean: the type is named, never the value. */
+function autorunProblem(autorun: unknown): OptionProblem | undefined {
+  return autorun === undefined || typeof autorun === 'boolean'
+    ? undefined
+    : { reason: `autorun must be a boolean, received ${kindOf(autorun)}` }
 }
 
 /** The refusal for a timer option outside the supported range, or undefined. */
@@ -55,8 +63,9 @@ function timerProblem(name: string, value: number | undefined): OptionProblem | 
  */
 export function workerOptionProblem(opts?: WorkerOptions): OptionProblem | undefined {
   if (opts === undefined) return undefined
-  const { concurrency, limiter, lockDuration, stalledInterval } = opts
+  const { concurrency, limiter, lockDuration, stalledInterval, autorun } = opts
   return (
+    autorunProblem(autorun) ??
     (concurrency === undefined
       ? undefined
       : countProblem('concurrency', concurrency, 1, MAX_WORKER_CONCURRENCY)) ??
