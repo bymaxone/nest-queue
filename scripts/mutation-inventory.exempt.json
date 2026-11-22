@@ -8,6 +8,18 @@
     "reason": "Runs scripts/check-file-length.mjs against throwaway git repositories; executes no code under src."
   },
   {
+    "file": "src/check-function-length.baseline.spec.ts",
+    "reason": "Runs scripts/check-function-length.mjs against throwaway repositories to hold its baseline rules; executes no code under src, so it can kill no mutant."
+  },
+  {
+    "file": "src/check-function-length.key.spec.ts",
+    "reason": "Runs scripts/function-length-key.mjs on structured keys; executes no code under src, so it can kill no mutant."
+  },
+  {
+    "file": "src/check-function-length.spec.ts",
+    "reason": "Runs scripts/check-function-length.mjs against throwaway git repositories; executes no code under src, so it can kill no mutant."
+  },
+  {
     "file": "src/mutate-const-tables.spec.ts",
     "reason": "Runs scripts/mutate-const-tables.mjs against fixture trees; executes no code under src."
   },

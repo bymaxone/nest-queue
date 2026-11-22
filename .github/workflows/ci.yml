@@ -86,6 +86,20 @@ jobs:
           else
             pnpm check:file-length
           fi
+      # AGENTS.md caps a function or a test body at 50 lines. The baseline can only shrink and is
+      # written by the script; on a pull request it is compared with the base branch's, so a change
+      # cannot admit the function it adds.
+      - name: No new function or test body over 50 lines
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ -n "$BASE_REF" ]; then
+            pnpm check:function-length --base "origin/$BASE_REF"
+          else
+            pnpm check:function-length
+          fi
+      - name: Script tests
+        run: pnpm test:scripts
       - name: Build all subpaths
         run: pnpm build
       - name: Verify build output integrity

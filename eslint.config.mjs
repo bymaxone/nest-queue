@@ -12,6 +12,17 @@ export default tseslint.config(
   {
     ignores: [
       'dist/**',
+      // Shared templates copied byte for byte from bymaxone/.github: their bytes are the contract, so no
+      // fixer may rewrite them.
+      'scripts/check-function-length.mjs',
+      'scripts/function-length-key.mjs',
+      'scripts/check-dist-fresh.mjs',
+      'scripts/check-dist-fresh.test.mjs',
+      'scripts/commitlint-no-ai-attribution.cjs',
+      'src/check-function-length.spec.ts',
+      'src/check-function-length.baseline.spec.ts',
+      'src/check-function-length.key.spec.ts',
+      'src/stryker-scope.spec.ts',
       'coverage/**',
       'node_modules/**',
       '.stryker-tmp/**',
@@ -45,6 +56,9 @@ export default tseslint.config(
         AbortSignal: 'readonly',
         URL: 'readonly',
         setTimeout: 'readonly',
+        // CommonJS tooling (the commitlint config and plugin) uses `module.exports` and `require`.
+        module: 'readonly',
+        require: 'readonly',
       },
     },
     rules: {
@@ -54,6 +68,11 @@ export default tseslint.config(
       // times obscures the one-line-per-assertion shape the output mirrors.
       '@typescript-eslint/no-unused-expressions': ['error', { allowTernary: true }],
     },
+  },
+  {
+    // `require` is how a CommonJS file loads a module; there is no import form to prefer.
+    files: ['**/*.cjs'],
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
   {
     files: ['**/*.ts'],
@@ -107,6 +126,8 @@ export default tseslint.config(
       '@typescript-eslint/no-extraneous-class': 'off',
       // Empty method bodies in test processor stubs are intentional placeholders.
       '@typescript-eslint/no-empty-function': 'off',
+      // Test doubles are plain objects typed as the BullMQ, Nest and ioredis classes they stand in for; the rule stays on for src.
+      '@typescript-eslint/no-unsafe-class-instance-assignment': 'off',
     },
   },
   {
