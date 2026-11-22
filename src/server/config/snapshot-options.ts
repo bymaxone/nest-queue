@@ -31,6 +31,11 @@ const SHUTDOWN_KEYS = [
   'drainTimeoutMs',
   'drainOnShutdown',
 ] as const satisfies readonly (keyof NonNullable<BymaxQueueModuleOptions['shutdown']>)[]
+/** The options that switch a behaviour on or off, which must be a boolean or absent, never `null`. */
+const TOP_LEVEL_FLAGS = ['isGlobal'] as const
+const FLOWS_FLAGS = ['enabled'] as const
+const METRICS_FLAGS = ['enabled'] as const
+const SHUTDOWN_FLAGS = ['drainOnShutdown'] as const
 const TOP_LEVEL_KEYS = [
   'connection',
   'defaultJobOptions',
@@ -53,15 +58,18 @@ function defineValue(copy: Record<string, unknown>, key: string, value: unknown)
 
 /**
  * Copy the set values of a group: every own enumerable key and every `known` key, each read once by
- * property access. A value that is not an object is returned as it is, for validation to judge.
+ * property access. A value that is not an object is returned as it is, for validation to judge. A
+ * `null` is "not given" except under a `flags` key, where it is kept for validation to refuse: a
+ * flag from an unset environment variable must not read as the default.
  */
-function setValuesOf<T>(group: T, known: readonly string[]): T {
+function setValuesOf<T>(group: T, known: readonly string[], flags: readonly string[] = []): T {
   if (typeof group !== 'object') return group
   const source = group as Record<string, unknown>
   const copy: Record<string, unknown> = {}
   for (const key of new Set([...Object.keys(source), ...known])) {
     const value = source[key]
-    if (value !== undefined && value !== null) defineValue(copy, key, value)
+    if (value === undefined || (value === null && !flags.includes(key))) continue
+    defineValue(copy, key, value)
   }
   return copy as T
 }
@@ -126,15 +134,18 @@ export function snapshotJobOptions<T extends JobsOptions | undefined>(options: T
  * @returns A plain copy that validation and the defaults can both read without a second look.
  */
 export function snapshotOptions(opts: BymaxQueueModuleOptions): BymaxQueueModuleOptions {
-  const copy = setValuesOf(opts, TOP_LEVEL_KEYS) as unknown as Record<string, unknown>
-  const groups: [string, readonly string[]][] = [
-    ['defaultJobOptions', JOB_OPTION_KEYS],
-    ['flows', FLOWS_KEYS],
-    ['metrics', METRICS_KEYS],
-    ['shutdown', SHUTDOWN_KEYS],
+  const copy = setValuesOf(opts, TOP_LEVEL_KEYS, TOP_LEVEL_FLAGS) as unknown as Record<
+    string,
+    unknown
+  >
+  const groups: [string, readonly string[], readonly string[]][] = [
+    ['defaultJobOptions', JOB_OPTION_KEYS, []],
+    ['flows', FLOWS_KEYS, FLOWS_FLAGS],
+    ['metrics', METRICS_KEYS, METRICS_FLAGS],
+    ['shutdown', SHUTDOWN_KEYS, SHUTDOWN_FLAGS],
   ]
-  for (const [name, known] of groups) {
-    if (name in copy) copy[name] = setValuesOf(copy[name], known)
+  for (const [name, known, flags] of groups) {
+    if (name in copy) copy[name] = setValuesOf(copy[name], known, flags)
   }
   return copy as unknown as BymaxQueueModuleOptions
 }

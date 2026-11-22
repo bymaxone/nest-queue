@@ -8,7 +8,7 @@ import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { snapshotOptions } from './snapshot-options'
-import { jobOptionsProblem } from '../utils/job-defaults-problem'
+import { jobOptionsProblem, kindOf } from '../utils/job-defaults-problem'
 import { isTimerDelayMs, MAX_TIMER_DELAY_MS } from '../utils/timer-delay'
 
 /** Throw a well-formed INVALID_OPTIONS exception carrying the failing reason. */
@@ -41,6 +41,25 @@ function checkCacheTtl(cacheTtlMs: number | undefined): void {
   if (cacheTtlMs !== undefined && cacheTtlMs < 0) {
     invalid('metrics.cacheTtlMs must be >= 0')
   }
+}
+
+/**
+ * Refuse a switch that is not a boolean. A string such as `'false'`, which is what an environment
+ * variable holds, is truthy, so `drainOnShutdown: process.env.X` would delete every waiting job at
+ * shutdown; `null` is the same mistake as an unset variable. Only the type is named, never the value.
+ */
+function checkFlag(path: string, value: unknown): void {
+  if (value !== undefined && typeof value !== 'boolean') {
+    invalid(`${path} must be a boolean, received ${kindOf(value)}`)
+  }
+}
+
+/** Refuse each of the switches that is not a boolean. */
+function checkFlags(opts: BymaxQueueModuleOptions): void {
+  checkFlag('isGlobal', opts.isGlobal)
+  checkFlag('flows.enabled', opts.flows?.enabled)
+  checkFlag('metrics.enabled', opts.metrics?.enabled)
+  checkFlag('shutdown.drainOnShutdown', opts.shutdown?.drainOnShutdown)
 }
 
 /**
@@ -108,6 +127,8 @@ export function validateOptions(given: BymaxQueueModuleOptions): void {
       invalid('connection.url is not a valid Redis URL')
     }
   }
+
+  checkFlags(opts)
 
   const drainTimeoutMs = opts.shutdown?.drainTimeoutMs
   // Stryker disable next-line ConditionalExpression: equivalent — dropping the presence check leaves `undefined <= 0`, which is false, so an absent value is still accepted and a present one still refused; the check states the intent

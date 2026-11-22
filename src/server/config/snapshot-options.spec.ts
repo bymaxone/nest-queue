@@ -111,7 +111,12 @@ describe('the other groups that are a class instance', () => {
   })
 
   it('copies the flows group as a plain object without its unset keys', () => {
-    expect(snapshotOptions(optionsWith({ flows: { enabled: null } })).flows).toEqual({})
+    // A `null` flag is kept, not dropped: it is the same mistake as an unset environment variable, and
+    // validation refuses it by name, where a dropped one would read as the default.
+    expect(snapshotOptions(optionsWith({ flows: { enabled: null } })).flows).toEqual({
+      enabled: null,
+    })
+    expect(snapshotOptions(optionsWith({ flows: {} })).flows).toEqual({})
     const copy = snapshotOptions(optionsWith({ flows: new InstanceFlows(true) })).flows
 
     expect(copy).toMatchObject({ enabled: true })
