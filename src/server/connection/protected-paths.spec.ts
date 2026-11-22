@@ -10,6 +10,7 @@
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { assertPrototypeClean } from './prototype-guard'
 
 const ROOT = join(__dirname, '..')
 
@@ -44,6 +45,8 @@ const BASELINED_GLOBALS: readonly string[] = [
   'RegExp',
   'WeakMap',
   'WeakSet',
+  'Boolean',
+  'BigInt',
 ]
 
 /** The globals the paths use that the baseline leaves out, each with the reason it is safe to. */
@@ -263,6 +266,52 @@ describe('the sources of the protected paths', () => {
     for (const reason of [...Object.values(EXEMPT_GLOBALS), ...Object.values(EXEMPT_METHODS)]) {
       expect(reason.length).toBeGreaterThan(10)
     }
+  })
+})
+
+/** Whether a source iterates implicitly: a `for...of`, a spread, or a destructuring of an array. */
+function iterates(source: string): boolean {
+  return (
+    /\bfor\s*\([^)]*\bof\b/.test(source) ||
+    /\.\.\.[\w([]/.test(source) ||
+    /\[[\w\s,]+\]\s*=/.test(source)
+  )
+}
+
+describe('implicit iteration in the protected paths', () => {
+  const ITERATORS: readonly [string, object][] = [
+    ['the Array iterator', Object.getPrototypeOf([][Symbol.iterator]()) as object],
+    ['the Set iterator', Object.getPrototypeOf(new Set()[Symbol.iterator]()) as object],
+    ['the Map iterator', Object.getPrototypeOf(new Map()[Symbol.iterator]()) as object],
+    ['the String iterator', Object.getPrototypeOf(''[Symbol.iterator]()) as object],
+  ]
+
+  it('is present, so the iterator prototypes belong in the baseline', () => {
+    const sources = PATHS.map((path) => readFileSync(join(ROOT, path), 'utf8'))
+
+    expect(sources.some((source) => iterates(strip(source)))).toBe(true)
+  })
+
+  it.each(ITERATORS)('is refused while %s has a replaced next', (_label, prototype) => {
+    const original = Object.getOwnPropertyDescriptor(prototype, 'next')!
+    let thrown: unknown
+    try {
+      Object.defineProperty(prototype, 'next', { ...original, value: () => ({ done: true }) })
+      assertPrototypeClean()
+    } catch (error) {
+      thrown = error
+    } finally {
+      Object.defineProperty(prototype, 'next', original)
+    }
+
+    expect(thrown).toBeDefined()
+  })
+
+  it('the scan sees a for-of, a spread and an array destructuring', () => {
+    expect(iterates('for (const x of list) {}')).toBe(true)
+    expect(iterates('const all = [...list]')).toBe(true)
+    expect(iterates('const [a, b] = pair')).toBe(true)
+    expect(iterates('const n = list.length')).toBe(false)
   })
 })
 

@@ -186,6 +186,8 @@ const BASELINE_GLOBALS = [
   'RegExp',
   'WeakMap',
   'WeakSet',
+  'Boolean',
+  'BigInt',
 ] as const
 
 /** One entry of the baseline: an object, one of its keys, and what the key held when this module loaded. */
