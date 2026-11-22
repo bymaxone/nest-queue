@@ -123,18 +123,28 @@ function setValuesOf<T>(
  * @returns A plain copy the caller can validate and send on without a second read.
  */
 export function readKeys<T>(group: T, known: readonly string[]): T {
+  return guarded('the job options', () => readKeysOf(group, known))
+}
+
+/**
+ * The read of {@link readKeys} with no guard of its own, for a caller that refuses with a code of
+ * its own: a throw of the host's getter reaches that caller as it is.
+ *
+ * @param group - A group of options.
+ * @param known - The keys to read by property access even when the group does not hold them as its own.
+ * @returns A plain copy.
+ */
+export function readKeysOf<T>(group: T, known: readonly string[]): T {
   if (typeof group !== 'object' || group === null || Array.isArray(group)) return group
   const source = group as Record<string, unknown>
-  return guarded('the job options', () => {
-    const copy: Record<string, unknown> = {}
-    for (const key of Object.keys(source)) defineValue(copy, key, source[key])
-    for (const key of known) {
-      if (Object.hasOwn(copy, key)) continue
-      const value = readByName(source, key)
-      if (value !== undefined) defineValue(copy, key, value)
-    }
-    return copy as T
-  })
+  const copy: Record<string, unknown> = {}
+  for (const key of Object.keys(source)) defineValue(copy, key, source[key])
+  for (const key of known) {
+    if (Object.hasOwn(copy, key)) continue
+    const value = readByName(source, key)
+    if (value !== undefined) defineValue(copy, key, value)
+  }
+  return copy as T
 }
 
 /** The keys of the objects a job's options may hold. */

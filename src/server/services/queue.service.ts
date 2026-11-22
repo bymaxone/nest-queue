@@ -5,7 +5,14 @@
  */
 
 import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common'
-import { defaultRepeatStrategy, type Job, type JobsOptions, Queue, type QueueOptions } from 'bullmq'
+import {
+  defaultRepeatStrategy,
+  type Job,
+  type JobsOptions,
+  Queue,
+  type QueueOptions,
+  type RepeatOptions,
+} from 'bullmq'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import type { BulkJob } from '../interfaces/queue-job-data.interface'
@@ -20,6 +27,9 @@ import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { MAX_BULK_SIZE } from '../constants/default-options'
 import { assertPageWindow } from '../utils/assert-page-window'
 import { assertJobInputs } from '../utils/assert-job-inputs'
+import { readBulkJobs } from '../utils/read-bulk-jobs'
+import { guarded, invalidRepeat } from '../config/guarded-read'
+import { readKeysOf, snapshotJobOptions } from '../config/snapshot-options'
 import { isReservedJobId } from '../utils/reserved-job-ids'
 import { withDeadline } from '../utils/with-deadline'
 import { QueueObserverRegistry, type TraceCarrier } from '../observability/queue-observer'
@@ -59,6 +69,26 @@ function assertValidCron(
     })
   }
 }
+
+/**
+ * Every option BullMQ's `RepeatOptions` has, held to that type by the compiler. Each is read by name,
+ * once, so a schedule the host built as a class with getters is sent as it was checked.
+ */
+const REPEAT_OPTION_TABLE = {
+  endDate: true,
+  startDate: true,
+  pattern: true,
+  key: true,
+  limit: true,
+  every: true,
+  immediately: true,
+  count: true,
+  offset: true,
+  prevMillis: true,
+  jobId: true,
+  tz: true,
+} as const satisfies Record<keyof RepeatOptions, true>
+const REPEAT_OPTION_KEYS: readonly string[] = Object.keys(REPEAT_OPTION_TABLE)
 
 /**
  * The central interaction point with BullMQ queues. Maintains a per-name `Queue`
@@ -257,21 +287,15 @@ export class QueueService {
     queueName: string,
     jobs: readonly BulkJob<TData>[],
   ): Promise<TypedJob<TData, TResult>[]> {
-    if (jobs.length > MAX_BULK_SIZE) {
-      throw new QueueException(QUEUE_ERROR_CODES.BULK_ENQUEUE_FAILED, HttpStatus.BAD_REQUEST, {
-        reason: 'batch size exceeds limit',
-        limit: MAX_BULK_SIZE,
-        received: jobs.length,
-      })
-    }
-    const checked = jobs.map((job, index) =>
+    const copied = readBulkJobs(jobs, MAX_BULK_SIZE)
+    const checked = copied.map((job, index) =>
       assertJobInputs(job.options, `jobs[${String(index)}].options`),
     )
     try {
       const created = await this.observed(queueName, undefined, (carrier) =>
         this.call('enqueueBulk', queueName, () =>
           this.queueFor(queueName).addBulk(
-            jobs.map((job, index) => {
+            copied.map((job, index) => {
               const opts = this.stamp(checked[index], carrier)
               return { name: job.name, data: job.data, ...(opts === undefined ? {} : { opts }) }
             }),
@@ -377,15 +401,29 @@ export class QueueService {
     repeat: JobSchedulerRepeatOptions,
     template?: { name?: string; data?: TData; opts?: JobsOptions },
   ): Promise<Job<TData, TResult> | undefined> {
+    // The schedule and the template are the host's: each is read once, here, and what is checked is what
+    // BullMQ is sent, even from a getter that answers differently the second time.
+    const given = guarded(
+      'the schedule',
+      () => ({
+        repeat: readKeysOf(repeat, REPEAT_OPTION_KEYS),
+        template:
+          template === undefined ? undefined : readKeysOf(template, ['name', 'data', 'opts']),
+      }),
+      invalidRepeat,
+    )
+    repeat = given.repeat
+    template = given.template
     validateJobSchedulerOptions(repeat)
     // The cache holds default-generic queues; the caller declares the payload
     // generics, which BullMQ's invariant `ExtractDataType` cannot narrow. The
     // returned job is re-projected onto the requested generics (unchanged at runtime).
     const queue = this.queueFor(queueName)
+    const templateOptions = snapshotJobOptions(template?.opts)
     const jobTemplate = {
       name: template?.name ?? schedulerId,
       data: template?.data ?? {},
-      ...(template?.opts === undefined ? {} : { opts: template.opts }),
+      ...(templateOptions === undefined ? {} : { opts: templateOptions }),
     }
     if ('pattern' in repeat) assertValidCron(repeat, this.options.queueOptions)
     const job = await this.call('upsertJobScheduler', queueName, () =>
