@@ -107,6 +107,8 @@ export default tseslint.config(
       '@typescript-eslint/no-extraneous-class': 'off',
       // Empty method bodies in test processor stubs are intentional placeholders.
       '@typescript-eslint/no-empty-function': 'off',
+      // Test doubles are plain objects typed as the BullMQ, Nest and ioredis classes they stand in for; the rule stays on for src.
+      '@typescript-eslint/no-unsafe-class-instance-assignment': 'off',
     },
   },
   {
