@@ -177,8 +177,9 @@ function snapshotConnection(connection: unknown): unknown {
   return guarded('connection', () => {
     const copy = emptyCopy()
     for (const key of ['client', 'url', 'options']) {
-      if (!Reflect.has(host, key)) continue
       const value = readByName(host, key)
+      // A key the host set to `undefined` stays, so validation can name it; one it never set is not read.
+      if (value === undefined && !Object.hasOwn(host, key)) continue
       defineValue(copy, key, key === 'options' ? copyFields(value) : value)
     }
     return copy

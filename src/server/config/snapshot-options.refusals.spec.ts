@@ -81,7 +81,8 @@ describe('what the options snapshot names when a read throws', () => {
     const host = new Proxy(
       { url: 'redis://x' },
       {
-        has: () => {
+        // The connection is read by descriptor now, so this is the trap that fails the read.
+        getOwnPropertyDescriptor: () => {
           throw boom
         },
       },

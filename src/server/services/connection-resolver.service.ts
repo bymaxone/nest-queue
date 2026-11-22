@@ -5,6 +5,7 @@
  * @layer server/services
  */
 
+import { snapshotOptions } from '../config/snapshot-options'
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common'
 import { Redis, type RedisOptions } from 'ioredis'
 import { BYMAX_QUEUE_OPTIONS } from '../bymax-queue.constants'
@@ -75,7 +76,7 @@ export class ConnectionResolver {
   #pendingReady: Promise<void> | undefined
 
   constructor(@Inject(BYMAX_QUEUE_OPTIONS) options: BymaxQueueModuleOptions) {
-    this.#options = options
+    this.#options = snapshotOptions(options)
   }
 
   /** Resolve and validate the connection. Call once during module bootstrap. */

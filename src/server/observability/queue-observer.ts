@@ -6,6 +6,7 @@
  * @layer server/observability
  */
 
+import { readByName } from '../config/read-by-name'
 import { Injectable, Logger } from '@nestjs/common'
 import { logEvent, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
 
@@ -153,7 +154,8 @@ export class QueueObserverRegistry {
   jobFinished(event: JobFinishedEvent): void {
     for (const observer of [...this.#observers]) {
       try {
-        const returned: unknown = observer.jobFinished?.(Object.freeze({ ...event }))
+        const finished = readByName(observer, 'jobFinished') as QueueObserver['jobFinished']
+        const returned: unknown = finished?.call(observer, Object.freeze({ ...event }))
         // A hook typed to return nothing can still be an `async` function, and its rejection would
         // reach no one: the registry does not await it, so it is caught here.
         Promise.resolve(returned).catch(() => {
@@ -182,7 +184,7 @@ export class QueueObserverRegistry {
     | undefined {
     let hook: unknown
     try {
-      hook = Reflect.get(observer, name)
+      hook = readByName(observer, name)
     } catch {
       this.#failed(name)
       return undefined

@@ -9,6 +9,7 @@
  * @layer server/services
  */
 
+import { readByName } from '../config/read-by-name'
 import { isAbsolute, extname } from 'node:path'
 import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import { Worker } from 'bullmq'
@@ -137,8 +138,14 @@ export class WorkerRegistry {
   register<TData = unknown, TResult = unknown>(
     config: ProgrammaticWorkerConfig<TData, TResult>,
   ): Worker<TData, TResult> {
-    const { queueName, handler } = config
-    const options = snapshotWorkerOptions(config.options)
+    const queueName = readByName(config, 'queueName') as string
+    const handler = readByName(config, 'handler') as ProgrammaticWorkerConfig<
+      TData,
+      TResult
+    >['handler']
+    const options = snapshotWorkerOptions(
+      readByName(config, 'options') as ProgrammaticWorkerConfig<TData, TResult>['options'],
+    )
     this.guardDuplicate(queueName)
     this.validateOptions(options)
 
@@ -192,8 +199,14 @@ export class WorkerRegistry {
    *   invalid or the BullMQ `Worker` constructor throws.
    */
   registerSandboxed(config: SandboxedWorkerConfig): Worker {
-    const { queueName, processorFile } = config
-    const options = snapshotWorkerOptions(config.options)
+    const queueName = readByName(config, 'queueName') as string
+    const processorFile = readByName(
+      config,
+      'processorFile',
+    ) as SandboxedWorkerConfig['processorFile']
+    const options = snapshotWorkerOptions(
+      readByName(config, 'options') as SandboxedWorkerConfig['options'],
+    )
     if (options?.jobTimeoutMs !== undefined) {
       throw new QueueException(
         QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,

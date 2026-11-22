@@ -8,6 +8,7 @@
 
 import { HttpStatus } from '@nestjs/common'
 import { bulkUnreadable, guarded } from '../config/guarded-read'
+import { readByName } from '../config/read-by-name'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { QueueException } from '../errors/queue-exception'
 import type { BulkJob } from '../interfaces/queue-job-data.interface'
@@ -47,7 +48,9 @@ export function readBulkJobs<T>(jobs: readonly BulkJob<T>[], limit: number): Bul
         where,
         () => {
           const entry = job as BulkJob<T>
-          const { name, data, options } = entry
+          const name = readByName(entry, 'name') as BulkJob<T>['name']
+          const data = readByName(entry, 'data') as T
+          const options = readByName(entry, 'options') as BulkJob<T>['options']
           return options === undefined ? { name, data } : { name, data, options }
         },
         bulkUnreadable,

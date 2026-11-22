@@ -20,8 +20,10 @@ function isChainEnd(level: object, source: object): boolean {
 /**
  * Read `key` of `source`, once, as property access would, except that a value found only on the
  * realm's root prototype is not a value the host gave and reads as `undefined`, and neither is one
- * found only on an ancestor with no prototype. An own property and a class getter count, and so
- * does the answer of a Proxy whose target holds nothing, which no descriptor lookup can see.
+ * found only on an ancestor with no prototype. The holder alone decides that, and a holder that is
+ * the root is not read at all, so a getter planted there never runs. Otherwise the key is read once,
+ * as property access would: an own property, a class getter, and the answer of a Proxy whose target
+ * holds nothing all count.
  *
  * @param source - The host object, or a group of options.
  * @param key - The name of the option.
@@ -29,11 +31,10 @@ function isChainEnd(level: object, source: object): boolean {
  */
 export function readByName(source: object, key: string): unknown {
   let holder: object | null = source
-  while (holder !== null && !Object.hasOwn(holder, key)) holder = Reflect.getPrototypeOf(holder)
-  const value: unknown = Reflect.get(source, key)
-  const planted =
-    holder !== null && isChainEnd(holder, source) && Reflect.get(holder, key) === value
-  return planted ? undefined : value
+  while (holder !== null && Reflect.getOwnPropertyDescriptor(holder, key) === undefined) {
+    holder = Reflect.getPrototypeOf(holder)
+  }
+  return holder !== null && isChainEnd(holder, source) ? undefined : Reflect.get(source, key)
 }
 
 /**

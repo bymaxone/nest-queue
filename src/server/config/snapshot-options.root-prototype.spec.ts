@@ -134,7 +134,8 @@ describe('what the root-prototype check keeps and drops', () => {
     expect(copy.shutdown?.drainOnShutdown).toBe(true)
   })
 
-  it('keeps the answer of a Proxy over an empty target that differs from the planted value', () => {
+  it('does not keep the answer of a Proxy over an empty target when the root holds the key', () => {
+    // Flipped: what was planted is decided from the holder alone, never by comparing two reads.
     const shutdown = new Proxy(
       {},
       { get: (_t, key) => (key === 'drainTimeoutMs' ? 5000 : undefined) },
@@ -142,7 +143,7 @@ describe('what the root-prototype check keeps and drops', () => {
 
     const copy = withPlanted('drainTimeoutMs', 1, () => snapshotOptions({ connection, shutdown }))
 
-    expect(copy.shutdown?.drainTimeoutMs).toBe(5000)
+    expect(copy.shutdown?.drainTimeoutMs).toBeUndefined()
   })
 })
 
