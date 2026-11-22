@@ -606,6 +606,26 @@ describe('ProcessorDiscoveryService — a failing @OnWorkerEvent / @OnQueueEvent
     errorSpy.mockRestore()
   })
 
+  /** The two events a failing `completed` handler on `FailingProcessor` must produce, in order. */
+  function failedHandlerEvents(): unknown[] {
+    return [
+      {
+        event: 'QUEUE_EVENT_HANDLER_FAILED',
+        message: `@OnWorkerEvent("completed") handler FailingProcessor.onCompleted failed (queue.event_handler_failed)`,
+        decorator: '@OnWorkerEvent',
+        eventName: 'completed',
+        err: expect.anything() as unknown,
+      },
+      {
+        event: 'QUEUE_EVENT_HANDLER_FAILED',
+        message: `@OnQueueEvent("completed") handler FailingProcessor.onQueueCompleted failed (queue.event_handler_failed)`,
+        decorator: '@OnQueueEvent',
+        eventName: 'completed',
+        err: expect.anything() as unknown,
+      },
+    ]
+  }
+
   it.each([
     ['rejects asynchronously', async () => Promise.reject(new Error('boom'))],
     [
@@ -653,22 +673,7 @@ describe('ProcessorDiscoveryService — a failing @OnWorkerEvent / @OnQueueEvent
 
     expect(unhandled).not.toHaveBeenCalled()
     expect(errorSpy).toHaveBeenCalledTimes(2)
-    expect(loggedEvents(errorSpy)).toEqual([
-      {
-        event: 'QUEUE_EVENT_HANDLER_FAILED',
-        message: `@OnWorkerEvent("completed") handler FailingProcessor.onCompleted failed (queue.event_handler_failed)`,
-        decorator: '@OnWorkerEvent',
-        eventName: 'completed',
-        err: expect.anything() as unknown,
-      },
-      {
-        event: 'QUEUE_EVENT_HANDLER_FAILED',
-        message: `@OnQueueEvent("completed") handler FailingProcessor.onQueueCompleted failed (queue.event_handler_failed)`,
-        decorator: '@OnQueueEvent',
-        eventName: 'completed',
-        err: expect.anything() as unknown,
-      },
-    ])
+    expect(loggedEvents(errorSpy)).toEqual(failedHandlerEvents())
     errorSpy.mockRestore()
   })
 
