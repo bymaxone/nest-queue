@@ -9,7 +9,6 @@
  * @layer server/services
  */
 
-import { readByName } from '../config/read-by-name'
 import { isAbsolute, extname } from 'node:path'
 import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import { Worker } from 'bullmq'
@@ -23,7 +22,7 @@ import { observeAttempt } from '../observability/observe-attempt'
 import { QueueObserverRegistry } from '../observability/queue-observer'
 import { isTimerDelayMs } from '../utils/timer-delay'
 import { workerOptionProblem } from '../utils/worker-option-problem'
-import { snapshotWorkerOptions } from '../utils/snapshot-worker-options'
+import { readWorkerConfig, snapshotWorkerOptions } from '../utils/snapshot-worker-options'
 import { isAbandoned } from '../utils/abandoned-workers'
 import type { WorkerOptions } from '../interfaces/worker-options.interface'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
@@ -138,14 +137,16 @@ export class WorkerRegistry {
   register<TData = unknown, TResult = unknown>(
     config: ProgrammaticWorkerConfig<TData, TResult>,
   ): Worker<TData, TResult> {
-    const queueName = readByName(config, 'queueName') as string
-    const handler = readByName(config, 'handler') as ProgrammaticWorkerConfig<
-      TData,
-      TResult
-    >['handler']
-    const options = snapshotWorkerOptions(
-      readByName(config, 'options') as ProgrammaticWorkerConfig<TData, TResult>['options'],
-    )
+    const [queueName, handler, rawOptions] = readWorkerConfig(config, [
+      'queueName',
+      'handler',
+      'options',
+    ]) as [
+      string,
+      ProgrammaticWorkerConfig<TData, TResult>['handler'],
+      ProgrammaticWorkerConfig<TData, TResult>['options'],
+    ]
+    const options = snapshotWorkerOptions(rawOptions)
     this.guardDuplicate(queueName)
     this.validateOptions(options)
 
@@ -199,14 +200,12 @@ export class WorkerRegistry {
    *   invalid or the BullMQ `Worker` constructor throws.
    */
   registerSandboxed(config: SandboxedWorkerConfig): Worker {
-    const queueName = readByName(config, 'queueName') as string
-    const processorFile = readByName(
-      config,
+    const [queueName, processorFile, rawOptions] = readWorkerConfig(config, [
+      'queueName',
       'processorFile',
-    ) as SandboxedWorkerConfig['processorFile']
-    const options = snapshotWorkerOptions(
-      readByName(config, 'options') as SandboxedWorkerConfig['options'],
-    )
+      'options',
+    ]) as [string, SandboxedWorkerConfig['processorFile'], SandboxedWorkerConfig['options']]
+    const options = snapshotWorkerOptions(rawOptions)
     if (options?.jobTimeoutMs !== undefined) {
       throw new QueueException(
         QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,

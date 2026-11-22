@@ -8,6 +8,7 @@
  * @layer server/module
  */
 
+import { readByName } from './config/read-by-name'
 import {
   ConfigurableModuleBuilder,
   type DynamicModule,
@@ -74,8 +75,10 @@ function readRegistrationOptions(options: typeof ASYNC_OPTIONS_TYPE): {
   rest: Omit<typeof ASYNC_OPTIONS_TYPE, 'isGlobal'>
 } {
   const read = guarded('the registration options', () => {
-    const { isGlobal, ...rest } = options
-    return { isGlobal: isGlobal, rest }
+    // A spread copies own fields only, so a getter planted on the root prototype is never run.
+    const rest = { ...options }
+    Reflect.deleteProperty(rest, 'isGlobal')
+    return { isGlobal: readByName(options, 'isGlobal') as boolean | undefined, rest }
   })
   checkFlag('isGlobal', read.isGlobal)
   return { isGlobal: read.isGlobal, rest: read.rest }

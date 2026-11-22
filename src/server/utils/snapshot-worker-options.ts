@@ -8,6 +8,7 @@
 
 import { HttpStatus } from '@nestjs/common'
 import { guarded } from '../config/guarded-read'
+import { readByName } from '../config/read-by-name'
 import { readKeysOf } from '../config/snapshot-options'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { QueueException } from '../errors/queue-exception'
@@ -50,6 +51,22 @@ export function snapshotWorkerOptions<T extends WorkerOptions | undefined>(optio
       }
       return copy as T
     },
+    unreadable,
+  )
+}
+
+/**
+ * Read the named fields of the configuration of one worker registration, each once, under a guard.
+ *
+ * @param config - The configuration as the host gave it.
+ * @param keys - The names to read.
+ * @returns The value of each name, in order, `undefined` for one the host did not give.
+ * @throws {QueueException} `WORKER_REGISTRATION_FAILED`, with the host's error as the cause, when a read throws.
+ */
+export function readWorkerConfig(config: object, keys: readonly string[]): unknown[] {
+  return guarded(
+    'the worker configuration',
+    () => keys.map((key) => readByName(config, key)),
     unreadable,
   )
 }
