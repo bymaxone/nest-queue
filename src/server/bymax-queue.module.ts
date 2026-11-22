@@ -19,6 +19,7 @@ import type { Redis } from 'ioredis'
 import type { BymaxQueueModuleOptions } from './interfaces/queue-module-options.interface'
 import type { QueueConnectionMode } from './interfaces/queue-connection.interface'
 import { snapshotOptions } from './config/snapshot-options'
+import { guarded } from './config/guarded-read'
 import { checkFlag, validateOptions } from './config/validate-options'
 import { applyDefaults, type ResolvedQueueOptions } from './config/resolved-options'
 import {
@@ -63,6 +64,23 @@ export const { ConfigurableModuleClass, MODULE_OPTIONS_TOKEN, OPTIONS_TYPE, ASYN
  *   useFactory: (client: Redis) => ({ connection: { client } }),
  * })
  */
+/**
+ * Read the options a host passes to `forRootAsync` once, under a guard, so Nest is handed the copy.
+ * An `isGlobal` that is `undefined` is not given, so the module keeps its default; any other value
+ * that is not a boolean is refused, as it is in `forRoot`, since `'false'` would read as true.
+ */
+function readRegistrationOptions(options: typeof ASYNC_OPTIONS_TYPE): {
+  isGlobal: boolean | undefined
+  rest: Omit<typeof ASYNC_OPTIONS_TYPE, 'isGlobal'>
+} {
+  const read = guarded('the registration options', () => {
+    const { isGlobal, ...rest } = options
+    return { isGlobal: isGlobal, rest }
+  })
+  checkFlag('isGlobal', read.isGlobal)
+  return { isGlobal: read.isGlobal, rest: read.rest }
+}
+
 @Module({})
 export class BymaxQueueModule extends ConfigurableModuleClass {
   /**
@@ -123,11 +141,8 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
    * @returns The configured dynamic module.
    */
   static forRootAsync(options: typeof ASYNC_OPTIONS_TYPE): DynamicModule {
-    // An `isGlobal` that is `undefined` is not given, so the module keeps its default; any other value
-    // that is not a boolean is refused, as it is in `forRoot`, since `'false'` would read as true.
-    const { isGlobal, ...rest } = options
-    checkFlag('isGlobal', isGlobal)
-    const base = super.forRootAsync(isGlobal === undefined ? rest : options)
+    const { isGlobal, rest } = readRegistrationOptions(options)
+    const base = super.forRootAsync(isGlobal === undefined ? rest : { ...rest, isGlobal })
 
     return {
       ...base,
