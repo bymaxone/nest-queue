@@ -98,8 +98,8 @@ describe('a value the host gave is still read', () => {
   })
 
   it('does not read a field from an ancestor the host built with no prototype', () => {
-    // Flipped: it cannot be told from a root prototype without reading the root's own properties,
-    // and `constructor` is one a polluted root can answer for.
+    // It cannot be told from a root prototype without reading the root's own properties, and
+    // `constructor` is one a polluted root can answer for.
     const ancestor = Object.assign(Object.create(null) as object, { drainTimeoutMs: 7000 })
     const shutdown = Object.create(ancestor) as object
 
@@ -135,7 +135,7 @@ describe('what the root-prototype check keeps and drops', () => {
   })
 
   it('does not keep the answer of a Proxy over an empty target when the root holds the key', () => {
-    // Flipped: what was planted is decided from the holder alone, never by comparing two reads.
+    // What was planted is decided from the holder alone, never by comparing two reads.
     const shutdown = new Proxy(
       {},
       { get: (_t, key) => (key === 'drainTimeoutMs' ? 5000 : undefined) },

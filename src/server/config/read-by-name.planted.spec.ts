@@ -179,4 +179,34 @@ describe('splitField takes one field out and copies the rest, each read once', (
 
     expect(() => splitField(host, 'named')).toThrow(boom)
   })
+
+  it('reads a known name by name, once, when the host holds it as a class method', () => {
+    class Host {
+      method(): string {
+        return 'method'
+      }
+    }
+
+    const { rest } = splitField(new Host(), 'named', ['method', 'absent'])
+
+    expect(Object.keys(rest)).toEqual(['method'])
+  })
+
+  it('does not read a known name again when it is an own field, or when it is the named one', () => {
+    const { host, reads } = counting(['own', 'named'])
+
+    const { rest } = splitField(host, 'named', ['own', 'named'])
+
+    expect(reads).toEqual({ own: 1, named: 1 })
+    expect(Object.keys(rest)).toEqual(['own'])
+  })
+
+  it('does not take a planted known name for the host’s', () => {
+    Object.defineProperty(Object.prototype, 'zzKnown', { value: 1, configurable: true })
+    try {
+      expect(Object.keys(splitField({}, 'named', ['zzKnown']).rest)).toEqual([])
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'zzKnown')
+    }
+  })
 })

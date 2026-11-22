@@ -65,6 +65,16 @@ export const { ConfigurableModuleClass, MODULE_OPTIONS_TOKEN, OPTIONS_TYPE, ASYN
  *   useFactory: (client: Redis) => ({ connection: { client } }),
  * })
  */
+/** The fields Nest reads from the options of an asynchronous registration. */
+const REGISTRATION_FIELDS = [
+  'imports',
+  'inject',
+  'provideInjectionTokensFrom',
+  'useClass',
+  'useExisting',
+  'useFactory',
+] as const
+
 /**
  * Read the options a host passes to `forRootAsync` once, under a guard, so Nest is handed the copy.
  * An `isGlobal` that is `undefined` is not given, so the module keeps its default; any other value
@@ -74,7 +84,9 @@ function readRegistrationOptions(options: typeof ASYNC_OPTIONS_TYPE): {
   isGlobal: boolean | undefined
   rest: Omit<typeof ASYNC_OPTIONS_TYPE, 'isGlobal'>
 } {
-  const read = guarded('the registration options', () => splitField(options, 'isGlobal'))
+  const read = guarded('the registration options', () =>
+    splitField(options, 'isGlobal', REGISTRATION_FIELDS),
+  )
   const isGlobal = read.value as boolean | undefined
   checkFlag('isGlobal', isGlobal)
   return { isGlobal, rest: read.rest }

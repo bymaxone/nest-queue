@@ -68,26 +68,38 @@ export function copyFields<T>(source: T): T {
  * Take one named field of `source` and copy the rest, each field read once. The named field is read
  * by name, so a value planted on the root prototype is not it and a getter planted there never runs;
  * the rest is every own enumerable field, symbols included, as an ordinary data property of a copy
- * with no prototype, so a key such as `__proto__` stays a key and a getter is read once.
+ * with no prototype, so a key such as `__proto__` stays a key and a getter is read once. A `known`
+ * name the rest does not hold is read by name, which a class method or an inherited getter answers.
  *
  * @param source - The host object.
  * @param key - The field to take out of the copy.
+ * @param known - Names to read by name when the host does not hold them as own enumerable fields, such as
+ *   a method of its class, so the copy keeps what the host gave.
  * @returns The value of the named field, `undefined` when the host did not give it, and the rest.
  */
 export function splitField(
   source: object,
   key: string,
+  known: readonly string[] = [],
 ): { value: unknown; rest: Record<PropertyKey, unknown> } {
   const value = readByName(source, key)
   const rest = Object.create(null) as Record<PropertyKey, unknown>
-  for (const own of Reflect.ownKeys(source)) {
-    if (own === key || !Object.prototype.propertyIsEnumerable.call(source, own)) continue
-    Object.defineProperty(rest, own, {
-      value: Reflect.get(source, own),
+  const put = (name: PropertyKey, field: unknown): void => {
+    Object.defineProperty(rest, name, {
+      value: field,
       enumerable: true,
       writable: true,
       configurable: true,
     })
+  }
+  for (const own of Reflect.ownKeys(source)) {
+    if (own !== key && Object.prototype.propertyIsEnumerable.call(source, own)) {
+      put(own, Reflect.get(source, own))
+    }
+  }
+  for (const name of known) {
+    const field = name === key || Object.hasOwn(rest, name) ? undefined : readByName(source, name)
+    if (field !== undefined) put(name, field)
   }
   return { value, rest }
 }
