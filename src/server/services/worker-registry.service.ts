@@ -206,7 +206,7 @@ export class WorkerRegistry {
       'processorFile',
       'options',
     ]) as [string, SandboxedWorkerConfig['processorFile'], SandboxedWorkerConfig['options']]
-    const options = snapshotWorkerOptions(rawOptions)
+    const options = snapshotWorkerOptions(rawOptions, ['useWorkerThreads'])
     if (options?.jobTimeoutMs !== undefined) {
       throw new QueueException(
         QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,

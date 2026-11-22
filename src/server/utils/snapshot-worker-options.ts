@@ -38,14 +38,22 @@ function unreadable(what: string): QueueException {
  * Copy the options of one worker registration, each read once, and the limiter with them.
  *
  * @param options - The options as the host gave them.
+ * @param extraKeys - Names beyond the base options to read by name, such as `useWorkerThreads` of a
+ *   sandboxed worker, which a class getter or a non-enumerable field would otherwise hide.
  * @returns A plain copy, or `options` itself when it is not an object, for validation to judge.
  * @throws {QueueException} `WORKER_REGISTRATION_FAILED`, with the host's error as the cause, when a read throws.
  */
-export function snapshotWorkerOptions<T extends WorkerOptions | undefined>(options: T): T {
+export function snapshotWorkerOptions<T extends WorkerOptions | undefined>(
+  options: T,
+  extraKeys: readonly string[] = [],
+): T {
   return guarded(
     'the worker options',
     () => {
-      const copy = readKeysOf(options as Record<string, unknown> | undefined, WORKER_OPTION_KEYS)
+      const copy = readKeysOf(options as Record<string, unknown> | undefined, [
+        ...WORKER_OPTION_KEYS,
+        ...extraKeys,
+      ])
       if (typeof copy === 'object' && 'limiter' in copy) {
         copy.limiter = readKeysOf(copy.limiter, ['max', 'duration'])
       }
