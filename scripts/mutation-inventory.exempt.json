@@ -42,5 +42,9 @@
   {
     "file": "src/stryker-scope.spec.ts",
     "reason": "Reads stryker.config.json, tsup.config.ts and the source text to pin the mutation scope; it executes no code under src, so it can kill no mutant."
+  },
+  {
+    "file": "src/server/utils/host-read-sites.spec.ts",
+    "reason": "Scans the source files for reads by name and checks each sits in a file that names its guard; executes no code under src, so it can kill no mutant."
   }
 ]
