@@ -111,10 +111,10 @@ export class QueueObserverRegistry {
     const inner = (): Promise<T> => run(carrier)
     return this.#observers.reduceRight<() => Promise<T>>(
       (next, observer) => () => {
-        const hook = observer.traceEnqueue?.bind(observer)
+        const hook = this.#hookOf<T>(observer, 'traceEnqueue')
         return hook === undefined
           ? next()
-          : this.#guarded('traceEnqueue', (once) => hook<T>(info, carrier, once), next)
+          : this.#guarded('traceEnqueue', (once) => hook(info, carrier, once), next)
       },
       inner,
     )()
@@ -134,10 +134,10 @@ export class QueueObserverRegistry {
   ): Promise<T> {
     return this.#observers.reduceRight<() => Promise<T>>(
       (next, observer) => () => {
-        const hook = observer.traceProcess?.bind(observer)
+        const hook = this.#hookOf<T>(observer, 'traceProcess')
         return hook === undefined
           ? next()
-          : this.#guarded('traceProcess', (once) => hook<T>(info, carrier, once), next)
+          : this.#guarded('traceProcess', (once) => hook(info, carrier, once), next)
       },
       run,
     )()
@@ -163,6 +163,36 @@ export class QueueObserverRegistry {
         this.#failed('jobFinished')
       }
     }
+  }
+
+  /**
+   * Read an observer's trace hook, once, so that the host's getter can neither fail the operation nor
+   * hand the registry something it cannot call. A hook that is `undefined` or `null` is absent; one
+   * that cannot be read, or is not a function, is the observer failing: it is logged and skipped.
+   *
+   * @param observer - The observer.
+   * @param name - The hook to read.
+   * @returns The hook bound to its observer, or `undefined` when there is none to run.
+   */
+  #hookOf<T>(
+    observer: QueueObserver,
+    name: 'traceEnqueue' | 'traceProcess',
+  ):
+    | ((info: QueueObserveInfo, carrier: TraceCarrier, run: () => Promise<T>) => Promise<T>)
+    | undefined {
+    let hook: unknown
+    try {
+      hook = Reflect.get(observer, name)
+    } catch {
+      this.#failed(name)
+      return undefined
+    }
+    if (hook === undefined || hook === null) return undefined
+    if (typeof hook !== 'function') {
+      this.#failed(name)
+      return undefined
+    }
+    return (hook as (...args: unknown[]) => Promise<T>).bind(observer)
   }
 
   /**
