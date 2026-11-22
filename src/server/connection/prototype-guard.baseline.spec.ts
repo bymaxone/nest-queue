@@ -90,6 +90,15 @@ const REPLACED: readonly [string, object, PropertyKey][] = [
   ['JSON.stringify', JSON, 'stringify'],
   ['Map.prototype.get', Map.prototype, 'get'],
   ['Symbol.for', Symbol, 'for'],
+  ['the Array iterator next', Object.getPrototypeOf([][Symbol.iterator]()), 'next'],
+  ['the Set iterator next', Object.getPrototypeOf(new Set()[Symbol.iterator]()), 'next'],
+  ['the Map iterator next', Object.getPrototypeOf(new Map()[Symbol.iterator]()), 'next'],
+  ['the String iterator next', Object.getPrototypeOf(''[Symbol.iterator]()), 'next'],
+  [
+    'the iterator prototype [Symbol.iterator]',
+    Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]())),
+    Symbol.iterator,
+  ],
 ]
 
 describe('a replaced built-in is refused on a clean Object.prototype', () => {

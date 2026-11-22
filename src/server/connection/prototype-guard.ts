@@ -21,6 +21,7 @@ const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor
 const hasOwn = Object.hasOwn
 const is = Object.is
 const create = Object.create
+const getPrototypeOf = Object.getPrototypeOf
 const ownKeys = Reflect.ownKeys
 const apply = Reflect.apply
 const isProxy = types.isProxy
@@ -194,6 +195,16 @@ interface BaselineEntry {
   readonly was: DescriptorFields | undefined
 }
 
+/** Add `owner` to `owners` unless it is already there. */
+function addOwner(owners: object[], owner: object): void {
+  let position = 0
+  while (position < owners.length) {
+    if (at(owners, position) === owner) return
+    position += 1
+  }
+  owners[owners.length] = owner
+}
+
 /** Every own property of the built-ins above and of their prototypes, as they were at load. */
 const BASELINE: readonly BaselineEntry[] = (() => {
   const owners: object[] = []
@@ -209,6 +220,21 @@ const BASELINE: readonly BaselineEntry[] = (() => {
         owners[owners.length] = constructor.prototype
       }
     }
+    position += 1
+  }
+  // The prototypes of the iterators that for-of and spread create, and the one above them: their
+  // `next` is what a loop calls.
+  const samples: object[] = [
+    [][Symbol.iterator](),
+    new Set()[Symbol.iterator](),
+    new Map()[Symbol.iterator](),
+    ''[Symbol.iterator](),
+  ]
+  position = 0
+  while (position < samples.length) {
+    const iterator = getPrototypeOf(at(samples, position)) as object
+    addOwner(owners, iterator)
+    addOwner(owners, getPrototypeOf(iterator) as object)
     position += 1
   }
   const entries: BaselineEntry[] = []
