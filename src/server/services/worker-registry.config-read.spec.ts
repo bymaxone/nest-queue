@@ -33,13 +33,19 @@ function throwing(boom: Error): never {
 }
 
 /** The refusal a call ended in: its code and its cause. */
-function refusalOf(run: () => unknown): { code: string; cause: unknown } {
+function refusalOf(run: () => unknown): {
+  code: string
+  reason: string | undefined
+  cause: unknown
+} {
   try {
     run()
   } catch (error) {
     if (!(error instanceof QueueException)) throw error
-    const body = error.getResponse() as { error: { code: string } }
-    return { code: body.error.code, cause: error.cause }
+    const body = error.getResponse() as {
+      error: { code: string; details?: { reason?: string } }
+    }
+    return { code: body.error.code, reason: body.error.details?.reason, cause: error.cause }
   }
   throw new Error('expected a refusal')
 }
@@ -55,6 +61,7 @@ describe('a worker configuration that cannot be read is refused', () => {
 
     expect(refusalOf(() => call(throwing(boom)))).toEqual({
       code: 'queue.worker_registration_failed',
+      reason: 'the worker configuration could not be read',
       cause: boom,
     })
     expect(getClient).not.toHaveBeenCalled()

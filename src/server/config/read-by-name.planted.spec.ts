@@ -80,6 +80,18 @@ describe('a bulk entry reads name, data and options by name', () => {
 })
 
 describe('a connection reads client, url and options by name', () => {
+  it('keeps a url the class of the host gives by a getter', () => {
+    class Connection {
+      get url(): string {
+        return `redis://localhost:${String(6379)}`
+      }
+    }
+
+    const copy = snapshotOptions({ connection: new Connection() })
+
+    expect(Object.keys(copy.connection as object)).toEqual(['url'])
+  })
+
   it.each(['client', 'options'])('does not see a planted %s next to a url', (key) => {
     const copy = withPlanted(key, { planted: true }, () =>
       snapshotOptions({ connection: { url: 'redis://localhost:6379' } }),
@@ -122,7 +134,7 @@ describe('splitField takes one field out and copies the rest, each read once', (
   it('reads the named field once and every other field once', () => {
     const { host, reads } = counting(['isGlobal', 'other'])
 
-    const { value, rest } = splitField(host, 'isGlobal')
+    const { value, rest } = splitField(host, 'isGlobal', [])
 
     expect(reads).toEqual({ isGlobal: 1, other: 1 })
     expect(value).toBe(true)
@@ -136,7 +148,7 @@ describe('splitField takes one field out and copies the rest, each read once', (
       configurable: true,
     })
     try {
-      expect(splitField({ a: 1 }, 'zzNamed')).toEqual({ value: undefined, rest: { a: 1 } })
+      expect(splitField({ a: 1 }, 'zzNamed', [])).toEqual({ value: undefined, rest: { a: 1 } })
       expect(runs).toBe(0)
     } finally {
       Reflect.deleteProperty(Object.prototype, 'zzNamed')
@@ -150,7 +162,7 @@ describe('splitField takes one field out and copies the rest, each read once', (
       }
     }
 
-    expect(splitField(new Host(), 'named').value).toBe('from Host')
+    expect(splitField(new Host(), 'named', []).value).toBe('from Host')
   })
 
   it('keeps symbols and a __proto__ key as keys of a copy with no prototype, and skips what is not enumerable', () => {
@@ -162,7 +174,7 @@ describe('splitField takes one field out and copies the rest, each read once', (
     )
     host[symbol] = 4
 
-    const { rest } = splitField(host, 'named')
+    const { rest } = splitField(host, 'named', [])
 
     expect(Reflect.getPrototypeOf(rest)).toBeNull()
     expect(Reflect.ownKeys(rest).map(String).sort()).toEqual(['Symbol(s)', '__proto__', 'kept'])
@@ -177,7 +189,7 @@ describe('splitField takes one field out and copies the rest, each read once', (
       },
     })
 
-    expect(() => splitField(host, 'named')).toThrow(boom)
+    expect(() => splitField(host, 'named', [])).toThrow(boom)
   })
 
   it('reads a known name by name, once, when the host holds it as a class method', () => {
@@ -208,5 +220,16 @@ describe('splitField takes one field out and copies the rest, each read once', (
     } finally {
       Reflect.deleteProperty(Object.prototype, 'zzKnown')
     }
+  })
+
+  it('copies each field as an ordinary writable, configurable, enumerable data property', () => {
+    const { rest } = splitField({ kept: 1 }, 'named', [])
+
+    expect(Object.getOwnPropertyDescriptor(rest, 'kept')).toEqual({
+      value: 1,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    })
   })
 })

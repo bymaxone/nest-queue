@@ -80,7 +80,7 @@ export function copyFields<T>(source: T): T {
 export function splitField(
   source: object,
   key: string,
-  known: readonly string[] = [],
+  known: readonly string[],
 ): { value: unknown; rest: Record<PropertyKey, unknown> } {
   const value = readByName(source, key)
   const rest = Object.create(null) as Record<PropertyKey, unknown>
