@@ -31,7 +31,7 @@ Against 1.2.26 the declared types do not change; the runtime of the main entry d
 
 ### Changed
 
-- **The main entry bundle is larger.** The guarded reads and copies of the options a host hands over are new runtime code: `dist/server/index.mjs` measures 17,458 B brotli with `pnpm size`, and its budget is now 17,488 B. The observability and shared entries are unchanged in budget.
+- **The main entry bundle is larger.** The guarded reads and copies of the options a host hands over are new runtime code: the brotli budget of `dist/server/index.mjs` was raised to fit it, and `pnpm size` holds the figure in `scripts/check-size.mjs`. The observability and shared budgets are unchanged.
 
 ## [1.2.26] — 2026-11-20
 
