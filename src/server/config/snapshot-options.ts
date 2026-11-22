@@ -98,7 +98,7 @@ function defineValue(copy: Record<string, unknown>, key: string, value: unknown)
 function setValuesOf<T>(
   group: T,
   known: readonly string[],
-  flags: readonly string[] = [],
+  flags: readonly string[],
   path = 'the module options',
 ): T {
   if (typeof group !== 'object') return group
