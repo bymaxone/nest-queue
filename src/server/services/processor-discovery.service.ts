@@ -88,6 +88,9 @@ export class ProcessorDiscoveryService implements OnModuleInit {
       if (!instance || typeof instance !== 'object') continue
 
       const ctor = (instance as WithConstructor).constructor
+      // An object with no prototype, such as the snapshot of the module options, has no constructor
+      // and cannot be a processor.
+      if (typeof ctor !== 'function') continue
 
       const processorMeta = Reflect.getOwnMetadata(PROCESSOR_METADATA_KEY, ctor) as
         ProcessorMetadata | undefined

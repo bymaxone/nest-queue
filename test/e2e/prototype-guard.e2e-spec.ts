@@ -31,6 +31,8 @@ import { startRedisContainer, type RedisContainer } from './setup/testcontainers
 class RootModule {}
 
 const QUEUE = 'guarded'
+/** A queue of its own, so jobs the other rows left behind are not processed by this row's worker. */
+const ISOLATED_QUEUE = 'guarded-foreign'
 
 let redis: RedisContainer
 let app: INestApplicationContext | undefined
@@ -180,28 +182,52 @@ describe('E2E — a polluted Object.prototype is refused', () => {
   it('keeps a job another producer enqueued when it is refused under a planted removeOnFail', async () => {
     const context = await boot()
     const handler = jest.fn().mockResolvedValue('done')
-    context.get(WorkerRegistry).register({ queueName: QUEUE, handler })
-    const producer = new Queue(QUEUE, { connection: { url: redis.url } })
+    const registry = context.get(WorkerRegistry)
+    registry.register({ queueName: ISOLATED_QUEUE, handler, options: { autorun: false } })
+    const worker = registry.getAll().get(ISOLATED_QUEUE)
+    // The other producer is another process, so it adds the job before anything is planted here:
+    // BullMQ's own `Queue.add` does not return under a planted `removeOnFail` in this process.
+    const producer = new Queue(ISOLATED_QUEUE, { connection: { url: redis.url } })
     try {
+      await producer.add('job', { n: 1 }, { jobId: 'foreign' })
       plant('removeOnFail', true)
       plant('removeOnComplete', true)
 
-      await producer.add('job', { n: 1 }, { jobId: 'foreign' })
-      const state = await settledState(producer, 'foreign')
+      void worker?.run()
+      await waitForState(producer, 'foreign', 'delayed')
+      const refused = await producer.getJob('foreign')
 
-      expect(['delayed', 'waiting', 'active']).toContain(state)
+      expect(await refused?.getState()).toBe('delayed')
+      expect(refused?.attemptsMade).toBe(0)
       expect(handler).not.toHaveBeenCalled()
+
+      Reflect.deleteProperty(Object.prototype, 'removeOnFail')
+      Reflect.deleteProperty(Object.prototype, 'removeOnComplete')
+      await waitForState(producer, 'foreign', 'completed', 25_000)
+
+      expect(handler).toHaveBeenCalledTimes(1)
     } finally {
       Reflect.deleteProperty(Object.prototype, 'removeOnFail')
       Reflect.deleteProperty(Object.prototype, 'removeOnComplete')
       await producer.close()
     }
-  }, 30_000)
+  }, 60_000)
 })
 
-/** The state of a job after the worker had time to offer it and be refused. */
-async function settledState(queue: Queue, jobId: string): Promise<string> {
-  await new Promise((done) => setTimeout(done, 3000))
-  const job = await queue.getJob(jobId)
-  return job === undefined ? 'gone' : await job.getState()
+/** Wait until the job is in `wanted`, and fail with the state it was last seen in when it never is. */
+async function waitForState(
+  queue: Queue,
+  jobId: string,
+  wanted: string,
+  timeoutMs = 10_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  let seen = 'gone'
+  while (Date.now() < deadline) {
+    const job = await queue.getJob(jobId)
+    seen = job === undefined ? 'gone' : await job.getState()
+    if (seen === wanted) return
+    await new Promise((done) => setTimeout(done, 100))
+  }
+  throw new Error(`job ${jobId} was ${seen}, not ${wanted}`)
 }

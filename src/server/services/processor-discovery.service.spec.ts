@@ -86,6 +86,19 @@ describe('ProcessorDiscoveryService.onModuleInit', () => {
     expect(workers.register).not.toHaveBeenCalled()
   })
 
+  it('skips a provider whose instance has no prototype, such as the snapshot of the module options', () => {
+    // An object with no prototype has no constructor; reading metadata off `undefined` would throw.
+    const discovery = mockDiscovery([makeWrapper(Object.create(null) as object)])
+    const workers = mockRegistry({ on: jest.fn() })
+    const eventsReg = mockEventsRegistry({ on: jest.fn() })
+    const svc = new ProcessorDiscoveryService(discovery, workers, eventsReg)
+
+    expect(() => {
+      svc.onModuleInit()
+    }).not.toThrow()
+    expect(workers.register).not.toHaveBeenCalled()
+  })
+
   it('registers a Worker when a @Processor class is discovered', () => {
     // The happy-path: a @Processor class causes WorkerRegistry.register to be called.
     @Processor('email', { concurrency: 3 })

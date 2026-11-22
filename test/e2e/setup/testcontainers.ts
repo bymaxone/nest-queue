@@ -31,7 +31,10 @@ const REDIS_PORT = 6379
  */
 export async function startRedisContainer(): Promise<RedisContainer> {
   const container = await new GenericContainer(REDIS_IMAGE).withExposedPorts(REDIS_PORT).start()
-  const url = `redis://${container.getHost()}:${String(container.getMappedPort(REDIS_PORT))}`
+  // `localhost` resolves to `::1` first here, where another local process may answer at the same
+  // port; the published port is on IPv4.
+  const host = container.getHost() === 'localhost' ? '127.0.0.1' : container.getHost()
+  const url = `redis://${host}:${String(container.getMappedPort(REDIS_PORT))}`
   return {
     container,
     url,

@@ -1,9 +1,12 @@
 /**
  * @fileoverview The refusal of a polluted `Object.prototype`. BullMQ and ioredis build ordinary
  * objects of their own and read names off them that the library never set, so a key planted on
- * `Object.prototype` is found there as if it were an option: a planted `path` or `ca` redirects or
- * reconfigures the connection, and no list of names can be complete. The guard refuses while the
- * realm's `Object.prototype` holds anything beyond what the language gives it.
+ * `Object.prototype` (prototype pollution in another dependency) is found there as if it were an
+ * option: a planted `path` or `ca` redirects or reconfigures the connection, and no list of names
+ * can be complete. The guard refuses while the realm's `Object.prototype` holds anything beyond what
+ * the language gives it. It runs on the built-ins as they were when this module loaded and reads
+ * nothing through an iterator or a method of an object it did not make, so a built-in replaced
+ * afterwards cannot blind it.
  * @layer server/connection
  */
 
@@ -12,11 +15,26 @@ import { HttpStatus } from '@nestjs/common'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { QueueException } from '../errors/queue-exception'
 
-/**
- * The string keys `Object.prototype` holds in every Node version the library supports. Anything else
- * is a key another part of the process planted there.
- */
-export const STANDARD_KEYS: ReadonlySet<string> = new Set([
+/** The built-ins the guard runs on, taken when this module loaded. */
+const getOwnPropertyNames = Object.getOwnPropertyNames
+const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor
+const hasOwn = Object.hasOwn
+const is = Object.is
+const create = Object.create
+const apply = Reflect.apply
+const isProxy = types.isProxy
+const objectPrototype = Object.prototype
+const nativeToString = Object.getOwnPropertyDescriptor(Function.prototype, 'toString')?.value as (
+  this: unknown,
+) => string
+const regExpTest = Object.getOwnPropertyDescriptor(RegExp.prototype, 'test')?.value as (
+  this: RegExp,
+  text: string,
+) => boolean
+const NATIVE_CODE = /\{\s*\[native code\]\s*\}\s*$/
+
+/** The standard string keys of `Object.prototype`, in the order the snapshots below use. */
+const STANDARD_NAMES: readonly string[] = [
   '__defineGetter__',
   '__defineSetter__',
   '__lookupGetter__',
@@ -29,10 +47,13 @@ export const STANDARD_KEYS: ReadonlySet<string> = new Set([
   'toLocaleString',
   'toString',
   'valueOf',
-])
+]
 
-/** `Object.hasOwn` as it was when this module loaded. */
-const hasOwn = Object.hasOwn
+/**
+ * The string keys `Object.prototype` holds in every Node version the library supports. Anything else
+ * is a key another part of the process planted there. Exported for the specs; the guard does not read it.
+ */
+export const STANDARD_KEYS: ReadonlySet<string> = new Set(STANDARD_NAMES)
 
 /** The six fields of a property descriptor, each present (`undefined` when the descriptor lacks it). */
 interface DescriptorFields {
@@ -44,6 +65,13 @@ interface DescriptorFields {
   readonly configurable: unknown
 }
 
+/** The element of `list` at `position`, which the loops below keep inside its length. */
+function at<T>(list: readonly T[], position: number): T {
+  return list[position] as T
+}
+
+const FIELD_NAMES = ['value', 'get', 'set', 'writable', 'enumerable', 'configurable'] as const
+
 /**
  * Copy the fields a descriptor holds of its own into an object with no prototype. A descriptor is an
  * ordinary object, so reading `get`, `set` or `value` off a data descriptor would find, and run, an
@@ -51,34 +79,40 @@ interface DescriptorFields {
  */
 function fieldsOf(descriptor: PropertyDescriptor | undefined): DescriptorFields | undefined {
   if (descriptor === undefined) return undefined
-  const fields = Object.create(null) as Record<string, unknown>
-  for (const field of ['value', 'get', 'set', 'writable', 'enumerable', 'configurable']) {
+  const fields = create(null) as Record<string, unknown>
+  let position = 0
+  while (position < FIELD_NAMES.length) {
+    const field = at(FIELD_NAMES, position)
     fields[field] = hasOwn(descriptor, field)
       ? (descriptor as unknown as Record<string, unknown>)[field]
       : undefined
+    position += 1
   }
   return fields as unknown as DescriptorFields
 }
 
-/** The descriptors of the standard keys as they were when this module loaded. */
-const STANDARD_DESCRIPTORS: ReadonlyMap<string, DescriptorFields | undefined> = new Map(
-  [...STANDARD_KEYS].map((name) => [
-    name,
-    fieldsOf(Object.getOwnPropertyDescriptor(Object.prototype, name)),
-  ]),
-)
+/** The descriptor of the standard key at `position`, now. */
+function descriptorNow(position: number): DescriptorFields | undefined {
+  return fieldsOf(getOwnPropertyDescriptor(objectPrototype, at(STANDARD_NAMES, position)))
+}
 
-/** `Function.prototype.toString` as it was when this module loaded. */
-const fnToString = Object.getOwnPropertyDescriptor(Function.prototype, 'toString')?.value as (
-  this: unknown,
-) => string
+/** The descriptors of the standard keys as they were when this module loaded. */
+const SNAPSHOT: readonly (DescriptorFields | undefined)[] = (() => {
+  const taken: (DescriptorFields | undefined)[] = []
+  let position = 0
+  while (position < STANDARD_NAMES.length) {
+    taken[position] = descriptorNow(position)
+    position += 1
+  }
+  return taken
+})()
 
 /** Whether `value` is a function the engine implements: not written in JavaScript, not a proxy. */
 function isNative(value: unknown): boolean {
   return (
     typeof value === 'function' &&
-    !types.isProxy(value) &&
-    /\{\s*\[native code\]\s*\}\s*$/.test(Reflect.apply<unknown, [], string>(fnToString, value, []))
+    !isProxy(value) &&
+    regExpTest.call(NATIVE_CODE, apply<unknown, [], string>(nativeToString, value, []))
   )
 }
 
@@ -96,24 +130,40 @@ function hasExpectedKind(name: string, descriptor: DescriptorFields | undefined)
   return isNative(descriptor.value) && (descriptor.value as { name: string }).name === expectedName
 }
 
-/** The standard keys that were not what the language gives them when this module loaded. */
-const BASELINE_DEFECTS: ReadonlySet<string> = new Set(
-  [...STANDARD_KEYS].filter((name) => !hasExpectedKind(name, STANDARD_DESCRIPTORS.get(name))),
-)
+/** Whether the standard key at each position was not what the language gives it when this module loaded. */
+const BASELINE_DEFECT: readonly boolean[] = (() => {
+  const flags: boolean[] = []
+  let position = 0
+  while (position < STANDARD_NAMES.length) {
+    flags[position] = !hasExpectedKind(at(STANDARD_NAMES, position), SNAPSHOT[position])
+    position += 1
+  }
+  return flags
+})()
 
-/** Whether a standard key is not what it was when this module loaded. */
-function isOverwritten(name: string): boolean {
-  const was = STANDARD_DESCRIPTORS.get(name)
-  const now = fieldsOf(Object.getOwnPropertyDescriptor(Object.prototype, name))
+/** Whether the standard key at `position` is not what it was when this module loaded. */
+function isOverwritten(position: number): boolean {
+  const was = SNAPSHOT[position]
+  const now = descriptorNow(position)
   if (was === undefined || now === undefined) return was !== now
   return (
-    !Object.is(was.value, now.value) ||
+    !is(was.value, now.value) ||
     was.get !== now.get ||
     was.set !== now.set ||
     was.writable !== now.writable ||
     was.enumerable !== now.enumerable ||
     was.configurable !== now.configurable
   )
+}
+
+/** Whether `name` is one of the standard keys, by comparison and not by a lookup in a collection. */
+function isStandard(name: string): boolean {
+  let position = 0
+  while (position < STANDARD_NAMES.length) {
+    if (STANDARD_NAMES[position] === name) return true
+    position += 1
+  }
+  return false
 }
 
 /**
@@ -125,13 +175,18 @@ function isOverwritten(name: string): boolean {
  * @throws {QueueException} `INVALID_OPTIONS` with the count of the keys, never a key or a value.
  */
 export function assertPrototypeClean(): void {
-  const added = Object.getOwnPropertyNames(Object.prototype).filter(
-    (name) => !STANDARD_KEYS.has(name),
-  )
-  const replaced = [...STANDARD_KEYS].filter(
-    (name) => BASELINE_DEFECTS.has(name) || isOverwritten(name),
-  )
-  const count = added.length + replaced.length
+  let count = 0
+  const names = getOwnPropertyNames(objectPrototype)
+  let position = 0
+  while (position < names.length) {
+    if (!isStandard(at(names, position))) count += 1
+    position += 1
+  }
+  position = 0
+  while (position < STANDARD_NAMES.length) {
+    if (BASELINE_DEFECT[position] === true || isOverwritten(position)) count += 1
+    position += 1
+  }
   if (count > 0) {
     throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, HttpStatus.INTERNAL_SERVER_ERROR, {
       reason: 'Object.prototype holds keys the libraries would read as their own',
