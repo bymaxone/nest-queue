@@ -33,6 +33,8 @@ class RootModule {}
 const QUEUE = 'guarded'
 /** A queue of its own, so jobs the other rows left behind are not processed by this row's worker. */
 const ISOLATED_QUEUE = 'guarded-foreign'
+/** A queue for the row whose handler plants the keys itself. */
+const SETTLE_QUEUE = 'guarded-settle'
 
 let redis: RedisContainer
 let app: INestApplicationContext | undefined
@@ -212,6 +214,38 @@ describe('E2E — a polluted Object.prototype is refused', () => {
       await producer.close()
     }
   }, 60_000)
+
+  it('keeps a job another producer enqueued when the handler plants removeOnComplete and removeOnFail itself', async () => {
+    const context = await boot()
+    const handler = jest.fn().mockImplementation(() => {
+      plant('removeOnComplete', true)
+      plant('removeOnFail', true)
+      return Promise.resolve('done')
+    })
+    const registry = context.get(WorkerRegistry)
+    registry.register({ queueName: SETTLE_QUEUE, handler, options: { autorun: false } })
+    const worker = registry.getAll().get(SETTLE_QUEUE)
+    // Added before anything is planted: BullMQ's own `Queue.add` does not return under a planted `removeOnFail`.
+    const producer = new Queue(SETTLE_QUEUE, { connection: { url: redis.url } })
+    try {
+      await producer.add('job', { n: 1 }, { jobId: 'settled' })
+
+      void worker?.run()
+      await waitUntilCalled(handler)
+      // The keys stay planted while BullMQ finishes the attempt: the guard refuses once the handler
+      // settled, the attempt fails, and the job is kept as failed instead of being deleted.
+      await waitForState(producer, 'settled', 'failed', 20_000)
+      const kept = await producer.getJob('settled')
+
+      expect(handler).toHaveBeenCalledTimes(1)
+      expect(kept).toBeDefined()
+      expect(await kept?.getState()).toBe('failed')
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'removeOnFail')
+      Reflect.deleteProperty(Object.prototype, 'removeOnComplete')
+      await producer.close()
+    }
+  }, 60_000)
 })
 
 /** Wait until the job is in `wanted`, and fail with the state it was last seen in when it never is. */
@@ -230,4 +264,13 @@ async function waitForState(
     await new Promise((done) => setTimeout(done, 100))
   }
   throw new Error(`job ${jobId} was ${seen}, not ${wanted}`)
+}
+
+/** Wait until the mock has been called, and give the settle that follows a moment to run. */
+async function waitUntilCalled(mock: jest.Mock, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (mock.mock.calls.length === 0 && Date.now() < deadline) {
+    await new Promise((done) => setTimeout(done, 50))
+  }
+  await new Promise((done) => setTimeout(done, 300))
 }

@@ -21,6 +21,7 @@ const getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor
 const hasOwn = Object.hasOwn
 const is = Object.is
 const create = Object.create
+const ownKeys = Reflect.ownKeys
 const apply = Reflect.apply
 const isProxy = types.isProxy
 const objectPrototype = Object.prototype
@@ -167,8 +168,131 @@ function isStandard(name: string): boolean {
 }
 
 /**
+ * The built-ins the options and the job paths call, and the globals that name them. Promise and Date
+ * are left out: a library that patches them for its own scheduling must not stop the queue.
+ */
+const BASELINE_GLOBALS = [
+  'Object',
+  'Reflect',
+  'Array',
+  'Number',
+  'String',
+  'Function',
+  'Symbol',
+  'JSON',
+  'Set',
+  'Map',
+  'RegExp',
+  'WeakMap',
+  'WeakSet',
+] as const
+
+/** One entry of the baseline: an object, one of its keys, and what the key held when this module loaded. */
+interface BaselineEntry {
+  readonly owner: object
+  readonly key: PropertyKey
+  readonly was: DescriptorFields | undefined
+}
+
+/** Every own property of the built-ins above and of their prototypes, as they were at load. */
+const BASELINE: readonly BaselineEntry[] = (() => {
+  const owners: object[] = []
+  let position = 0
+  while (position < BASELINE_GLOBALS.length) {
+    const constructor = (globalThis as unknown as Record<string, { prototype?: object }>)[
+      at(BASELINE_GLOBALS, position)
+    ]
+    if (constructor !== undefined) {
+      owners[owners.length] = constructor
+      // `Object.prototype` is checked above, key by key, and counted there.
+      if (constructor.prototype !== undefined && constructor.prototype !== objectPrototype) {
+        owners[owners.length] = constructor.prototype
+      }
+    }
+    position += 1
+  }
+  const entries: BaselineEntry[] = []
+  position = 0
+  while (position < owners.length) {
+    const owner = at(owners, position)
+    const keys = ownKeys(owner)
+    let keyPosition = 0
+    while (keyPosition < keys.length) {
+      const key = at(keys, keyPosition)
+      entries[entries.length] = { owner, key, was: fieldsOf(getOwnPropertyDescriptor(owner, key)) }
+      keyPosition += 1
+    }
+    position += 1
+  }
+  return entries
+})()
+
+/** The globals that name the built-ins above, as they were at load. */
+const GLOBAL_BINDINGS: readonly unknown[] = (() => {
+  const bound: unknown[] = []
+  let position = 0
+  while (position < BASELINE_GLOBALS.length) {
+    bound[position] = (globalThis as unknown as Record<string, unknown>)[
+      at(BASELINE_GLOBALS, position)
+    ]
+    position += 1
+  }
+  return bound
+})()
+
+/** How many of the built-ins, and the globals that name them, are not what they were at load. */
+function replacedBuiltins(): number {
+  let count = 0
+  let position = 0
+  while (position < BASELINE_GLOBALS.length) {
+    const now = (globalThis as unknown as Record<string, unknown>)[at(BASELINE_GLOBALS, position)]
+    if (now !== at(GLOBAL_BINDINGS, position)) count += 1
+    position += 1
+  }
+  position = 0
+  while (position < BASELINE.length) {
+    const entry = at(BASELINE, position)
+    const now = fieldsOf(getOwnPropertyDescriptor(entry.owner, entry.key))
+    if (!sameFields(entry.was, now)) count += 1
+    position += 1
+  }
+  return count
+}
+
+/** Whether two copies of a descriptor hold the same fields, or both are missing. */
+function sameFields(was: DescriptorFields | undefined, now: DescriptorFields | undefined): boolean {
+  if (was === undefined || now === undefined) return was === now
+  return (
+    is(was.value, now.value) &&
+    was.get === now.get &&
+    was.set === now.set &&
+    was.writable === now.writable &&
+    was.enumerable === now.enumerable &&
+    was.configurable === now.configurable
+  )
+}
+
+/** The `details` of the refusal; its count is set each time the refusal is thrown. */
+const REFUSAL_DETAILS = {
+  reason: 'Object.prototype holds keys the libraries would read as their own',
+  count: 0,
+}
+
+/**
+ * The refusal, built when this module loads: building one at use time would run live string and
+ * object built-ins and read a `message` planted on `Object.prototype`, so a blinded guard would answer
+ * with an untyped error. Only the count changes between throws.
+ */
+const REFUSAL = new QueueException(
+  QUEUE_ERROR_CODES.INVALID_OPTIONS,
+  HttpStatus.INTERNAL_SERVER_ERROR,
+  REFUSAL_DETAILS,
+)
+
+/**
  * Refuse while `Object.prototype` holds a string key it does not hold by default, or a standard key that
- * is not what the language gives it or not what it was when this module loaded. A symbol key is not a
+ * is not what the language gives it or not what it was when this module loaded, or while a built-in
+ * the options and job paths call (or the global that names it) is not what it was when this module loaded. A symbol key is not a
  * name the libraries read. It does not cover `Array.prototype`, `Function.prototype` or the prototype
  * of `Buffer`, and a key planted after the last check is still read by the objects built later.
  *
@@ -187,10 +311,9 @@ export function assertPrototypeClean(): void {
     if (BASELINE_DEFECT[position] === true || isOverwritten(position)) count += 1
     position += 1
   }
+  count += replacedBuiltins()
   if (count > 0) {
-    throw new QueueException(QUEUE_ERROR_CODES.INVALID_OPTIONS, HttpStatus.INTERNAL_SERVER_ERROR, {
-      reason: 'Object.prototype holds keys the libraries would read as their own',
-      count,
-    })
+    REFUSAL_DETAILS.count = count
+    throw REFUSAL
   }
 }

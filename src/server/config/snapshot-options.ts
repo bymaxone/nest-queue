@@ -44,7 +44,7 @@ const JOB_OPTION_TABLE = {
 } as const satisfies Record<keyof JobsOptions, true>
 
 /** The job options, each read by name even when it is inherited or hidden. */
-const JOB_OPTION_KEYS: readonly string[] = Object.keys(JOB_OPTION_TABLE)
+export const JOB_OPTION_KEYS: readonly string[] = Object.keys(JOB_OPTION_TABLE)
 
 const FLOWS_KEYS = ['enabled'] as const satisfies readonly (keyof NonNullable<
   BymaxQueueModuleOptions['flows']

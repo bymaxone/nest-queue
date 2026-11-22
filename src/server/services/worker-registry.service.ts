@@ -9,6 +9,7 @@
  * @layer server/services
  */
 
+import { shadowJobOptions } from '../utils/shadow-job-options'
 import { assertPrototypeClean } from '../connection/prototype-guard'
 import { isAbsolute, extname } from 'node:path'
 import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common'
@@ -454,6 +455,13 @@ export class WorkerRegistry {
     // Propagate the configured telemetry instance so spans cross from enqueue()
     // into the worker; the key stays absent when telemetry is not configured.
     if (this.options.telemetry !== undefined) result.telemetry = this.options.telemetry
+    // BullMQ keeps these options in an ordinary object and reads them while it finishes a job
+    // (`removeOnComplete`, `removeOnFail`, `limiter`, `name`, `metrics`): a name nobody set is looked up on
+    // `Object.prototype`, so each gets an own `undefined`, which is what an absent option is to it.
+    const shadowed = result as unknown as Record<string, unknown>
+    for (const name of WORKER_SHADOWED_OPTIONS) {
+      if (!Object.hasOwn(shadowed, name)) shadowed[name] = undefined
+    }
     return result
   }
 }
@@ -503,6 +511,19 @@ function adaptHandler<TData, TResult>(
   }
 }
 
+/** The options of a BullMQ `Worker` that have no default and are read after the handler settled. */
+const WORKER_SHADOWED_OPTIONS: readonly string[] = [
+  'removeOnComplete',
+  'removeOnFail',
+  'name',
+  'limiter',
+  'metrics',
+  'maxStartedAttempts',
+  'skipLockRenewal',
+  'skipStalledCheck',
+  'settings',
+]
+
 /** How long a job refused under a polluted `Object.prototype` waits before it is offered again. */
 const REFUSED_JOB_DELAY_MS = 5000
 
@@ -515,8 +536,29 @@ async function deferRefusedJob<TData, TResult>(
   job: Job<TData, TResult>,
   token: string | undefined,
 ): Promise<never> {
-  await job.moveToDelayed(Date.now() + REFUSED_JOB_DELAY_MS, token)
+  // BullMQ's own `Job.moveToDelayed` hands the backend an options literal that inherits from
+  // `Object.prototype`, where a planted `fetchNext` would pull another job to active and a planted
+  // `fieldsToUpdate` would be written to the job's hash. The backend is called with an object that has
+  // no prototype and every name it reads.
+  const now = Date.now()
+  const options = Object.create(null) as Record<string, unknown>
+  options.skipAttempt = true
+  options.fetchNext = false
+  options.fieldsToUpdate = undefined
+  const backend = (job as unknown as { backend: DelayBackend }).backend
+  await backend.moveToDelayed(job.id, now, REFUSED_JOB_DELAY_MS, token, options)
   throw new DelayedError()
+}
+
+/** The part of BullMQ's queue backend that moves a job to the delayed set. */
+interface DelayBackend {
+  moveToDelayed(
+    jobId: string | undefined,
+    timestamp: number,
+    delay: number,
+    token: string | undefined,
+    options: object,
+  ): Promise<unknown>
 }
 
 /**
@@ -548,10 +590,18 @@ function toProcessor<TData, TResult>(
     } catch {
       return deferRefusedJob(job, token)
     }
+    // BullMQ reads job options off an ordinary object after the handler settles: they get own values
+    // now, and the guard runs again once the handler has settled.
+    shadowJobOptions(job)
     return run(job, token, signal).then(
-      (value) => (abandoned() ? new Promise<never>(() => undefined) : value),
+      (value) => {
+        if (abandoned()) return new Promise<never>(() => undefined)
+        assertPrototypeClean()
+        return value
+      },
       (error: unknown) => {
         if (abandoned()) return new Promise<never>(() => undefined)
+        assertPrototypeClean()
         throw error
       },
     )

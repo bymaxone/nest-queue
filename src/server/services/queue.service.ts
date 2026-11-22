@@ -179,6 +179,9 @@ export class QueueService {
       this.afterReady(queueName).then(() => {
         // Stryker disable next-line StringLiteral: equivalent — the deadline already rejected the caller, so this error is absorbed and never read
         if (expired) throw new Error('the call had already timed out')
+        // Once more, in the turn that makes the call: the awaits before it (the wait for the client,
+        // the observer hooks) leave room for a key to be planted after the guard at the entry.
+        assertPrototypeClean()
         return run()
       }),
       this.options.enqueueTimeoutMs,
@@ -525,10 +528,14 @@ export class QueueService {
   }
 }
 
-/** The codes `enqueueBulk` reports as they are instead of wrapping them in `BULK_ENQUEUE_FAILED`. */
+/**
+ * The codes `enqueueBulk` reports as they are instead of wrapping them in `BULK_ENQUEUE_FAILED`: a
+ * refusal of the guard, which runs again in the turn that makes the call, is one of them.
+ */
 const PASSED_THROUGH: ReadonlySet<string> = new Set([
   QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
   QUEUE_ERROR_CODES.STORAGE_FULL,
+  QUEUE_ERROR_CODES.INVALID_OPTIONS,
 ])
 
 /** The stable code a `QueueException` carries in its response envelope. */

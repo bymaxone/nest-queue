@@ -77,9 +77,10 @@ describe('the guard keeps refusing when a built-in is replaced after the import'
   )
 
   it.each(REPLACEMENTS)(
-    'stays quiet on a clean prototype while %s is replaced',
+    'refuses even with a clean prototype while %s is replaced',
     (_label, owner, name, instead) => {
-      expect(outcomeBlinded(owner, name, instead, false)).toBe('clean')
+      // The options and job paths call these built-ins, so a replaced one is refused on its own.
+      expect(outcomeBlinded(owner, name, instead, false)).toBeInstanceOf(QueueException)
     },
   )
 

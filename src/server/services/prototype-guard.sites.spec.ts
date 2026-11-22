@@ -149,6 +149,60 @@ describe('QueueService under a polluted Object.prototype', () => {
   })
 })
 
+describe('QueueService when a key is planted while it waits for the client', () => {
+  const schedule = { every: 1000 }
+  // The late refusal reaches the caller of every call as the refusal itself, and stops the call before
+  // BullMQ is touched.
+  const calls: [
+    string,
+    (s: QueueService) => Promise<unknown>,
+    'add' | 'addBulk' | 'upsertJobScheduler',
+    string,
+  ][] = [
+    ['enqueue', (s) => s.enqueue('q', 'job', { a: 1 }), 'add', 'queue.invalid_options'],
+    [
+      'enqueueBulk',
+      (s) => s.enqueueBulk('q', [{ name: 'job', data: 1 }]),
+      'addBulk',
+      'queue.invalid_options',
+    ],
+    [
+      'upsertJobScheduler',
+      (s) => s.upsertJobScheduler('q', 'id', schedule),
+      'upsertJobScheduler',
+      'queue.invalid_options',
+    ],
+  ]
+
+  it.each(calls)(
+    '%s is refused when the wait ends, and never reaches BullMQ',
+    async (_n, call, reached, expected) => {
+      let ready: () => void = () => undefined
+      const pending = connection()
+      ;(pending.awaitReady as jest.Mock).mockReturnValue(
+        new Promise<void>((resolve) => {
+          ready = resolve
+        }),
+      )
+      const service = new QueueService(pending, options)
+
+      const outcome = refusedWith(() => call(service))
+      // The guard at the entry has passed; the key arrives while the call waits for the client.
+      let code: string | undefined
+      try {
+        ;(Object.prototype as Record<string, unknown>).zzPlanted = 'planted-value'
+        ready()
+        code = await outcome
+      } finally {
+        Reflect.deleteProperty(Object.prototype, 'zzPlanted')
+      }
+
+      expect(code).toBe(expected)
+      expect(queues.every((queue) => queue[reached].mock.calls.length === 0)).toBe(true)
+    },
+  )
+})
+
 describe('FlowService under a polluted Object.prototype', () => {
   const calls: [string, (s: FlowService) => Promise<unknown>][] = [
     ['add', (s) => s.add(flow)],
@@ -189,35 +243,47 @@ describe('the processor the worker registry gives BullMQ', () => {
     return processor
   }
 
-  it('moves the job back to the delayed set and ends the attempt with DelayedError, never failing it', async () => {
+  /** A job whose queue backend moves it to the delayed set through `moveToDelayed`. */
+  function jobWith(moveToDelayed: jest.Mock): Job {
+    return Object.assign({}, jobFields, { backend: { moveToDelayed } }) as unknown as Job
+  }
+
+  it('moves the job back to the delayed set through the backend with an options object that has no prototype', async () => {
     const handler = jest.fn().mockResolvedValue('done')
     const moveToDelayed = jest.fn().mockResolvedValue(undefined)
     const processor = registered(handler)
-    const before = Date.now()
 
     const outcome = await planted(() =>
-      processor(Object.assign({}, jobFields, { moveToDelayed }) as unknown as Job, 'token').catch(
-        (e: unknown) => e,
-      ),
+      processor(jobWith(moveToDelayed), 'token').catch((e: unknown) => e),
     )
 
     expect(outcome).toBeInstanceOf(DelayedError)
     expect(moveToDelayed).toHaveBeenCalledTimes(1)
-    const [until, token] = moveToDelayed.mock.calls[0] as [number, string]
-    expect(until).toBeGreaterThanOrEqual(before + 5000)
+    const [id, , delay, token, options] = moveToDelayed.mock.calls[0] as [
+      string,
+      number,
+      number,
+      string,
+      Record<string, unknown>,
+    ]
+    expect(id).toBe('1')
+    expect(delay).toBe(5000)
     expect(token).toBe('token')
+    expect(Object.getPrototypeOf(options)).toBeNull()
+    expect({ ...options }).toEqual({
+      skipAttempt: true,
+      fetchNext: false,
+      fieldsToUpdate: undefined,
+    })
     expect(handler).not.toHaveBeenCalled()
   })
 
   it('ends the attempt with the error of the move when the job cannot be moved', async () => {
     const boom = new Error('redis down')
-    const moveToDelayed = jest.fn().mockRejectedValue(boom)
     const processor = registered(jest.fn())
 
     const outcome = await planted(() =>
-      processor(Object.assign({}, jobFields, { moveToDelayed }) as unknown as Job).catch(
-        (e: unknown) => e,
-      ),
+      processor(jobWith(jest.fn().mockRejectedValue(boom))).catch((e: unknown) => e),
     )
 
     expect(outcome).toBe(boom)
