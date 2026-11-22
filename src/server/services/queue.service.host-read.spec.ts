@@ -213,4 +213,43 @@ describe('QueueService.upsertJobScheduler — the schedule is the host’s', () 
     expect(refusal.code).toBe(QUEUE_ERROR_CODES.INVALID_REPEAT_OPTIONS)
     expect(refusal.cause).toBe(boom)
   })
+
+  it('names the schedule in the refusal', async () => {
+    const repeat = {
+      get every(): number {
+        throw new Error('host getter')
+      },
+    } as unknown as JobSchedulerRepeatOptions
+
+    await expect(makeService().upsertJobScheduler('q', 'tick', repeat)).rejects.toMatchObject({
+      response: { error: { details: { reason: 'the schedule could not be read' } } },
+    })
+  })
+
+  it('reads the name, the data and the options of a template whose fields are getters of a class', async () => {
+    class Template {
+      private readonly given = { name: 'named', data: { a: 1 }, opts: { attempts: 2 } }
+      get name(): string {
+        return this.given.name
+      }
+      get data(): unknown {
+        return this.given.data
+      }
+      get opts(): unknown {
+        return this.given.opts
+      }
+    }
+
+    await makeService().upsertJobScheduler('q', 'tick', { every: 1000 }, new Template() as never)
+
+    const sent = (queues[0]?.upsertJobScheduler.mock.calls as unknown[][])[0]?.[2]
+    expect(sent).toMatchObject({ name: 'named', data: { a: 1 }, opts: { attempts: 2 } })
+  })
+
+  it('sends a template with no opts key when the host gave none', async () => {
+    await makeService().upsertJobScheduler('q', 'tick', { every: 1000 })
+
+    const sent = (queues[0]?.upsertJobScheduler.mock.calls as unknown[][])[0]?.[2]
+    expect(sent).toStrictEqual({ name: 'tick', data: {} })
+  })
 })

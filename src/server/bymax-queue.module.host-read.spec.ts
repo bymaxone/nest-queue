@@ -11,6 +11,17 @@ import { QUEUE_ERROR_CODES } from './constants/error-codes'
 
 const baseOptions = { connection: { url: 'redis://localhost:6379' } }
 
+/** The reason of the refusal a call ended in. */
+function reasonOf(run: () => unknown): unknown {
+  try {
+    run()
+  } catch (error) {
+    return ((error as QueueException).getResponse() as { error: { details: { reason: unknown } } })
+      .error.details.reason
+  }
+  throw new Error('expected a refusal')
+}
+
 describe('BymaxQueueModule.forRootAsync — the registration options are the host’s', () => {
   it.each(['ownKeys', 'getOwnPropertyDescriptor', 'get'] as const)(
     'refuses a %s trap that throws, with the host error as the cause',
@@ -38,4 +49,27 @@ describe('BymaxQueueModule.forRootAsync — the registration options are the hos
       expect((thrown as QueueException).cause).toBe(boom)
     },
   )
+
+  it('names the registration options in the refusal', () => {
+    const options = new Proxy(
+      { useFactory: () => baseOptions },
+      {
+        ownKeys: () => {
+          throw new Error('host')
+        },
+      },
+    )
+
+    expect(reasonOf(() => BymaxQueueModule.forRootAsync(options as never))).toBe(
+      'the registration options could not be read',
+    )
+  })
+
+  it('names isGlobal and the type when it is not a boolean', () => {
+    const options = { useFactory: () => baseOptions, isGlobal: 'false' }
+
+    expect(reasonOf(() => BymaxQueueModule.forRootAsync(options as never))).toBe(
+      'isGlobal must be a boolean, received a string',
+    )
+  })
 })

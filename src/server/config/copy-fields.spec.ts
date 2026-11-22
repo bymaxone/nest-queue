@@ -70,3 +70,21 @@ describe('copyFields', () => {
     expect(reads).toBe(1)
   })
 })
+
+describe('copyFields — the shape of the copy', () => {
+  it('copies an object that has no prototype, and ends at the end of its chain', () => {
+    const source = Object.assign(Object.create(null) as object, { host: 'redis' })
+
+    expect({ ...(copyFields(source) as object) }).toEqual({ host: 'redis' })
+  })
+
+  it('defines each field writable, configurable and enumerable', () => {
+    const copy = copyFields({ host: 'redis' })
+
+    expect(Object.getOwnPropertyDescriptor(copy, 'host')).toMatchObject({
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    })
+  })
+})

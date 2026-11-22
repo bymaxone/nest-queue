@@ -36,12 +36,23 @@ export function optionsOf(job: Job): JobsOptions | undefined {
  * active and schedules no retry: the attempt has neither been retried nor failed.
  */
 function isReadableByBullMq(error: unknown): boolean {
-  if (error === null || error === undefined) return false
+  const read = error as { message?: unknown; name?: unknown }
+  return [
+    unreadableAs(() => read.message),
+    unreadableAs(() => Object.getPrototypeOf(error)),
+    unreadableAs(() => read.name),
+  ].every((value) => value !== UNREADABLE)
+}
+
+/** What a read of the error answers when it throws, which no value of the error can be. */
+const UNREADABLE = Symbol('unreadable')
+
+/** The value `read` answers, or {@link UNREADABLE} when it throws; a `null` or an `undefined` throws. */
+function unreadableAs(read: () => unknown): unknown {
   try {
-    const read = error as { message?: unknown; name?: unknown }
-    return [read.message, Object.getPrototypeOf(error), read.name].length > 0
+    return read()
   } catch {
-    return false
+    return UNREADABLE
   }
 }
 

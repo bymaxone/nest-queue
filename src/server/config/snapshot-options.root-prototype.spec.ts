@@ -121,3 +121,36 @@ describe('a value the host gave is still read', () => {
     expect(copy.shutdown?.drainOnShutdown).toBe(false)
   })
 })
+
+describe('what the root-prototype check keeps and drops', () => {
+  it('keeps a value the host gave as its own when the root prototype holds the same one', () => {
+    const copy = withPlanted('drainOnShutdown', true, () =>
+      snapshotOptions({ connection, shutdown: { drainOnShutdown: true } }),
+    )
+
+    expect(copy.shutdown?.drainOnShutdown).toBe(true)
+  })
+
+  it('keeps the answer of a Proxy over an empty target that differs from the planted value', () => {
+    const shutdown = new Proxy(
+      {},
+      { get: (_t, key) => (key === 'drainTimeoutMs' ? 5000 : undefined) },
+    )
+
+    const copy = withPlanted('drainTimeoutMs', 1, () => snapshotOptions({ connection, shutdown }))
+
+    expect(copy.shutdown?.drainTimeoutMs).toBe(5000)
+  })
+
+  it('does not take for the root a host-built ancestor with no prototype that holds a constructor of its own', () => {
+    const ancestor = Object.assign(Object.create(null) as object, {
+      constructor: function Other() {},
+      drainTimeoutMs: 7000,
+    })
+    const shutdown = Object.create(ancestor) as object
+
+    const copy = snapshotOptions({ connection, shutdown })
+
+    expect(copy.shutdown?.drainTimeoutMs).toBe(7000)
+  })
+})

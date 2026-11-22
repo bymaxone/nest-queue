@@ -98,7 +98,7 @@ function defineValue(copy: Record<string, unknown>, key: string, value: unknown)
 function setValuesOf<T>(
   group: T,
   known: readonly string[],
-  flags: readonly string[],
+  flags?: readonly string[],
   path = 'the module options',
 ): T {
   if (typeof group !== 'object') return group
@@ -106,7 +106,7 @@ function setValuesOf<T>(
   const copy = emptyCopy()
   for (const key of new Set(guarded(path, () => [...Object.keys(source), ...known]))) {
     const value = guarded(`${path}.${key}`, () => readByName(source, key))
-    if (value === undefined || (value === null && !flags.includes(key))) continue
+    if (value === undefined || (value === null && flags?.includes(key) !== true)) continue
     defineValue(copy, key, value)
   }
   return copy as T
@@ -157,7 +157,7 @@ const NESTED_JOB_OPTION_KEYS: readonly (readonly [string, readonly string[]])[] 
 
 /** The objects a group of job options holds, each read once, in a copy that keeps the rest as it is. */
 function readNestedJobOptions(group: unknown): unknown {
-  if (typeof group !== 'object' || group === null) return group
+  if (typeof group !== 'object') return group
   const copy = group as Record<string, unknown>
   for (const [name, known] of NESTED_JOB_OPTION_KEYS) {
     if (name in copy) copy[name] = readKeys(copy[name], known)
@@ -171,12 +171,14 @@ function readNestedJobOptions(group: unknown): unknown {
  * later reads the copy and never the host's object again.
  */
 function snapshotConnection(connection: unknown): unknown {
-  if (typeof connection !== 'object' || connection === null) return connection
+  if (typeof connection !== 'object') return connection
+  // A `null` connection was dropped as not given before this, so what is left is an object.
+  const host = Object(connection) as object
   return guarded('connection', () => {
     const copy = emptyCopy()
     for (const key of ['client', 'url', 'options']) {
-      if (!Reflect.has(connection, key)) continue
-      const value = readByName(connection, key)
+      if (!Reflect.has(host, key)) continue
+      const value = readByName(host, key)
       defineValue(copy, key, key === 'options' ? copyFields(value) : value)
     }
     return copy
@@ -215,8 +217,8 @@ export function snapshotOptions(opts: BymaxQueueModuleOptions): BymaxQueueModule
     string,
     unknown
   >
-  const groups: [string, readonly string[], readonly string[]][] = [
-    ['defaultJobOptions', JOB_OPTION_KEYS, []],
+  const groups: [string, readonly string[], readonly string[] | undefined][] = [
+    ['defaultJobOptions', JOB_OPTION_KEYS, undefined],
     ['flows', FLOWS_KEYS, FLOWS_FLAGS],
     ['metrics', METRICS_KEYS, METRICS_FLAGS],
     ['shutdown', SHUTDOWN_KEYS, SHUTDOWN_FLAGS],

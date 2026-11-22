@@ -31,8 +31,8 @@ function refuse(reason: string, extra: Record<string, unknown> = {}): never {
  *   batch over `limit`, an entry that is not an object, or a read that throws (the host's error is the cause).
  */
 export function readBulkJobs<T>(jobs: readonly BulkJob<T>[], limit: number): BulkJob<T>[] {
-  const length: unknown = guarded('jobs', () => jobs.length, bulkUnreadable)
-  if (typeof length !== 'number' || !Number.isSafeInteger(length) || length < 0) {
+  const length = guarded('jobs', () => jobs.length, bulkUnreadable)
+  if (!Number.isSafeInteger(length) || length < 0) {
     refuse('jobs must have a whole number length')
   }
   if (length > limit) refuse('batch size exceeds limit', { limit, received: length })

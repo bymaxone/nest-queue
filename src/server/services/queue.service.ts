@@ -407,8 +407,7 @@ export class QueueService {
       'the schedule',
       () => ({
         repeat: readKeysOf(repeat, REPEAT_OPTION_KEYS),
-        template:
-          template === undefined ? undefined : readKeysOf(template, ['name', 'data', 'opts']),
+        template: readKeysOf(template, ['name', 'data', 'opts']),
       }),
       invalidRepeat,
     )
