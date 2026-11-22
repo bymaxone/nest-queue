@@ -216,20 +216,28 @@ describe('BymaxQueueModule.forRoot', () => {
     expect(dynamic.global).toBe(true)
   })
 
-  it.each([undefined, null])(
-    'treats isGlobal: %s as not given, so the module stays global',
-    (unset) => {
-      // An option that holds nothing keeps its default, here for the module registration too.
-      const sync = BymaxQueueModule.forRoot({ ...baseOptions, isGlobal: unset } as never)
-      const async = BymaxQueueModule.forRootAsync({
-        useFactory: () => baseOptions,
-        isGlobal: unset,
-      } as never)
+  it('treats isGlobal: undefined as not given, so the module stays global', () => {
+    // An option that holds nothing keeps its default, here for the module registration too.
+    const sync = BymaxQueueModule.forRoot({ ...baseOptions, isGlobal: undefined } as never)
+    const async = BymaxQueueModule.forRootAsync({
+      useFactory: () => baseOptions,
+      isGlobal: undefined,
+    } as never)
 
-      expect(sync.global).toBe(true)
-      expect(async.global).toBe(true)
-    },
-  )
+    expect(sync.global).toBe(true)
+    expect(async.global).toBe(true)
+  })
+
+  it.each([null, 'false', 0])('refuses isGlobal: %s in both registrations by name', (value) => {
+    // A `null` is the same mistake as an unset variable and a string is truthy: neither reads as the default.
+    const sync = (): unknown =>
+      BymaxQueueModule.forRoot({ ...baseOptions, isGlobal: value } as never)
+    const async = (): unknown =>
+      BymaxQueueModule.forRootAsync({ useFactory: () => baseOptions, isGlobal: value } as never)
+
+    expect(sync).toThrow(QueueException)
+    expect(async).toThrow(QueueException)
+  })
 
   it('respects isGlobal: false', () => {
     // An explicit false opts the module out of global registration.

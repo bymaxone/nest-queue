@@ -110,7 +110,7 @@ describe('the other groups that are a class instance', () => {
     })
   })
 
-  it('copies the flows group as a plain object without its unset keys', () => {
+  it('copies the flows group with no prototype and without its unset keys', () => {
     // A `null` flag is kept, not dropped: it is the same mistake as an unset environment variable, and
     // validation refuses it by name, where a dropped one would read as the default.
     expect(snapshotOptions(optionsWith({ flows: { enabled: null } })).flows).toEqual({
@@ -120,7 +120,8 @@ describe('the other groups that are a class instance', () => {
     const copy = snapshotOptions(optionsWith({ flows: new InstanceFlows(true) })).flows
 
     expect(copy).toMatchObject({ enabled: true })
-    expect(Object.getPrototypeOf(copy)).toBe(Object.prototype)
+    // No prototype, so a key planted on the root prototype is not answered for a key the copy lacks.
+    expect(Object.getPrototypeOf(copy)).toBeNull()
   })
 
   it('leaves a group that was not given out of the copy', () => {

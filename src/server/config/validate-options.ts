@@ -48,7 +48,7 @@ function checkCacheTtl(cacheTtlMs: number | undefined): void {
  * variable holds, is truthy, so `drainOnShutdown: process.env.X` would delete every waiting job at
  * shutdown; `null` is the same mistake as an unset variable. Only the type is named, never the value.
  */
-function checkFlag(path: string, value: unknown): void {
+export function checkFlag(path: string, value: unknown): void {
   if (value !== undefined && typeof value !== 'boolean') {
     invalid(`${path} must be a boolean, received ${kindOf(value)}`)
   }

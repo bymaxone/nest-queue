@@ -10,6 +10,7 @@
 
 import type { JobsOptions } from 'bullmq'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
+import { readByName } from './read-by-name'
 
 /** The job options whose values are checked, so each is read even when it is inherited. */
 const JOB_OPTION_KEYS = [
@@ -51,6 +52,14 @@ const TOP_LEVEL_KEYS = [
   'enqueueTimeoutMs',
 ] as const satisfies readonly (keyof BymaxQueueModuleOptions)[]
 
+/**
+ * An empty copy with no prototype, so a read of a key the copy does not hold answers `undefined` and
+ * never what was planted on the root prototype, which a plain object would hand back.
+ */
+function emptyCopy(): Record<string, unknown> {
+  return Object.create(null) as Record<string, unknown>
+}
+
 /** Put `value` at `key` as an own data property, which `__proto__` too becomes, not a prototype. */
 function defineValue(copy: Record<string, unknown>, key: string, value: unknown): void {
   Object.defineProperty(copy, key, { value, enumerable: true, writable: true, configurable: true })
@@ -64,10 +73,10 @@ function defineValue(copy: Record<string, unknown>, key: string, value: unknown)
  */
 function setValuesOf<T>(group: T, known: readonly string[], flags: readonly string[] = []): T {
   if (typeof group !== 'object') return group
-  const source = group as Record<string, unknown>
-  const copy: Record<string, unknown> = {}
+  const source = group as unknown as Record<string, unknown>
+  const copy = emptyCopy()
   for (const key of new Set([...Object.keys(source), ...known])) {
-    const value = source[key]
+    const value = readByName(source, key)
     if (value === undefined || (value === null && !flags.includes(key))) continue
     defineValue(copy, key, value)
   }
@@ -91,7 +100,7 @@ export function readKeys<T>(group: T, known: readonly string[]): T {
   for (const key of Object.keys(source)) defineValue(copy, key, source[key])
   for (const key of known) {
     if (Object.hasOwn(copy, key)) continue
-    const value = source[key]
+    const value = readByName(source, key)
     if (value !== undefined) defineValue(copy, key, value)
   }
   return copy as T
