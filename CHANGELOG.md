@@ -29,6 +29,10 @@ Against 1.2.26 the declared types do not change; the runtime of the main entry d
 - **An observer whose hook cannot be read no longer fails the enqueue or the attempt.** A trace hook whose getter threw, or that was not a function, failed the operation with the host's own error. It is read once inside the registry and logged as `QUEUE_OBSERVER_FAILED`, and the operation runs.
 - **An attempt that BullMQ cannot classify is reported as neither retried nor failed.** A processor that throws `null`, `undefined`, or a value whose `message`, `name` or prototype lookup throws, makes BullMQ throw inside its own failure handling. Measured against a real Redis with `attempts: 3`: the job stayed active with `attemptsMade` 0, nothing was retried and nothing failed. The observers were told `retried` or `failed`; they are now told nothing, as for a job handed back to BullMQ.
 
+### Changed
+
+- **The main entry bundle is larger.** The guarded reads and copies of the options a host hands over are new runtime code: `dist/server/index.mjs` measures 17,304 B brotli with `pnpm size`, and its budget is now 17,334 B. The observability and shared entries are unchanged in budget.
+
 ## [1.2.26] — 2026-11-20
 
 Against 1.2.25 the declared types of the main entry gain the observer types and `QueueObserverRegistry` (see the note below), and a new optional subpath `@bymax-one/nest-queue/observability` is added; the built package also differs in the error message of `INVALID_OPTIONS`, in how module options are read, and in the shape of the library's log lines.
