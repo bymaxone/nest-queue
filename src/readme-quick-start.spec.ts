@@ -44,7 +44,11 @@ jest.mock('ioredis', () => {
     }
     disconnect(): void {}
   }
-  return { Redis: FakeRedis }
+  return {
+    AbstractConnector: jest.requireActual<{ AbstractConnector: unknown }>('ioredis')
+      .AbstractConnector,
+    Redis: FakeRedis,
+  }
 })
 
 jest.mock('bullmq', () => ({

@@ -58,6 +58,8 @@ jest.mock('bullmq', () => ({
 }))
 
 jest.mock('ioredis', () => ({
+  AbstractConnector: jest.requireActual<{ AbstractConnector: unknown }>('ioredis')
+    .AbstractConnector,
   Redis: jest.fn().mockImplementation(() => ({
     status: 'ready',
     options: {},

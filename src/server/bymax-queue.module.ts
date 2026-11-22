@@ -8,7 +8,7 @@
  * @layer server/module
  */
 
-import { splitField } from './config/read-by-name'
+import { defineOwn, splitField } from './config/read-by-name'
 import {
   ConfigurableModuleBuilder,
   type DynamicModule,
@@ -88,14 +88,7 @@ function readRegistrationOptions(options: typeof ASYNC_OPTIONS_TYPE): typeof ASY
   checkFlag('isGlobal', isGlobal)
   // The copy has no prototype and `isGlobal` goes into it, never a spread, so Nest reads plainly
   // from an object that holds nothing the host did not give.
-  if (isGlobal !== undefined) {
-    Object.defineProperty(read.rest, 'isGlobal', {
-      value: isGlobal,
-      enumerable: true,
-      writable: true,
-      configurable: true,
-    })
-  }
+  if (isGlobal !== undefined) defineOwn(read.rest, 'isGlobal', isGlobal)
   return read.rest
 }
 

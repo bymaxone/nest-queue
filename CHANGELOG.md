@@ -29,6 +29,10 @@ Against 1.2.26 the declared types do not change; the runtime of the main entry d
 - **An observer whose hook cannot be read no longer fails the enqueue or the attempt.** A trace hook whose getter threw, or that was not a function, failed the operation with the host's own error. It is read once inside the registry and logged as `QUEUE_OBSERVER_FAILED`, and the operation runs.
 - **An attempt that BullMQ cannot classify is reported as neither retried nor failed.** A processor that throws `null`, `undefined`, or a value whose `message`, `name` or prototype lookup throws, makes BullMQ throw inside its own failure handling. Measured against a real Redis with `attempts: 3`: the job stayed active with `attemptsMade` 0, nothing was retried and nothing failed. The observers were told `retried` or `failed`; they are now told nothing, as for a job handed back to BullMQ.
 
+### Added
+
+- **A polluted `Object.prototype` is refused.** BullMQ and ioredis read names off objects they build that the library never set, so a key planted on `Object.prototype` redirected or reconfigured the Redis connection (a planted `path` or `tls`), and giving the options an own `undefined` for each name does not stop it: ioredis copies an enumerable planted key into any option that holds `undefined`. The library now refuses while `Object.prototype` holds a string key beyond the standard ones, or a standard method that was replaced: `INVALID_OPTIONS` with the count of keys, never a name or a value. It is checked at boot, before every `enqueue`, `enqueueBulk`, scheduler upsert and flow add, before every job, and in the tick that opens each socket of a connection the library owns, on every reconnect, including the connections BullMQ duplicates for workers and queue events. A client you pass in is checked at the calls above, not at its own reconnects.
+
 ### Changed
 
 - **The main entry bundle is larger.** The guarded reads and copies of the options a host hands over are new runtime code: the brotli budget of `dist/server/index.mjs` was raised to fit it, and `pnpm size` holds the figure in `scripts/check-size.mjs`. The observability and shared budgets are unchanged.

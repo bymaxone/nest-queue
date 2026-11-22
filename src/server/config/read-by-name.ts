@@ -65,6 +65,23 @@ export function copyFields<T>(source: T): T {
 }
 
 /**
+ * Put `value` at `name` of `target` as an ordinary writable, configurable, enumerable data property,
+ * which `__proto__` too becomes, never a prototype.
+ *
+ * @param target - The object to write to.
+ * @param name - The key.
+ * @param value - The value.
+ */
+export function defineOwn(target: object, name: PropertyKey, value: unknown): void {
+  Object.defineProperty(target, name, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  })
+}
+
+/**
  * Take one named field of `source` and copy the rest, each field read once. The named field is read
  * by name, so a value planted on the root prototype is not it and a getter planted there never runs;
  * the rest is every own enumerable field, symbols included, as an ordinary data property of a copy
@@ -84,22 +101,14 @@ export function splitField(
 ): { value: unknown; rest: Record<PropertyKey, unknown> } {
   const value = readByName(source, key)
   const rest = Object.create(null) as Record<PropertyKey, unknown>
-  const put = (name: PropertyKey, field: unknown): void => {
-    Object.defineProperty(rest, name, {
-      value: field,
-      enumerable: true,
-      writable: true,
-      configurable: true,
-    })
-  }
   for (const own of Reflect.ownKeys(source)) {
     if (own !== key && Object.prototype.propertyIsEnumerable.call(source, own)) {
-      put(own, Reflect.get(source, own))
+      defineOwn(rest, own, Reflect.get(source, own))
     }
   }
   for (const name of known) {
     const field = name === key || Object.hasOwn(rest, name) ? undefined : readByName(source, name)
-    if (field !== undefined) put(name, field)
+    if (field !== undefined) defineOwn(rest, name, field)
   }
   return { value, rest }
 }

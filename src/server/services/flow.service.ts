@@ -6,6 +6,7 @@
  * @layer server/services
  */
 
+import { assertPrototypeClean } from '../connection/prototype-guard'
 import { HttpStatus, Injectable, Logger } from '@nestjs/common'
 import { FlowProducer, type FlowJob, type JobNode, type Telemetry } from 'bullmq'
 import type { ConnectionResolver } from './connection-resolver.service'
@@ -95,6 +96,7 @@ export class FlowService {
    *   when Redis does not answer within `enqueueTimeoutMs` (the flow may still have been added).
    */
   async add(flow: FlowJob): Promise<JobNode> {
+    assertPrototypeClean()
     const producer = this.requireProducer()
     const checked = assertFlowTree(flow, 'flow')
     return this.bounded('addFlow', this.addTree(producer, checked))
@@ -118,6 +120,7 @@ export class FlowService {
    *   passed, or its command timed out, and may still land, so resend it only with a stable `jobId`.
    */
   async addBulk(flows: readonly FlowJob[]): Promise<JobNode[]> {
+    assertPrototypeClean()
     const producer = this.requireProducer()
     const checked = flows.map((flow, index) => assertFlowTree(flow, `flows[${String(index)}]`))
     if (flows.length > MAX_BULK_SIZE) {

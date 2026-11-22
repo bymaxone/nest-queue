@@ -9,6 +9,7 @@
  * @layer server/services
  */
 
+import { assertPrototypeClean } from '../connection/prototype-guard'
 import { isAbsolute, extname } from 'node:path'
 import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import { Worker } from 'bullmq'
@@ -521,12 +522,16 @@ function toProcessor<TData, TResult>(
       ? adapted
       : (job, token, signal) =>
           observeAttempt(observe.registry, observe.queue, job, () => adapted(job, token, signal))
-  return (job, token, signal) =>
-    run(job, token, signal).then(
+  return (job, token, signal) => {
+    // A polluted `Object.prototype` is refused before each job, as it is before each add; a throw
+    // here reaches BullMQ as the processor failing.
+    assertPrototypeClean()
+    return run(job, token, signal).then(
       (value) => (abandoned() ? new Promise<never>(() => undefined) : value),
       (error: unknown) => {
         if (abandoned()) return new Promise<never>(() => undefined)
         throw error
       },
     )
+  }
 }

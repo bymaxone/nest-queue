@@ -26,6 +26,7 @@ import { validateJobSchedulerOptions } from '../utils/validate-job-scheduler-opt
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { MAX_BULK_SIZE } from '../constants/default-options'
 import { assertPageWindow } from '../utils/assert-page-window'
+import { assertPrototypeClean } from '../connection/prototype-guard'
 import { assertJobInputs } from '../utils/assert-job-inputs'
 import { readBulkJobs } from '../utils/read-bulk-jobs'
 import { guarded, invalidRepeat } from '../config/guarded-read'
@@ -262,6 +263,7 @@ export class QueueService {
     data: TData,
     options?: JobsOptions,
   ): Promise<TypedJob<TData, TResult>> {
+    assertPrototypeClean()
     const checked = assertJobInputs(options, 'options')
     const job = await this.observed(queueName, jobName, (carrier) =>
       this.call('enqueue', queueName, () =>
@@ -287,6 +289,7 @@ export class QueueService {
     queueName: string,
     jobs: readonly BulkJob<TData>[],
   ): Promise<TypedJob<TData, TResult>[]> {
+    assertPrototypeClean()
     const copied = readBulkJobs(jobs, MAX_BULK_SIZE)
     const checked = copied.map((job, index) =>
       assertJobInputs(job.options, `jobs[${String(index)}].options`),
@@ -401,6 +404,7 @@ export class QueueService {
     repeat: JobSchedulerRepeatOptions,
     template?: { name?: string; data?: TData; opts?: JobsOptions },
   ): Promise<Job<TData, TResult> | undefined> {
+    assertPrototypeClean()
     // The schedule and the template are the host's: each is read once, here, and what is checked is what
     // BullMQ is sent, even from a getter that answers differently the second time.
     const given = guarded(
