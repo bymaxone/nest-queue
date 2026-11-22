@@ -8,40 +8,31 @@
  */
 
 /**
- * Whether `level` is the root prototype of its realm: it has no prototype of its own, and it is the
- * `prototype` of its own `constructor`. A host-built ancestor made with no prototype holds no such
- * constructor, so it is a level of the host's chain and is read, and the root of another realm
- * (another `vm` context, a driver's own copy of `Object`) is recognised the same way.
+ * Whether `level` ends the chain of `source` without being `source`: a prototype of no prototype is
+ * taken for the realm's root, and none of its properties is read to confirm it, because the root's
+ * `constructor` is exactly what a polluted root can answer for. A host-built ancestor with no
+ * prototype cannot be told from it, so it is not read either.
  */
-function isRealmRoot(level: object): boolean {
-  if (Reflect.getPrototypeOf(level) !== null) return false
-  const constructorOfLevel: unknown = Object.hasOwn(level, 'constructor')
-    ? Reflect.get(level, 'constructor')
-    : undefined
-  return (
-    typeof constructorOfLevel === 'function' &&
-    (constructorOfLevel as { prototype?: unknown }).prototype === level
-  )
+function isChainEnd(level: object, source: object): boolean {
+  return level !== source && Reflect.getPrototypeOf(level) === null
 }
 
 /**
  * Read `key` of `source`, once, as property access would, except that a value found only on the
- * realm's root prototype is not a value the host gave and reads as `undefined`. An own property, a
- * class getter and an ancestor the host built all count, and so does the answer of a Proxy whose
- * target holds nothing, which no descriptor lookup can see.
+ * realm's root prototype is not a value the host gave and reads as `undefined`, and neither is one
+ * found only on an ancestor with no prototype. An own property and a class getter count, and so
+ * does the answer of a Proxy whose target holds nothing, which no descriptor lookup can see.
  *
  * @param source - The host object, or a group of options.
  * @param key - The name of the option.
  * @returns The value the host gave, or `undefined`.
  */
 export function readByName(source: object, key: string): unknown {
-  let level: object | null = source
-  while (level !== null && !isRealmRoot(level)) {
-    if (Object.hasOwn(level, key)) return Reflect.get(source, key)
-    level = Reflect.getPrototypeOf(level)
-  }
+  let holder: object | null = source
+  while (holder !== null && !Object.hasOwn(holder, key)) holder = Reflect.getPrototypeOf(holder)
   const value: unknown = Reflect.get(source, key)
-  const planted = level !== null && Object.hasOwn(level, key) && Reflect.get(level, key) === value
+  const planted =
+    holder !== null && isChainEnd(holder, source) && Reflect.get(holder, key) === value
   return planted ? undefined : value
 }
 
@@ -57,7 +48,7 @@ export function readByName(source: object, key: string): unknown {
 export function copyFields<T>(source: T): T {
   if (typeof source !== 'object' || source === null || Array.isArray(source)) return source
   const copy: Record<PropertyKey, unknown> = Object.create(null) as Record<PropertyKey, unknown>
-  for (let level: object | null = source; level !== null && !isRealmRoot(level);) {
+  for (let level: object | null = source; level !== null && !isChainEnd(level, source);) {
     for (const key of Reflect.ownKeys(level)) {
       if (key === 'constructor' || Object.hasOwn(copy, key)) continue
       Object.defineProperty(copy, key, {

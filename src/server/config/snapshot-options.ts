@@ -137,7 +137,7 @@ export function readKeys<T>(group: T, known: readonly string[]): T {
 export function readKeysOf<T>(group: T, known: readonly string[]): T {
   if (typeof group !== 'object' || group === null || Array.isArray(group)) return group
   const source = group as Record<string, unknown>
-  const copy: Record<string, unknown> = {}
+  const copy = emptyCopy()
   for (const key of Object.keys(source)) defineValue(copy, key, source[key])
   for (const key of known) {
     if (Object.hasOwn(copy, key)) continue

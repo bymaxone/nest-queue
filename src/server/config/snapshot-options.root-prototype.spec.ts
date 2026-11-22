@@ -9,6 +9,7 @@
 import { runInNewContext } from 'node:vm'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
 import { applyDefaults } from './resolved-options'
+import { snapshotWorkerOptions } from '../utils/snapshot-worker-options'
 import { snapshotJobOptions, snapshotOptions } from './snapshot-options'
 
 const connection = { url: 'redis://localhost:6379' }
@@ -96,13 +97,15 @@ describe('a value the host gave is still read', () => {
     expect(copy.shutdown?.drainTimeoutMs).toBe(5000)
   })
 
-  it('reads a field from an ancestor the host built with no prototype', () => {
+  it('does not read a field from an ancestor the host built with no prototype', () => {
+    // Flipped: it cannot be told from a root prototype without reading the root's own properties,
+    // and `constructor` is one a polluted root can answer for.
     const ancestor = Object.assign(Object.create(null) as object, { drainTimeoutMs: 7000 })
     const shutdown = Object.create(ancestor) as object
 
     const copy = snapshotOptions({ connection, shutdown })
 
-    expect(copy.shutdown?.drainTimeoutMs).toBe(7000)
+    expect(copy.shutdown?.drainTimeoutMs).toBeUndefined()
   })
 
   it('reads a field of an object from another realm', () => {
@@ -141,16 +144,65 @@ describe('what the root-prototype check keeps and drops', () => {
 
     expect(copy.shutdown?.drainTimeoutMs).toBe(5000)
   })
+})
 
-  it('does not take for the root a host-built ancestor with no prototype that holds a constructor of its own', () => {
-    const ancestor = Object.assign(Object.create(null) as object, {
-      constructor: function Other() {},
-      drainTimeoutMs: 7000,
+describe('a root prototype whose constructor was overwritten is still the root', () => {
+  /** Run `body` with the `constructor` of `root` replaced, and put it back whatever happens. */
+  function withConstructorReplaced<T>(root: object, body: () => T): T {
+    const saved = Object.getOwnPropertyDescriptor(root, 'constructor')
+    Object.defineProperty(root, 'constructor', {
+      value: function Other() {},
+      configurable: true,
+      writable: true,
     })
-    const shutdown = Object.create(ancestor) as object
+    try {
+      return body()
+    } finally {
+      if (saved) Object.defineProperty(root, 'constructor', saved)
+    }
+  }
 
-    const copy = snapshotOptions({ connection, shutdown })
+  it('does not read a planted key when Object.prototype.constructor was overwritten', () => {
+    const resolved = withConstructorReplaced(Object.prototype, () =>
+      withPlanted('drainOnShutdown', true, () => applyDefaults({ connection, shutdown: {} })),
+    )
 
-    expect(copy.shutdown?.drainTimeoutMs).toBe(7000)
+    expect(resolved.shutdown.drainOnShutdown).toBe(false)
+  })
+
+  it('does not read a planted key when the root of another realm lost its constructor', () => {
+    const foreign = runInNewContext('({ shutdown: {} })') as { shutdown: object }
+    const foreignRoot = Object.getPrototypeOf(foreign) as object
+    Object.defineProperty(foreignRoot, 'drainOnShutdown', { value: true, configurable: true })
+
+    const copy = withConstructorReplaced(foreignRoot, () =>
+      snapshotOptions({ connection, shutdown: foreign.shutdown }),
+    )
+
+    expect(copy.shutdown).toEqual({})
+  })
+
+  it('copies no field of a polluted root whose constructor was overwritten', () => {
+    const copy = withConstructorReplaced(Object.prototype, () =>
+      withPlanted('prefix', 'planted', () => snapshotOptions({ connection })),
+    )
+
+    expect(Object.keys(copy)).toEqual(['connection'])
+  })
+})
+
+describe('a copy of job or worker options inherits nothing from the root prototype', () => {
+  it('has no planted job option on a copy of an empty group', () => {
+    const copy = withPlanted('attempts', 9, () => snapshotJobOptions({}))
+
+    expect((copy as Record<string, unknown>).attempts).toBeUndefined()
+    expect(Reflect.getPrototypeOf(copy)).toBeNull()
+  })
+
+  it('has no planted autorun on a copy of the options of a worker', () => {
+    const copy = withPlanted('autorun', false, () => snapshotWorkerOptions({}))
+
+    expect((copy as Record<string, unknown>).autorun).toBeUndefined()
+    expect(Reflect.getPrototypeOf(copy)).toBeNull()
   })
 })
