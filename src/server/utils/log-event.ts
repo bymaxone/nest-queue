@@ -90,7 +90,8 @@ export function logFailure(
  * logger with `app.useLogger`, and a logger of its own can throw; the throw would escape from the
  * library code that reports a fault: a listener of an `error` event, a shutdown step, a failure
  * path. A promise the host logger returns is out of reach: Nest's `Logger` does not return it, so
- * the rejection of an asynchronous transport is the host's to handle.
+ * the rejection of an asynchronous transport is dropped, becomes an unhandled rejection and ends
+ * the process with exit code 1 unless the application handles `unhandledRejection`.
  *
  * @param logger - The logger of the class that reports the event.
  * @param level - How serious the event is.
