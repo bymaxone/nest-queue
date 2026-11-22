@@ -24,4 +24,21 @@ describe('forRootAsync does not take a planted isGlobal for the host’s', () =>
       Reflect.deleteProperty(Object.prototype, 'isGlobal')
     }
   })
+
+  it('reads an isGlobal getter of the host once', () => {
+    let reads = 0
+    const options = { useFactory: () => ({ connection: { url: 'redis://localhost:6379' } }) }
+    Object.defineProperty(options, 'isGlobal', {
+      enumerable: true,
+      get: () => {
+        reads += 1
+        return reads === 1
+      },
+    })
+
+    const registered = BymaxQueueModule.forRootAsync(options)
+
+    expect(reads).toBe(1)
+    expect(registered.global).toBe(true)
+  })
 })
