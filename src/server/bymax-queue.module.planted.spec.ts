@@ -63,3 +63,64 @@ describe('forRootAsync keeps the registration fields of a class instance', () =>
     expect(registered.global).toBe(true)
   })
 })
+
+describe('forRootAsync hands Nest an object that inherits nothing, isGlobal given or not', () => {
+  /** Plant `key` on the root prototype with `value` while `body` runs. */
+  function withPlanted<T>(key: string, value: unknown, body: () => T): T {
+    Object.defineProperty(Object.prototype, key, { value, configurable: true, writable: true })
+    try {
+      return body()
+    } finally {
+      Reflect.deleteProperty(Object.prototype, key)
+    }
+  }
+
+  const factory = (): { connection: { url: string } } => ({
+    connection: { url: 'redis://localhost:6379' },
+  })
+
+  it.each([true, undefined])('does not take a planted inject (isGlobal %s)', (isGlobal) => {
+    const registered = withPlanted('inject', ['PLANTED'], () =>
+      BymaxQueueModule.forRootAsync(
+        isGlobal === undefined ? { useFactory: factory } : { isGlobal, useFactory: factory },
+      ),
+    )
+    const provider = registered.providers?.find(
+      (candidate) => (candidate as { provide?: unknown }).provide === MODULE_OPTIONS_TOKEN,
+    ) as { inject?: unknown[] }
+
+    expect(provider.inject ?? []).not.toContain('PLANTED')
+  })
+
+  it.each([true, undefined])('does not take a planted imports (isGlobal %s)', (isGlobal) => {
+    class Planted {}
+    const registered = withPlanted('imports', [Planted], () =>
+      BymaxQueueModule.forRootAsync(
+        isGlobal === undefined ? { useFactory: factory } : { isGlobal, useFactory: factory },
+      ),
+    )
+
+    expect(registered.imports).not.toContain(Planted)
+  })
+
+  it('does not use a planted factory when the host gave none', async () => {
+    Object.defineProperty(Object.prototype, 'useFactory', {
+      value: factory,
+      configurable: true,
+      writable: true,
+    })
+    try {
+      const provider = BymaxQueueModule.forRootAsync({ isGlobal: true }).providers?.find(
+        (candidate) => (candidate as { provide?: unknown }).provide === MODULE_OPTIONS_TOKEN,
+      ) as { useFactory: () => unknown }
+
+      const result = await Promise.resolve()
+        .then(() => provider.useFactory())
+        .catch(() => 'refused')
+
+      expect(result).toBe('refused')
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'useFactory')
+    }
+  })
+})

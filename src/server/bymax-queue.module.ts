@@ -80,16 +80,23 @@ const REGISTRATION_FIELDS = [
  * An `isGlobal` that is `undefined` is not given, so the module keeps its default; any other value
  * that is not a boolean is refused, as it is in `forRoot`, since `'false'` would read as true.
  */
-function readRegistrationOptions(options: typeof ASYNC_OPTIONS_TYPE): {
-  isGlobal: boolean | undefined
-  rest: Omit<typeof ASYNC_OPTIONS_TYPE, 'isGlobal'>
-} {
+function readRegistrationOptions(options: typeof ASYNC_OPTIONS_TYPE): typeof ASYNC_OPTIONS_TYPE {
   const read = guarded('the registration options', () =>
     splitField(options, 'isGlobal', REGISTRATION_FIELDS),
   )
   const isGlobal = read.value as boolean | undefined
   checkFlag('isGlobal', isGlobal)
-  return { isGlobal, rest: read.rest }
+  // The copy has no prototype and `isGlobal` goes into it, never a spread, so Nest reads plainly
+  // from an object that holds nothing the host did not give.
+  if (isGlobal !== undefined) {
+    Object.defineProperty(read.rest, 'isGlobal', {
+      value: isGlobal,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    })
+  }
+  return read.rest
 }
 
 @Module({})
@@ -152,8 +159,7 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
    * @returns The configured dynamic module.
    */
   static forRootAsync(options: typeof ASYNC_OPTIONS_TYPE): DynamicModule {
-    const { isGlobal, rest } = readRegistrationOptions(options)
-    const base = super.forRootAsync(isGlobal === undefined ? rest : { ...rest, isGlobal })
+    const base = super.forRootAsync(readRegistrationOptions(options))
 
     return {
       ...base,
