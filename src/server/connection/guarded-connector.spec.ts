@@ -330,140 +330,167 @@ describe('a real client built with the connector', () => {
   })
 })
 
+/** The self-signed certificate and its key. */
+interface IPair {
+  certificate: string
+  key: string
+}
+
+/** Make a throwaway certificate for `localhost` and `127.0.0.1` with `openssl`. */
+function makePair(): IPair {
+  const pem = execFileSync(
+    'openssl',
+    [
+      'req',
+      '-x509',
+      '-newkey',
+      'rsa:2048',
+      '-nodes',
+      '-days',
+      '2',
+      '-subj',
+      '/CN=localhost',
+      '-addext',
+      'subjectAltName=DNS:localhost,IP:127.0.0.1',
+      '-keyout',
+      '/dev/stdout',
+      '-out',
+      '/dev/stdout',
+    ],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+  )
+  return {
+    certificate:
+      /-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/.exec(pem)?.[0] ?? '',
+    key:
+      /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----/.exec(pem)?.[0] ??
+      '',
+  }
+}
+
+/** Whether the TLS handshake of `stream` completed. */
+function secured(stream: Socket | undefined): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    stream?.once('secureConnect', () => {
+      resolve(true)
+    })
+    stream?.once('error', () => {
+      resolve(false)
+    })
+  })
+}
+
+/** Listen with a TLS server that answers like a Redis server. */
+function listenTls(pair: IPair): Promise<number> {
+  return listenOnPort(tls.createServer({ key: pair.key, cert: pair.certificate }, answer))
+}
+
+/** The connector connects with the TLS options of the host. */
+async function tlsConnects(pair: IPair): Promise<void> {
+  const port = await listenTls(pair)
+  const spy = jest.spyOn(tls, 'connect')
+  const connector = new GuardedConnector({
+    host: '127.0.0.1',
+    port,
+    tls: { ca: pair.certificate, servername: 'localhost' },
+  })
+
+  const { stream, error } = await settle(connector)
+  const ok = await secured(stream)
+
+  expect(error).toBeUndefined()
+  expect(ok).toBe(true)
+  expect(Object.getPrototypeOf(firstArg(spy))).toBeNull()
+  connector.disconnect()
+}
+
+/** A server whose certificate the host never gave is not trusted. */
+async function tlsDistrusts(pair: IPair): Promise<void> {
+  const port = await listenTls(pair)
+  const connector = new GuardedConnector({
+    host: '127.0.0.1',
+    port,
+    tls: { servername: 'localhost' },
+  })
+
+  const { stream } = await settle(connector)
+  const ok = await secured(stream)
+
+  expect(ok).toBe(false)
+  connector.disconnect()
+}
+
+/** A planted `ca` is refused before any socket opens. */
+async function tlsRefusesPlantedCa(pair: IPair): Promise<void> {
+  const port = await listenTls(pair)
+  const spy = jest.spyOn(tls, 'connect')
+  const connector = new GuardedConnector({
+    host: '127.0.0.1',
+    port,
+    tls: { servername: 'localhost' },
+  })
+
+  const { stream, error } = await planted('ca', pair.certificate, () => settle(connector))
+
+  expect(stream).toBeUndefined()
+  expect(codeOf(error)).toBe('queue.invalid_options')
+  expect(spy).not.toHaveBeenCalled()
+}
+
+/** A real TLS client that reconnects with a planted `ca` ends. */
+async function tlsEndsOnPlantedCa(pair: IPair): Promise<void> {
+  const port = await listenTls(pair)
+  const client = new Redis({
+    host: '127.0.0.1',
+    port,
+    tls: { ca: pair.certificate, servername: 'localhost' },
+    Connector: GuardedConnector,
+    retryStrategy: () => 50,
+    disconnectTimeout: 20,
+  } as never)
+  closers.push(() => {
+    client.disconnect()
+  })
+  client.on('error', () => undefined)
+  await new Promise<void>((resolve) =>
+    client.once('ready', () => {
+      resolve()
+    }),
+  )
+
+  const outcome = await planted('ca', pair.certificate, () => {
+    const next = new Promise<Error | 'ready'>((resolve) => {
+      client.once('ready', () => {
+        resolve('ready')
+      })
+      client.once('error', (e: Error) => {
+        resolve(e)
+      })
+    })
+    client.disconnect(true)
+    return next
+  })
+
+  expect(codeOf(outcome)).toBe('queue.invalid_options')
+  expect(client.status).toBe('end')
+}
+
 describe('the connector over TLS', () => {
   /** `describe` only when `openssl` can make the certificate; otherwise the skip is explicit. */
   const describeTls = hasOpenssl() ? describe : describe.skip
-  let certificate = ''
-  let key = ''
+  let pair: IPair = { certificate: '', key: '' }
 
   describeTls('with a certificate made by openssl', () => {
     beforeAll(() => {
-      const pem = execFileSync(
-        'openssl',
-        [
-          'req',
-          '-x509',
-          '-newkey',
-          'rsa:2048',
-          '-nodes',
-          '-days',
-          '2',
-          '-subj',
-          '/CN=localhost',
-          '-addext',
-          'subjectAltName=DNS:localhost,IP:127.0.0.1',
-          '-keyout',
-          '/dev/stdout',
-          '-out',
-          '/dev/stdout',
-        ],
-        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
-      )
-      certificate =
-        /-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/.exec(pem)?.[0] ?? ''
-      key =
-        /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----/.exec(
-          pem,
-        )?.[0] ?? ''
+      pair = makePair()
     })
 
-    /** Whether the TLS handshake of `stream` completed. */
-    function secured(stream: Socket | undefined): Promise<boolean> {
-      return new Promise<boolean>((resolve) => {
-        stream?.once('secureConnect', () => {
-          resolve(true)
-        })
-        stream?.once('error', () => {
-          resolve(false)
-        })
-      })
-    }
-
-    it('connects with the TLS options of the host, and hands Node an object with no prototype', async () => {
-      const port = await listenOnPort(tls.createServer({ key, cert: certificate }, answer))
-      const spy = jest.spyOn(tls, 'connect')
-      const connector = new GuardedConnector({
-        host: '127.0.0.1',
-        port,
-        tls: { ca: certificate, servername: 'localhost' },
-      })
-
-      const { stream, error } = await settle(connector)
-      const ok = await secured(stream)
-
-      expect(error).toBeUndefined()
-      expect(ok).toBe(true)
-      expect(Object.getPrototypeOf(firstArg(spy))).toBeNull()
-      connector.disconnect()
-    })
-
-    it('does not trust a server whose certificate the host never gave', async () => {
-      const port = await listenOnPort(tls.createServer({ key, cert: certificate }, answer))
-      const connector = new GuardedConnector({
-        host: '127.0.0.1',
-        port,
-        tls: { servername: 'localhost' },
-      })
-
-      const { stream } = await settle(connector)
-      const ok = await secured(stream)
-
-      expect(ok).toBe(false)
-      connector.disconnect()
-    })
-
-    it('refuses with a planted ca, so the planted certificate makes no server trusted', async () => {
-      const port = await listenOnPort(tls.createServer({ key, cert: certificate }, answer))
-      const spy = jest.spyOn(tls, 'connect')
-      const connector = new GuardedConnector({
-        host: '127.0.0.1',
-        port,
-        tls: { servername: 'localhost' },
-      })
-
-      const { stream, error } = await planted('ca', certificate, () => settle(connector))
-
-      expect(stream).toBeUndefined()
-      expect(codeOf(error)).toBe('queue.invalid_options')
-      expect(spy).not.toHaveBeenCalled()
-    })
-
-    it('ends a real TLS client that reconnects with a planted ca', async () => {
-      const port = await listenOnPort(tls.createServer({ key, cert: certificate }, answer))
-      const client = new Redis({
-        host: '127.0.0.1',
-        port,
-        tls: { ca: certificate, servername: 'localhost' },
-        Connector: GuardedConnector,
-        retryStrategy: () => 50,
-        disconnectTimeout: 20,
-      } as never)
-      closers.push(() => {
-        client.disconnect()
-      })
-      client.on('error', () => undefined)
-      await new Promise<void>((resolve) =>
-        client.once('ready', () => {
-          resolve()
-        }),
-      )
-
-      const outcome = await planted('ca', certificate, () => {
-        const next = new Promise<Error | 'ready'>((resolve) => {
-          client.once('ready', () => {
-            resolve('ready')
-          })
-          client.once('error', (e: Error) => {
-            resolve(e)
-          })
-        })
-        client.disconnect(true)
-        return next
-      })
-
-      expect(codeOf(outcome)).toBe('queue.invalid_options')
-      expect(client.status).toBe('end')
-    })
+    it('connects with the TLS options of the host, and hands Node an object with no prototype', () =>
+      tlsConnects(pair))
+    it('does not trust a server whose certificate the host never gave', () => tlsDistrusts(pair))
+    it('refuses with a planted ca, so the planted certificate makes no server trusted', () =>
+      tlsRefusesPlantedCa(pair))
+    it('ends a real TLS client that reconnects with a planted ca', () => tlsEndsOnPlantedCa(pair))
   })
 })
 
