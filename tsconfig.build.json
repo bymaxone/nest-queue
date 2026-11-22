@@ -9,5 +9,12 @@
     "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "coverage", "**/*.spec.ts", "test"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "coverage",
+    "**/*.spec.ts",
+    "src/stryker-scope.data.ts",
+    "test"
+  ]
 }

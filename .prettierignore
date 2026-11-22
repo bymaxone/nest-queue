@@ -9,3 +9,16 @@ dist/
 coverage/
 reports/
 .stryker-tmp/
+
+# Shared templates copied byte for byte from bymaxone/.github: their bytes are the contract, so no
+# formatter may rewrite them.
+scripts/check-function-length.mjs
+scripts/function-length-key.mjs
+scripts/check-dist-fresh.mjs
+scripts/check-dist-fresh.test.mjs
+scripts/commitlint-no-ai-attribution.cjs
+src/check-function-length.spec.ts
+src/check-function-length.baseline.spec.ts
+src/check-function-length.key.spec.ts
+src/stryker-scope.spec.ts
+.github/workflows/no-ai-attribution.yml

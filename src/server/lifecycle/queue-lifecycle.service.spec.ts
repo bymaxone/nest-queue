@@ -118,6 +118,14 @@ async function closeApp(lifecycle: QueueLifecycle): Promise<void> {
   await lifecycle.onApplicationShutdown()
 }
 
+/** A mock that notes `label` in `order` when called and resolves to `value`. */
+function recordsStep(label: string, value?: string): jest.Mock {
+  return jest.fn().mockImplementation(() => {
+    order.push(label)
+    return Promise.resolve(value)
+  })
+}
+
 /** An event whose message contains `part`. */
 function saying(part: string): unknown {
   return expect.objectContaining({ message: expect.stringContaining(part) as string })
@@ -135,38 +143,17 @@ beforeEach(() => {
 describe('QueueLifecycle shutdown — happy path', () => {
   it('runs the teardown steps in the documented order', async () => {
     // workers → queue-events → duplicated connections, then (after the HTTP server) flow → queues → connection.
-    const workerClose = jest.fn().mockImplementation(() => {
-      order.push('worker')
-      return Promise.resolve()
-    })
-    const eventsClose = jest.fn().mockImplementation(() => {
-      order.push('events')
-      return Promise.resolve()
-    })
-    const workerQuit = jest.fn().mockImplementation(() => {
-      order.push('worker-conn')
-      return Promise.resolve('OK')
-    })
-    const eventQuit = jest.fn().mockImplementation(() => {
-      order.push('event-conn')
-      return Promise.resolve('OK')
-    })
+    const workerClose = recordsStep('worker')
+    const eventsClose = recordsStep('events')
+    const workerQuit = recordsStep('worker-conn', 'OK')
+    const eventQuit = recordsStep('event-conn', 'OK')
     const queueClose = jest.fn().mockResolvedValue(undefined)
     const queueDrain = jest.fn().mockResolvedValue(undefined)
     // Closing the queues belongs to QueueService.closeAll (covered by its own
     // spec); what this test owns is WHERE that step falls in the sequence.
-    const queuesCloseAll = jest.fn().mockImplementation(() => {
-      order.push('queue')
-      return Promise.resolve()
-    })
-    const flowDestroy = jest.fn().mockImplementation(() => {
-      order.push('flow')
-      return Promise.resolve()
-    })
-    const connectionDestroy = jest.fn().mockImplementation(() => {
-      order.push('connection')
-      return Promise.resolve()
-    })
+    const queuesCloseAll = recordsStep('queue')
+    const flowDestroy = recordsStep('flow')
+    const connectionDestroy = recordsStep('connection')
 
     const { lifecycle } = makeLifecycle({
       workers: new Map([['email', makeWorker(workerClose)]]),

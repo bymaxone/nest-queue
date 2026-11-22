@@ -94,6 +94,23 @@ afterAll(async () => {
   await container.stop().catch(() => undefined)
 })
 
+/** One call per operation that can wait for Redis, each on a queue name this test never used. */
+function coldQueueCalls(): [string, () => Promise<unknown>][] {
+  const cold = 'cold'
+  return [
+    ['getMetrics', () => queues.getMetrics(`${cold}-1`)],
+    ['getJob', () => queues.getJob(`${cold}-2`, '1')],
+    ['getJobs', () => queues.getJobs(`${cold}-3`, 'waiting')],
+    ['getJobSchedulers', () => queues.getJobSchedulers(`${cold}-4`)],
+    ['removeJobScheduler', () => queues.removeJobScheduler(`${cold}-5`, 'tick')],
+    ['pauseQueue', () => queues.pauseQueue(`${cold}-6`)],
+    ['resumeQueue', () => queues.resumeQueue(`${cold}-7`)],
+    ['cleanQueue', () => queues.cleanQueue(`${cold}-8`, 1000, 10)],
+    ['enqueue', () => queues.enqueue(`${cold}-9`, 'job', {})],
+    ['enqueueBulk', () => queues.enqueueBulk(`${cold}-10`, [{ name: 'job', data: {} }])],
+  ]
+}
+
 describe('E2E — a Redis that goes away and comes back', () => {
   it('rejects every call with CONNECTION_TIMEOUT, keeps the client listeners bounded, and recovers', async () => {
     await queues.getMetrics('warm')
@@ -111,19 +128,7 @@ describe('E2E — a Redis that goes away and comes back', () => {
     })
 
     // A queue name never used: bounded by the per-call deadline, for every call that can wait.
-    const cold = 'cold'
-    const coldCalls: [string, () => Promise<unknown>][] = [
-      ['getMetrics', () => queues.getMetrics(`${cold}-1`)],
-      ['getJob', () => queues.getJob(`${cold}-2`, '1')],
-      ['getJobs', () => queues.getJobs(`${cold}-3`, 'waiting')],
-      ['getJobSchedulers', () => queues.getJobSchedulers(`${cold}-4`)],
-      ['removeJobScheduler', () => queues.removeJobScheduler(`${cold}-5`, 'tick')],
-      ['pauseQueue', () => queues.pauseQueue(`${cold}-6`)],
-      ['resumeQueue', () => queues.resumeQueue(`${cold}-7`)],
-      ['cleanQueue', () => queues.cleanQueue(`${cold}-8`, 1000, 10)],
-      ['enqueue', () => queues.enqueue(`${cold}-9`, 'job', {})],
-      ['enqueueBulk', () => queues.enqueueBulk(`${cold}-10`, [{ name: 'job', data: {} }])],
-    ]
+    const coldCalls = coldQueueCalls()
     // No elapsed-time bound: a call without its deadline stays pending, which the test timeout reports.
     const results = await Promise.all(coldCalls.map(([, call]) => outcome(call())))
     coldCalls.forEach(([operation], index) => {
