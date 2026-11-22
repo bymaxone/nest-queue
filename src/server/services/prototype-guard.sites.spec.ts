@@ -6,6 +6,7 @@
  * @layer server/services
  */
 
+import { DelayedError } from 'bullmq'
 import { EventEmitter } from 'node:events'
 import type { FlowJob, Job } from 'bullmq'
 import { FlowService } from './flow.service'
@@ -22,6 +23,7 @@ const producers: { add: jest.Mock; addBulk: jest.Mock }[] = []
 const processors: Processor[] = []
 
 jest.mock('bullmq', () => ({
+  DelayedError: jest.requireActual<{ DelayedError: unknown }>('bullmq').DelayedError,
   QueueKeys: jest.requireActual<{ QueueKeys: unknown }>('bullmq').QueueKeys,
   defaultRepeatStrategy: jest.requireActual<{ defaultRepeatStrategy: unknown }>('bullmq')
     .defaultRepeatStrategy,
@@ -176,7 +178,8 @@ describe('FlowService under a polluted Object.prototype', () => {
 })
 
 describe('the processor the worker registry gives BullMQ', () => {
-  const job = { id: '1', name: 'send', data: {} } as unknown as Job
+  const jobFields = { id: '1', name: 'send', data: {} }
+  const job = jobFields as unknown as Job
 
   /** Register a worker over `handler` and return its processor. */
   function registered(handler: () => Promise<unknown>): Processor {
@@ -186,23 +189,38 @@ describe('the processor the worker registry gives BullMQ', () => {
     return processor
   }
 
-  it('throws the refusal before the handler runs when a key is planted', () => {
+  it('moves the job back to the delayed set and ends the attempt with DelayedError, never failing it', async () => {
     const handler = jest.fn().mockResolvedValue('done')
+    const moveToDelayed = jest.fn().mockResolvedValue(undefined)
     const processor = registered(handler)
+    const before = Date.now()
 
-    const thrown = planted((): unknown => {
-      try {
-        return processor(job)
-      } catch (error) {
-        return error
-      }
-    })
+    const outcome = await planted(() =>
+      processor(Object.assign({}, jobFields, { moveToDelayed }) as unknown as Job, 'token').catch(
+        (e: unknown) => e,
+      ),
+    )
 
-    expect(thrown).toBeInstanceOf(QueueException)
-    expect(
-      ((thrown as QueueException).getResponse() as { error: { code: string } }).error.code,
-    ).toBe('queue.invalid_options')
+    expect(outcome).toBeInstanceOf(DelayedError)
+    expect(moveToDelayed).toHaveBeenCalledTimes(1)
+    const [until, token] = moveToDelayed.mock.calls[0] as [number, string]
+    expect(until).toBeGreaterThanOrEqual(before + 5000)
+    expect(token).toBe('token')
     expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('ends the attempt with the error of the move when the job cannot be moved', async () => {
+    const boom = new Error('redis down')
+    const moveToDelayed = jest.fn().mockRejectedValue(boom)
+    const processor = registered(jest.fn())
+
+    const outcome = await planted(() =>
+      processor(Object.assign({}, jobFields, { moveToDelayed }) as unknown as Job).catch(
+        (e: unknown) => e,
+      ),
+    )
+
+    expect(outcome).toBe(boom)
   })
 
   it('runs the handler and returns its result when Object.prototype is clean', async () => {

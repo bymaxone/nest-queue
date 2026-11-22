@@ -7,6 +7,7 @@
 
 import { EventEmitter } from 'node:events'
 import type { Redis } from 'ioredis'
+import { GuardedConnector } from '../connection/guarded-connector'
 import { ConnectionResolver } from './connection-resolver.service'
 import { QueueException } from '../errors/queue-exception'
 
@@ -83,5 +84,17 @@ describe('ConnectionResolver refuses a polluted Object.prototype at boot', () =>
 
     expect(resolver.getMode()).toBe('mode-b-owned')
     expect(redisConstructor).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives the owned client the guarded connector even when the host named a Connector', async () => {
+    class HostConnector {}
+    const resolver = new ConnectionResolver({
+      connection: { url: 'redis://localhost:6379', options: { Connector: HostConnector as never } },
+    })
+
+    await resolver.init()
+
+    const given = redisConstructor.mock.calls[0]?.[1] as { Connector: unknown }
+    expect(given.Connector).toBe(GuardedConnector)
   })
 })

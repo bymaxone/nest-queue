@@ -15,6 +15,7 @@ import { join } from 'node:path'
 import { NestFactory } from '@nestjs/core'
 import { Module } from '@nestjs/common'
 import type { INestApplicationContext } from '@nestjs/common'
+import { Queue } from 'bullmq'
 import type { Redis } from 'ioredis'
 import {
   BYMAX_QUEUE_REDIS_CLIENT,
@@ -175,4 +176,32 @@ describe('E2E — a polluted Object.prototype is refused', () => {
 
     expect(await statusAfter(client, 'ready')).toBe('ready')
   }, 30_000)
+
+  it('keeps a job another producer enqueued when it is refused under a planted removeOnFail', async () => {
+    const context = await boot()
+    const handler = jest.fn().mockResolvedValue('done')
+    context.get(WorkerRegistry).register({ queueName: QUEUE, handler })
+    const producer = new Queue(QUEUE, { connection: { url: redis.url } })
+    try {
+      plant('removeOnFail', true)
+      plant('removeOnComplete', true)
+
+      await producer.add('job', { n: 1 }, { jobId: 'foreign' })
+      const state = await settledState(producer, 'foreign')
+
+      expect(['delayed', 'waiting', 'active']).toContain(state)
+      expect(handler).not.toHaveBeenCalled()
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'removeOnFail')
+      Reflect.deleteProperty(Object.prototype, 'removeOnComplete')
+      await producer.close()
+    }
+  }, 30_000)
 })
+
+/** The state of a job after the worker had time to offer it and be refused. */
+async function settledState(queue: Queue, jobId: string): Promise<string> {
+  await new Promise((done) => setTimeout(done, 3000))
+  const job = await queue.getJob(jobId)
+  return job === undefined ? 'gone' : await job.getState()
+}

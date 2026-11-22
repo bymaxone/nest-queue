@@ -169,6 +169,7 @@ export function guardSentinelConnector<T extends object>(client: T): T {
   connector.connect = async (...args): Promise<unknown> => {
     assertPrototypeClean()
     const stream = await connect(...args)
+    sealListeners(stream as Socket)
     try {
       assertPrototypeClean()
     } catch (error) {

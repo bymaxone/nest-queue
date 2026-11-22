@@ -526,6 +526,18 @@ describe('the guard on the connector a sentinel client builds for itself', () =>
     expect(stream.destroy).not.toHaveBeenCalled()
   })
 
+  it('cuts the listener table of the stream from Object.prototype once the connect resolved', async () => {
+    const listeners = { error: [] as unknown[] }
+    const stream = { destroy: jest.fn(), _events: listeners }
+    const client = fake(jest.fn().mockResolvedValue(stream))
+    guardSentinelConnector(client)
+
+    await callWrapped(client)
+
+    expect(Object.getPrototypeOf(stream._events)).toBeNull()
+    expect(stream._events).toBe(listeners)
+  })
+
   it('refuses before the connect it wraps runs when a key is planted', async () => {
     const original = jest.fn().mockResolvedValue({ destroy: jest.fn() })
     const client = fake(original)

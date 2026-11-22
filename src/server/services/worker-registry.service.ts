@@ -12,7 +12,7 @@
 import { assertPrototypeClean } from '../connection/prototype-guard'
 import { isAbsolute, extname } from 'node:path'
 import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common'
-import { Worker } from 'bullmq'
+import { DelayedError, Worker } from 'bullmq'
 import type { Job, WorkerOptions as BullWorkerOptions } from 'bullmq'
 import type { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
@@ -503,6 +503,22 @@ function adaptHandler<TData, TResult>(
   }
 }
 
+/** How long a job refused under a polluted `Object.prototype` waits before it is offered again. */
+const REFUSED_JOB_DELAY_MS = 5000
+
+/**
+ * Put a job the guard refused back in the delayed set, and end the attempt with BullMQ's own signal
+ * for it, so the job is neither failed nor counted as an attempt, and survives until the prototype is
+ * clean. When the job cannot be moved (Redis is unreachable), the error of that move ends the attempt.
+ */
+async function deferRefusedJob<TData, TResult>(
+  job: Job<TData, TResult>,
+  token: string | undefined,
+): Promise<never> {
+  await job.moveToDelayed(Date.now() + REFUSED_JOB_DELAY_MS, token)
+  throw new DelayedError()
+}
+
 /**
  * The processor BullMQ is given: the adapted handler, whose outcome is dropped once the worker has
  * been abandoned by the shutdown. A dropped outcome leaves the returned promise pending for good,
@@ -523,9 +539,15 @@ function toProcessor<TData, TResult>(
       : (job, token, signal) =>
           observeAttempt(observe.registry, observe.queue, job, () => adapted(job, token, signal))
   return (job, token, signal) => {
-    // A polluted `Object.prototype` is refused before each job, as it is before each add; a throw
-    // here reaches BullMQ as the processor failing.
-    assertPrototypeClean()
+    // A polluted `Object.prototype` is refused before each job, as it is before each add. The job
+    // goes back to the delayed set and is not failed: BullMQ's failure path reads `removeOnFail` off
+    // an options object it rebuilds as an ordinary one, so a planted `removeOnFail: true` would
+    // delete a job another producer enqueued.
+    try {
+      assertPrototypeClean()
+    } catch {
+      return deferRefusedJob(job, token)
+    }
     return run(job, token, signal).then(
       (value) => (abandoned() ? new Promise<never>(() => undefined) : value),
       (error: unknown) => {

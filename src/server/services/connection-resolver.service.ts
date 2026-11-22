@@ -130,9 +130,10 @@ export class ConnectionResolver {
       commandTimeout: this.#options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS,
       enableOfflineQueue: false,
       disconnectTimeout: DISCONNECT_TIMEOUT_MS,
-      // A sentinel client builds its own connector, which is guarded after it is built.
-      ...(sentinel ? {} : { Connector: GuardedConnector }),
       ...(options ?? {}),
+      // After the host's options, so a `Connector` of the host's cannot remove the guard. A sentinel
+      // client builds its own connector, which is guarded after it is built, and takes none.
+      Connector: sentinel ? undefined : GuardedConnector,
       lazyConnect: sentinel,
     }) as OwnedRedisOptions
   }
