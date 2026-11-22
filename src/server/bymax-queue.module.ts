@@ -8,7 +8,7 @@
  * @layer server/module
  */
 
-import { readByName } from './config/read-by-name'
+import { splitField } from './config/read-by-name'
 import {
   ConfigurableModuleBuilder,
   type DynamicModule,
@@ -74,24 +74,10 @@ function readRegistrationOptions(options: typeof ASYNC_OPTIONS_TYPE): {
   isGlobal: boolean | undefined
   rest: Omit<typeof ASYNC_OPTIONS_TYPE, 'isGlobal'>
 } {
-  const read = guarded('the registration options', () => {
-    // Own enumerable fields except isGlobal, each read once; isGlobal is read once, by name, so a
-    // getter planted on the root prototype never runs and a stateful getter of the host's cannot
-    // answer twice.
-    const rest: Record<string, unknown> = {}
-    for (const key of Object.keys(options)) {
-      if (key === 'isGlobal') continue
-      Object.defineProperty(rest, key, {
-        value: (options as Record<string, unknown>)[key],
-        enumerable: true,
-        writable: true,
-        configurable: true,
-      })
-    }
-    return { isGlobal: readByName(options, 'isGlobal') as boolean | undefined, rest }
-  })
-  checkFlag('isGlobal', read.isGlobal)
-  return { isGlobal: read.isGlobal, rest: read.rest }
+  const read = guarded('the registration options', () => splitField(options, 'isGlobal'))
+  const isGlobal = read.value as boolean | undefined
+  checkFlag('isGlobal', isGlobal)
+  return { isGlobal, rest: read.rest }
 }
 
 @Module({})

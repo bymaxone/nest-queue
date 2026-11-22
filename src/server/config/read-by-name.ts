@@ -63,3 +63,31 @@ export function copyFields<T>(source: T): T {
   }
   return copy as T
 }
+
+/**
+ * Take one named field of `source` and copy the rest, each field read once. The named field is read
+ * by name, so a value planted on the root prototype is not it and a getter planted there never runs;
+ * the rest is every own enumerable field, symbols included, as an ordinary data property of a copy
+ * with no prototype, so a key such as `__proto__` stays a key and a getter is read once.
+ *
+ * @param source - The host object.
+ * @param key - The field to take out of the copy.
+ * @returns The value of the named field, `undefined` when the host did not give it, and the rest.
+ */
+export function splitField(
+  source: object,
+  key: string,
+): { value: unknown; rest: Record<PropertyKey, unknown> } {
+  const value = readByName(source, key)
+  const rest = Object.create(null) as Record<PropertyKey, unknown>
+  for (const own of Reflect.ownKeys(source)) {
+    if (own === key || !Object.prototype.propertyIsEnumerable.call(source, own)) continue
+    Object.defineProperty(rest, own, {
+      value: Reflect.get(source, own),
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    })
+  }
+  return { value, rest }
+}

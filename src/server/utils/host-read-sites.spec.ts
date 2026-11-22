@@ -44,7 +44,10 @@ function codeOf(file: string): string {
 describe('the reads of a host object', () => {
   const readers = sources(SRC)
     .map((file) => ({ name: relative(SRC, file), code: codeOf(file) }))
-    .filter(({ name, code }) => !DEFINITIONS.has(name) && /\b(readByName|readKeysOf)\(/.test(code))
+    .filter(
+      ({ name, code }) =>
+        !DEFINITIONS.has(name) && /\b(readByName|readKeysOf|splitField)\(/.test(code),
+    )
 
   it('are made only in files that name their guard', () => {
     expect(readers.map(({ name }) => name).sort()).toEqual(Object.keys(GUARDED_SITES).sort())

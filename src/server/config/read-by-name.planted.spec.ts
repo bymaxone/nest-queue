@@ -6,7 +6,7 @@
  */
 
 import { readBulkJobs } from '../utils/read-bulk-jobs'
-import { readByName } from './read-by-name'
+import { readByName, splitField } from './read-by-name'
 import { snapshotOptions } from './snapshot-options'
 import { validateOptions } from './validate-options'
 
@@ -99,5 +99,84 @@ describe('a connection reads client, url and options by name', () => {
     )
 
     expect(Object.keys(copy.connection as object)).toEqual(['options'])
+  })
+})
+
+describe('splitField takes one field out and copies the rest, each read once', () => {
+  /** An object whose fields are counting getters, each answering differently after its first read. */
+  function counting(names: string[]): { host: object; reads: Record<string, number> } {
+    const reads: Record<string, number> = {}
+    const host = {}
+    for (const name of names) {
+      Object.defineProperty(host, name, {
+        enumerable: true,
+        get: () => {
+          reads[name] = (reads[name] ?? 0) + 1
+          return reads[name] === 1
+        },
+      })
+    }
+    return { host, reads }
+  }
+
+  it('reads the named field once and every other field once', () => {
+    const { host, reads } = counting(['isGlobal', 'other'])
+
+    const { value, rest } = splitField(host, 'isGlobal')
+
+    expect(reads).toEqual({ isGlobal: 1, other: 1 })
+    expect(value).toBe(true)
+    expect(rest).toEqual({ other: true })
+  })
+
+  it('does not take a planted value for the named field and never runs a planted getter', () => {
+    let runs = 0
+    Object.defineProperty(Object.prototype, 'zzNamed', {
+      get: () => (runs += 1),
+      configurable: true,
+    })
+    try {
+      expect(splitField({ a: 1 }, 'zzNamed')).toEqual({ value: undefined, rest: { a: 1 } })
+      expect(runs).toBe(0)
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'zzNamed')
+    }
+  })
+
+  it('reads the named field from a class getter of the host', () => {
+    class Host {
+      get named(): string {
+        return `from ${this.constructor.name}`
+      }
+    }
+
+    expect(splitField(new Host(), 'named').value).toBe('from Host')
+  })
+
+  it('keeps symbols and a __proto__ key as keys of a copy with no prototype, and skips what is not enumerable', () => {
+    const symbol = Symbol('s')
+    const host = Object.defineProperty(
+      JSON.parse('{"__proto__": 1, "kept": 2}') as Record<PropertyKey, unknown>,
+      'hidden',
+      { value: 3, enumerable: false },
+    )
+    host[symbol] = 4
+
+    const { rest } = splitField(host, 'named')
+
+    expect(Reflect.getPrototypeOf(rest)).toBeNull()
+    expect(Reflect.ownKeys(rest).map(String).sort()).toEqual(['Symbol(s)', '__proto__', 'kept'])
+  })
+
+  it('lets a throwing getter of the host escape for the caller’s guard to refuse', () => {
+    const boom = new Error('host')
+    const host = Object.defineProperty({}, 'x', {
+      enumerable: true,
+      get: () => {
+        throw boom
+      },
+    })
+
+    expect(() => splitField(host, 'named')).toThrow(boom)
   })
 })
