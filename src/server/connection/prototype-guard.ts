@@ -84,9 +84,12 @@ function isNative(value: unknown): boolean {
 
 /**
  * Whether what a standard key holds is what the language gives it: a native function with the key's
- * own name (`constructor` holds `Object`), and for `__proto__` a native getter and setter.
+ * own name (`constructor` holds `Object`), and for `__proto__` a native getter and setter, or none.
  */
 function hasExpectedKind(name: string, descriptor: DescriptorFields | undefined): boolean {
+  // A runtime started with `--disable-proto=delete` has no `__proto__` accessor at all: that is what
+  // the language gives it there, and a later appearance of one counts as planted.
+  if (name === '__proto__' && descriptor === undefined) return true
   if (descriptor === undefined) return false
   if (name === '__proto__') return isNative(descriptor.get) && isNative(descriptor.set)
   const expectedName = name === 'constructor' ? 'Object' : name

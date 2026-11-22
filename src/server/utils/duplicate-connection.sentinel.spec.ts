@@ -42,17 +42,23 @@ function plant(name: string, value: unknown): void {
 interface IFake {
   client: Redis
   duplicate: jest.Mock
-  copy: { connector: { connect: (...args: unknown[]) => Promise<unknown> } }
+  copy: {
+    connector: { connect: (...args: unknown[]) => Promise<unknown> }
+    duplicate: (override?: object) => unknown
+  }
   connect: jest.Mock
+  /** The `duplicate` of the copy as the client built it, before the guard wraps it. */
+  copyDuplicate: jest.Mock
 }
 
 /** A fake client whose `duplicate` hands back a fake duplicate with a mock connector. */
 function fakeClient(options: object | undefined): IFake {
   const connect = jest.fn()
-  const copy = { connector: { connect } }
+  const copyDuplicate = jest.fn().mockReturnValue({ connector: { connect }, duplicate: jest.fn() })
+  const copy = { connector: { connect }, duplicate: copyDuplicate }
   const duplicate = jest.fn().mockReturnValue(copy)
   const client = (options === undefined ? { duplicate } : { options, duplicate }) as unknown
-  return { client: client as Redis, duplicate, copy, connect }
+  return { client: client as Redis, duplicate, copy, connect, copyDuplicate }
 }
 
 /** The override object `duplicate` was called with. */
@@ -78,6 +84,35 @@ describe('duplicateConnection on a client with sentinels', () => {
       lazyConnect: true,
     })
     expect('commandTimeout' in override).toBe(true)
+  })
+
+  it('builds a duplicate of the duplicate lazy too, whatever override it is given', () => {
+    const fake = fakeClient({ sentinels })
+    const copy = duplicateConnection(fake.client) as unknown as IFake['copy']
+
+    const second = copy.duplicate({ maxRetriesPerRequest: 3 })
+
+    expect(second).toBe(fake.copyDuplicate.mock.results[0]?.value)
+    expect(fake.copyDuplicate).toHaveBeenCalledWith({ maxRetriesPerRequest: 3, lazyConnect: true })
+    copy.duplicate()
+    expect(fake.copyDuplicate).toHaveBeenLastCalledWith({ lazyConnect: true })
+  })
+
+  it('guards the connector of the duplicate of the duplicate', async () => {
+    const fake = fakeClient({ sentinels })
+    const copy = duplicateConnection(fake.client) as unknown as IFake['copy']
+    const second = copy.duplicate({}) as IFake['copy']
+    plant('path', '/nowhere')
+
+    let error: unknown
+    try {
+      error = await second.connector.connect().catch((e: unknown) => e)
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'path')
+    }
+
+    expect(codeOf(error)).toBe('queue.invalid_options')
+    expect(fake.connect).not.toHaveBeenCalled()
   })
 
   it('refuses a connect while a key is planted, before the original connect runs', async () => {
@@ -318,6 +353,36 @@ describe('a duplicate of a real sentinel client', () => {
 
     expect(codeOf(outcome)).toBe('queue.invalid_options')
     expect(copy.status).toBe('end')
+    expect(unix.seen()).toBe(0)
+  })
+})
+
+describe('a duplicate of the duplicate of a real sentinel client', () => {
+  it('is built lazy, reaches ready, and ends with INVALID_OPTIONS on a reconnect under a planted path', async () => {
+    const unix = await listenCounting()
+    const { copy } = await connectedPair()
+    const second = copy.duplicate({})
+    closers.push(() => {
+      second.disconnect()
+    })
+    second.on('error', () => undefined)
+    const wasLazy = second.status
+    const up = ready(second)
+    await second.connect()
+    await up
+    plant('path', unix.path)
+
+    let outcome: Error | 'ready'
+    try {
+      outcome = await reconnect(second)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'path')
+    }
+
+    expect(wasLazy).toBe('wait')
+    expect(codeOf(outcome)).toBe('queue.invalid_options')
+    expect(second.status).toBe('end')
     expect(unix.seen()).toBe(0)
   })
 })

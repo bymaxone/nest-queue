@@ -561,55 +561,113 @@ describe('the guard on the connector a sentinel client builds for itself', () =>
   })
 })
 
-describe('GuardedConnector keeps Node’s emitter off the planted keys', () => {
-  const IDLE = [
+describe('GuardedConnector seals the table of listeners of its socket', () => {
+  const EVENTS = [
+    'OCSPResponse',
     'connectionAttempt',
     'connectionAttemptFailed',
     'connectionAttemptTimeout',
+    'drain',
+    'end',
+    'finish',
     'keylog',
     'lookup',
-    'OCSPResponse',
+    'pause',
+    'ready',
+    'resume',
     'secureConnect',
     'session',
+    'timeout',
   ]
 
-  it('registers a listener for each event Node emits unobserved, before the socket opens', async () => {
-    const server = net.createServer(answer)
+  /** The server's own end of the connection is a Node stream too; keep the plant off its table. */
+  function sealed(socket: Socket): void {
+    Object.setPrototypeOf((socket as unknown as { _events: object })._events, null)
+  }
+
+  /** A socket from a connector over a listening server, with a host name to resolve. */
+  async function open(options: { host: string } = { host: 'localhost' }): Promise<Socket> {
+    const server = net.createServer((socket) => {
+      sealed(socket)
+      answer(socket)
+    })
     const port = await listenOnPort(server)
+    const { stream } = await settle(new GuardedConnector({ ...options, port }))
+    if (stream === undefined) throw new Error('the connector refused')
+    return stream
+  }
 
-    const { stream } = await settle(new GuardedConnector({ host: 'localhost', port }))
+  it('leaves the table of listeners of the socket with no prototype', async () => {
+    const stream = await open()
 
-    for (const event of IDLE) expect(stream?.listenerCount(event)).toBeGreaterThan(0)
-    stream?.destroy()
+    const table = (stream as unknown as { _events: object })._events
+
+    expect(Object.getPrototypeOf(table)).toBeNull()
+    stream.destroy()
   })
 
-  it('survives strings planted for those events after the guard ran, with a host name to resolve', async () => {
-    const server = net.createServer(answer)
-    const port = await listenOnPort(server)
-    const { stream } = await settle(new GuardedConnector({ host: 'localhost', port }))
-    stream?.on('error', () => undefined)
-
+  /**
+   * The `Object.prototype` of the realm Node's own streams are built in. Jest runs a test in a context
+   * of its own, so the tables of listeners that Node creates inherit from this one and not from the
+   * `Object.prototype` the test sees; planting there is what a process-wide pollution does to them.
+   */
+  async function nodeObjectPrototype(): Promise<object> {
+    const probe = new net.Socket()
+    const proto = Object.getPrototypeOf((probe as unknown as { _events: object })._events) as object
     const closed = new Promise<void>((resolve) =>
-      stream?.once('close', () => {
+      probe.once('close', () => {
         resolve()
       }),
     )
-    for (const event of IDLE) {
-      Object.defineProperty(Object.prototype, event, {
-        value: 'planted',
-        configurable: true,
-        writable: true,
-        enumerable: true,
-      })
+    probe.destroy()
+    await closed
+    return proto
+  }
+
+  it('survives strings planted under many event names after the guard ran', async () => {
+    const stream = await open()
+    stream.on('error', () => undefined)
+    const closed = new Promise<void>((resolve) =>
+      stream.once('close', () => {
+        resolve()
+      }),
+    )
+    const proto = await nodeObjectPrototype()
+    for (const event of EVENTS) {
+      Object.defineProperty(proto, event, { value: 'planted', configurable: true, writable: true })
     }
     try {
       await opened(stream)
-      stream?.destroy()
+      stream.destroy()
       await closed
     } finally {
-      for (const event of IDLE) Reflect.deleteProperty(Object.prototype, event)
+      for (const event of EVENTS) Reflect.deleteProperty(proto, event)
     }
 
-    expect(stream?.destroyed).toBe(true)
+    expect(stream.destroyed).toBe(true)
+  })
+
+  it('leaves alone a stream that has no table of listeners to seal', async () => {
+    const once = jest.fn()
+    const spy = jest.spyOn(net, 'createConnection').mockReturnValue({ once } as unknown as Socket)
+
+    const { stream } = await settle(new GuardedConnector({ host: '127.0.0.1', port: 1 }))
+
+    expect(stream).toEqual({ once })
+    expect(once).toHaveBeenCalledWith('error', expect.any(Function))
+    spy.mockRestore()
+  })
+
+  it('still calls the listeners that were registered: connect and error', async () => {
+    const stream = await open({ host: '127.0.0.1' })
+    const seen: string[] = []
+    stream.on('connect', () => seen.push('connect'))
+    stream.on('error', () => seen.push('error'))
+
+    stream.emit('connect')
+    stream.emit('error', new Error('boom'))
+
+    expect(seen).toEqual(['connect', 'error'])
+    stream.destroy()
   })
 })

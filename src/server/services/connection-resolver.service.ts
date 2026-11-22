@@ -20,6 +20,7 @@ import {
   DEFAULT_CONNECTION_READY_TIMEOUT_MS,
   DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS,
 } from '../constants/default-options'
+import { withOwnKeys } from '../connection/driver-option-names'
 import { GuardedConnector, guardSentinelConnector } from '../connection/guarded-connector'
 import { assertPrototypeClean } from '../connection/prototype-guard'
 import { QueueException } from '../errors/queue-exception'
@@ -126,7 +127,7 @@ export class ConnectionResolver {
    */
   private ownedOptions(options?: Partial<RedisOptions>): OwnedRedisOptions {
     const sentinel = Boolean(options?.sentinels)
-    return {
+    return withOwnKeys({
       commandTimeout: this.#options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS,
       enableOfflineQueue: false,
       disconnectTimeout: DISCONNECT_TIMEOUT_MS,
@@ -134,7 +135,7 @@ export class ConnectionResolver {
       ...(sentinel ? {} : { Connector: GuardedConnector }),
       ...(options ?? {}),
       lazyConnect: sentinel,
-    } as OwnedRedisOptions
+    }) as OwnedRedisOptions
   }
 
   /** The resolved Queue-role client. */

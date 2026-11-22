@@ -395,6 +395,24 @@ describe('the baseline the module takes at load', () => {
     }
   })
 
+  it('treats a missing __proto__ accessor as expected, as on a runtime without one', () => {
+    const outcome = copyUnder('__proto__', undefined)
+
+    expect(outcome.loadThrew).toBe(false)
+    expect(outcome.useThrew).toBe(false)
+  })
+
+  it('refuses a __proto__ accessor that appears after a load without one, counting it once', () => {
+    const outcome = copyUnder('__proto__', undefined, true)
+
+    expect(outcome.loadThrew).toBe(false)
+    expect(outcome.useThrew).toBe(true)
+    expect(outcome.body?.details).toEqual({
+      reason: 'Object.prototype holds keys the libraries would read as their own',
+      count: 1,
+    })
+  })
+
   it('refuses a key that was missing at load and is back at use', () => {
     const outcome = copyUnder('toLocaleString', undefined, true)
 

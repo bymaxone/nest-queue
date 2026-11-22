@@ -33,5 +33,21 @@ export function duplicateConnection(client: Redis): Redis {
   // A client that carries no options is not one ioredis built, so it has no sentinels to guard.
   const options = client.options as typeof client.options | undefined
   if (!options?.sentinels) return client.duplicate(override)
-  return guardSentinelConnector(client.duplicate({ ...override, lazyConnect: true }))
+  return guardSentinelClient(client.duplicate({ ...override, lazyConnect: true }))
+}
+
+/**
+ * Guard the connector of a sentinel client and of every client it duplicates: BullMQ's queue events
+ * duplicate the connection they are handed, and ioredis would build that one's connector again
+ * without the guard.
+ *
+ * @param client - A sentinel client built lazy.
+ * @returns The same client, whose `duplicate` builds guarded lazy clients in turn.
+ */
+function guardSentinelClient(client: Redis): Redis {
+  guardSentinelConnector(client)
+  const duplicate = client.duplicate.bind(client)
+  client.duplicate = (override?: Parameters<Redis['duplicate']>[0]): Redis =>
+    guardSentinelClient(duplicate({ ...override, lazyConnect: true }))
+  return client
 }

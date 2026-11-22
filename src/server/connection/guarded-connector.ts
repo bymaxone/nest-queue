@@ -18,25 +18,14 @@ import { AbstractConnector } from 'ioredis'
 import { assertPrototypeClean } from './prototype-guard'
 
 /**
- * The events Node emits on a socket that nobody listens to. An emitter with no listener for an event
- * looks it up on a plain object, so a string planted on `Object.prototype` after the guard ran would be
- * found there and end the process from inside `emit`. A listener that does nothing is registered
- * before the socket opens, so the lookup finds a function of ours.
+ * Cut the table of listeners of a socket from `Object.prototype`. An emitter looks a listener up with
+ * a property read on that table, so a string planted under any event name after the guard ran would be
+ * found there and called, ending the process from inside `emit`; no list of event names can be
+ * complete. With no prototype the table finds only the listeners that were registered.
  */
-const IDLE_EVENTS = [
-  'connectionAttempt',
-  'connectionAttemptFailed',
-  'connectionAttemptTimeout',
-  'keylog',
-  'lookup',
-  'OCSPResponse',
-  'secureConnect',
-  'session',
-] as const
-
-/** A listener that does nothing. */
-function idle(): void {
-  // Nothing to do: the registration is the point.
+function sealListeners(stream: Socket): void {
+  const table = (stream as unknown as { _events?: object })._events
+  if (table !== undefined) Object.setPrototypeOf(table, null)
 }
 
 /** ioredis's own text for a connect attempt that was cancelled before the socket opened. */
@@ -104,7 +93,7 @@ export class GuardedConnector extends AbstractConnector {
           reject(error instanceof Error ? error : new Error(String(error)))
           return
         }
-        for (const event of IDLE_EVENTS) this.stream.on(event, idle)
+        sealListeners(this.stream)
         this.stream.once('error', (error: Error) => {
           this.firstError = error
         })
