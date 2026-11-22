@@ -11,6 +11,7 @@ import type { Server, Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Redis } from 'ioredis'
+import { GuardedConnector, guardSentinelConnector } from '../connection/guarded-connector'
 import { QueueException } from '../errors/queue-exception'
 import { duplicateConnection } from './duplicate-connection'
 
@@ -239,11 +240,19 @@ async function listenTcp(handler: (socket: Socket) => void): Promise<number> {
 }
 
 /** A unix-socket server that counts what it is asked for; closed after the test. */
-async function listenCounting(): Promise<{ path: string; seen: () => number }> {
+async function listenCounting(): Promise<{
+  path: string
+  seen: () => number
+  bytes: () => number
+}> {
   let count = 0
+  let received = 0
   const server: Server = net.createServer((socket) => {
     count += 1
     socket.on('error', () => undefined)
+    socket.on('data', (chunk: Buffer) => {
+      received += chunk.length
+    })
     socket.destroy()
   })
   const path = join(tmpdir(), `bymax-queue-dup-${String(process.pid)}.sock`)
@@ -251,7 +260,7 @@ async function listenCounting(): Promise<{ path: string; seen: () => number }> {
   closers.push(() => {
     server.close()
   })
-  return { path, seen: () => count }
+  return { path, seen: () => count, bytes: () => received }
 }
 
 /** Resolve when `client` is ready. */
@@ -384,5 +393,131 @@ describe('a duplicate of the duplicate of a real sentinel client', () => {
     expect(codeOf(outcome)).toBe('queue.invalid_options')
     expect(second.status).toBe('end')
     expect(unix.seen()).toBe(0)
+  })
+})
+
+/** A fake server and every command it received, in order. */
+interface IRecording {
+  port: number
+  commands: string[][]
+}
+
+/** Listen on a loopback port, answer with `reply`, and keep every command received. */
+async function listenRecording(reply: (args: string[]) => string): Promise<IRecording> {
+  const commands: string[][] = []
+  const port = await listenTcp((socket) => {
+    serve(socket, (args) => {
+      commands.push(args)
+      return reply(args)
+    })
+  })
+  return { port, commands }
+}
+
+/** A recording fake master and a recording fake sentinel that points at it. */
+async function recordedPair(): Promise<{ master: IRecording; sentinel: IRecording }> {
+  const master = await listenRecording(masterReply)
+  const sentinel = await listenRecording(sentinelReply(master.port))
+  return { master, sentinel }
+}
+
+/** The sentinel client of the handshake rows: lazy, with a sentinel password, not yet guarded. */
+function sentinelClient(sentinelPort: number): Redis {
+  const client = new Redis({
+    sentinels: [{ host: '127.0.0.1', port: sentinelPort }],
+    name: 'mymaster',
+    sentinelPassword: 'sentinel-secret',
+    lazyConnect: true,
+    retryStrategy: () => 50,
+    sentinelRetryStrategy: () => 50,
+    disconnectTimeout: 20,
+  })
+  closers.push(() => {
+    client.disconnect()
+  })
+  client.on('error', () => undefined)
+  return client
+}
+
+/**
+ * The commands in `commands` that carry the sentinel password. ioredis speaks RESP3 by default, so the
+ * probe hands its credentials over in `HELLO 3 AUTH <user> <password>` rather than in an `AUTH`.
+ */
+function authsOf(commands: string[][]): string[][] {
+  return commands.filter((c) => c.includes('sentinel-secret'))
+}
+
+/** The probe builder of a guarded sentinel client. */
+interface ProbeBuilder {
+  connectToSentinel(endpoint: { host: string; port: number }): Redis
+}
+
+/** Build the probe the guarded connector of `client` opens toward `port`, owned by this test. */
+function probeOf(client: Redis, port: number): Redis {
+  const probe = (client as unknown as { connector: ProbeBuilder }).connector.connectToSentinel({
+    host: '127.0.0.1',
+    port,
+  })
+  closers.push(() => {
+    probe.disconnect()
+  })
+  return probe
+}
+
+describe('the probe a guarded sentinel client opens to ask a sentinel', () => {
+  it('reaches the master through a probe built with the guarded connector, password sent', async () => {
+    const { master, sentinel } = await recordedPair()
+    const probes = jest.spyOn(GuardedConnector.prototype, 'connect')
+    const client = guardSentinelConnector(sentinelClient(sentinel.port))
+    const up = ready(client)
+
+    await client.connect()
+    await up
+
+    expect(client.status).toBe('ready')
+    expect(await client.ping()).toBe('PONG')
+    expect(probes).toHaveBeenCalled()
+    expect(authsOf(sentinel.commands)).toHaveLength(1)
+    expect(authsOf(master.commands)).toEqual([])
+    expect(sentinel.commands.some((c) => c[1]?.toLowerCase() === 'get-master-addr-by-name')).toBe(
+      true,
+    )
+    probes.mockRestore()
+  })
+
+  it('sends the sentinel password to the sentinel when nothing is planted (control)', async () => {
+    const { sentinel } = await recordedPair()
+    const client = guardSentinelConnector(sentinelClient(sentinel.port))
+    const probe = probeOf(client, sentinel.port)
+    probe.on('error', () => undefined)
+
+    expect(await probe.ping()).toBe('PONG')
+
+    expect(authsOf(sentinel.commands)).toHaveLength(1)
+  })
+
+  it('refuses to open the probe under a path planted after the wrapper checked, sending nothing', async () => {
+    const unix = await listenCounting()
+    const { sentinel } = await recordedPair()
+    const client = guardSentinelConnector(sentinelClient(sentinel.port))
+    plant('path', unix.path)
+
+    let probe: Redis
+    const failure = new Promise<unknown>((resolve) => {
+      probe = probeOf(client, sentinel.port)
+      probe.once('error', resolve)
+    })
+    let error: unknown
+    try {
+      error = await failure
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'path')
+    }
+
+    expect(codeOf(error)).toBe('queue.invalid_options')
+    expect(unix.seen()).toBe(0)
+    expect(unix.bytes()).toBe(0)
+    expect(authsOf(sentinel.commands)).toEqual([])
   })
 })

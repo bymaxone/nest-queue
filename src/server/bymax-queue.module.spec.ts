@@ -310,39 +310,62 @@ describe('BymaxQueueModule.forRootAsync', () => {
     expect(dynamic.exports).toEqual(BymaxQueueModule.forRoot(baseOptionsClientMode()).exports)
   })
 
-  it('aliases the options token to the configurable module token', () => {
-    // BYMAX_QUEUE_OPTIONS is a useExisting alias of the generated token.
+  it('provides the options token as a validated snapshot of the generated token', () => {
+    // The factory result is read once, so the provider injects the generated token and returns a copy.
     const dynamic = BymaxQueueModule.forRootAsync({ useFactory: () => baseOptionsClientMode() })
-    const provider = findProvider(dynamic.providers ?? [], BYMAX_QUEUE_OPTIONS) as {
-      useExisting: unknown
-    }
-    expect(provider.useExisting).toBe(MODULE_OPTIONS_TOKEN)
+    const provider = findProvider(dynamic.providers ?? [], BYMAX_QUEUE_OPTIONS) as FactoryProvider
+    expect(provider.inject).toEqual([MODULE_OPTIONS_TOKEN])
+    const snapshot = provider.useFactory(baseOptionsClientMode()) as object
+    expect(snapshot).not.toBe(baseOptionsClientMode())
+    expect(Object.getPrototypeOf(snapshot)).toBeNull()
   })
 
-  it('derives resolved options from a factory injecting the options token', () => {
-    // The resolved-options provider validates then applies defaults at runtime.
+  it('derives resolved options from the options token', () => {
+    // The resolved-options provider applies defaults to the snapshot at runtime.
     const dynamic = BymaxQueueModule.forRootAsync({ useFactory: () => baseOptionsClientMode() })
     const provider = findProvider(
       dynamic.providers ?? [],
       BYMAX_QUEUE_RESOLVED_OPTIONS,
     ) as FactoryProvider
-    expect(provider.inject).toEqual([MODULE_OPTIONS_TOKEN])
+    expect(provider.inject).toEqual([BYMAX_QUEUE_OPTIONS])
     const resolved = provider.useFactory(baseOptionsClientMode()) as { prefix: string }
     expect(Object.isFrozen(resolved)).toBe(true)
     expect(resolved.prefix).toBe('bull')
   })
 
-  it('rejects invalid factory options instead of resolving them', () => {
-    // The async path must fail fast like forRoot: options a factory returns reach the
-    // resolved-options provider unvalidated, so it is the only place a bad value is caught.
+  it('rejects invalid factory options instead of providing them', () => {
+    // The async path must fail fast like forRoot: the options a factory returns are validated by
+    // the provider of the options token, once, before anything reads them.
     const dynamic = BymaxQueueModule.forRootAsync({ useFactory: () => baseOptionsClientMode() })
-    const provider = findProvider(
-      dynamic.providers ?? [],
-      BYMAX_QUEUE_RESOLVED_OPTIONS,
-    ) as FactoryProvider
+    const provider = findProvider(dynamic.providers ?? [], BYMAX_QUEUE_OPTIONS) as FactoryProvider
     expect(() => {
       provider.useFactory({})
     }).toThrow(QueueException)
+  })
+
+  it('reads a getter of the factory result once for the resolved options and the connection', () => {
+    let reads = 0
+    const host = baseOptionsClientMode() as { metrics?: unknown }
+    Object.defineProperty(host, 'metrics', {
+      enumerable: true,
+      get: () => {
+        reads += 1
+        if (reads > 1) throw new Error('read twice')
+        return { enabled: true }
+      },
+    })
+    const dynamic = BymaxQueueModule.forRootAsync({ useFactory: () => host as never })
+    const options = findProvider(dynamic.providers ?? [], BYMAX_QUEUE_OPTIONS) as FactoryProvider
+    const resolved = findProvider(
+      dynamic.providers ?? [],
+      BYMAX_QUEUE_RESOLVED_OPTIONS,
+    ) as FactoryProvider
+
+    const snapshot: unknown = options.useFactory(host)
+    const applied = resolved.useFactory(snapshot) as { metrics: { enabled: boolean } }
+
+    expect(reads).toBe(1)
+    expect(applied.metrics.enabled).toBe(true)
   })
 
   it('registers FlowService and MetricsService as resolved-aware factories', () => {

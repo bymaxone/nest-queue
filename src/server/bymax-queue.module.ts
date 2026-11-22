@@ -92,6 +92,23 @@ function readRegistrationOptions(options: typeof ASYNC_OPTIONS_TYPE): typeof ASY
   return read.rest
 }
 
+/**
+ * The provider of `BYMAX_QUEUE_OPTIONS` for an asynchronous registration. The factory result is read
+ * once, here, and validated: the resolved options and the connection resolver both read this snapshot,
+ * never the host's object again.
+ */
+function asyncOptionsProvider(): Provider {
+  return {
+    provide: BYMAX_QUEUE_OPTIONS,
+    useFactory: (opts: BymaxQueueModuleOptions): BymaxQueueModuleOptions => {
+      const snapshot = snapshotOptions(opts)
+      validateOptions(snapshot)
+      return snapshot
+    },
+    inject: [MODULE_OPTIONS_TOKEN],
+  }
+}
+
 @Module({})
 export class BymaxQueueModule extends ConfigurableModuleClass {
   /**
@@ -134,7 +151,10 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
             new MetricsService(qs, resolved.metrics.enabled, resolved.metrics.cacheTtlMs),
           inject: [QueueService],
         },
-        ...BymaxQueueModule.buildCoreProviders(),
+        ...BymaxQueueModule.buildCoreProviders({
+          provide: BYMAX_QUEUE_OPTIONS,
+          useExisting: MODULE_OPTIONS_TOKEN,
+        }),
       ],
       exports: BymaxQueueModule.buildExports(),
     }
@@ -161,12 +181,9 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
         ...(base.providers ?? []),
         {
           provide: BYMAX_QUEUE_RESOLVED_OPTIONS,
-          useFactory: (opts: BymaxQueueModuleOptions): Readonly<ResolvedQueueOptions> => {
-            const snapshot = snapshotOptions(opts)
-            validateOptions(snapshot)
-            return applyDefaults(snapshot)
-          },
-          inject: [MODULE_OPTIONS_TOKEN],
+          useFactory: (snapshot: BymaxQueueModuleOptions): Readonly<ResolvedQueueOptions> =>
+            applyDefaults(snapshot),
+          inject: [BYMAX_QUEUE_OPTIONS],
         },
         {
           provide: FlowService,
@@ -191,7 +208,7 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
             new MetricsService(qs, resolved.metrics.enabled, resolved.metrics.cacheTtlMs),
           inject: [QueueService, BYMAX_QUEUE_RESOLVED_OPTIONS],
         },
-        ...BymaxQueueModule.buildCoreProviders(),
+        ...BymaxQueueModule.buildCoreProviders(asyncOptionsProvider()),
       ],
       exports: BymaxQueueModule.buildExports(),
     }
@@ -203,11 +220,12 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
    * singleton services. `BYMAX_QUEUE_RESOLVED_OPTIONS`, `FlowService`, and
    * `MetricsService` are intentionally omitted — they differ per path.
    *
+   * @param optionsProvider - What `BYMAX_QUEUE_OPTIONS` resolves to: the one snapshot every consumer reads.
    * @returns The shared provider list.
    */
-  private static buildCoreProviders(): Provider[] {
+  private static buildCoreProviders(optionsProvider: Provider): Provider[] {
     return [
-      { provide: BYMAX_QUEUE_OPTIONS, useExisting: MODULE_OPTIONS_TOKEN },
+      optionsProvider,
       {
         provide: ConnectionResolver,
         useFactory: async (opts: BymaxQueueModuleOptions): Promise<ConnectionResolver> => {

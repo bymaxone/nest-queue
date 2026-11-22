@@ -13,8 +13,10 @@ import type { Socket } from 'node:net'
 import { connect as tlsConnect } from 'node:tls'
 import type { ConnectionOptions } from 'node:tls'
 
-import { AbstractConnector } from 'ioredis'
+import { AbstractConnector, Redis } from 'ioredis'
+import type { RedisOptions } from 'ioredis'
 
+import { withOwnKeys } from './driver-option-names'
 import { assertPrototypeClean } from './prototype-guard'
 
 /**
@@ -103,14 +105,54 @@ export class GuardedConnector extends AbstractConnector {
   }
 }
 
-/** A connector with a `connect()` that can be wrapped. */
+/** The address of a sentinel as ioredis hands it to the client that asks it. */
+interface ISentinelEndpoint {
+  readonly host?: string | undefined
+  readonly port?: number | undefined
+  readonly family?: number | undefined
+}
+
+/** A connector with a `connect()` that can be wrapped, and the sentinel connector's probe. */
 interface IWrappableConnector {
   connect: (...args: never[]) => Promise<unknown>
+  options: RedisOptions
+  connectToSentinel: (endpoint: ISentinelEndpoint, probeOptions?: object) => Redis
+}
+
+/**
+ * The client ioredis opens to ask one sentinel for the master, built as ioredis builds it but with
+ * the guarded connector and the own keys: the default one would open its socket from an ordinary
+ * object and send the sentinel password wherever a planted `path` points.
+ */
+function guardedProbe(
+  options: RedisOptions,
+  endpoint: ISentinelEndpoint,
+  probeOptions?: object,
+): Redis {
+  return new Redis(
+    withOwnKeys({
+      port: endpoint.port ?? 26379,
+      host: endpoint.host,
+      username: options.sentinelUsername ?? null,
+      password: options.sentinelPassword ?? null,
+      family: endpoint.family ?? ('path' in options && options.path ? undefined : options.family),
+      tls: options.sentinelTLS,
+      retryStrategy: null,
+      enableReadyCheck: false,
+      protocol: options.protocol,
+      replyMapping: 'legacy',
+      connectTimeout: options.connectTimeout,
+      commandTimeout: options.sentinelCommandTimeout,
+      ...probeOptions,
+      Connector: GuardedConnector,
+    }) as Omit<RedisOptions, 'replyMapping'>,
+  )
 }
 
 /**
  * Runs the guard before every connect of the connector a sentinel client built for itself, which is
- * ioredis's own `SentinelConnector`, and again once it has resolved: it asks the sentinels for the master
+ * ioredis's own `SentinelConnector`, and again once it has resolved, and gives each client that connector
+ * opens to ask a sentinel the guarded connector and the own keys: it asks the sentinels for the master
  * and then opens the socket from what they answered, an ordinary object Node reads with inheritance, so
  * a key planted while it waited is read there. A socket opened under a polluted `Object.prototype` is
  * destroyed before ioredis uses it and the connect is refused.
@@ -122,6 +164,8 @@ interface IWrappableConnector {
 export function guardSentinelConnector<T extends object>(client: T): T {
   const connector = (client as { connector: IWrappableConnector }).connector
   const connect = connector.connect.bind(connector)
+  connector.connectToSentinel = (endpoint, probeOptions) =>
+    guardedProbe(connector.options, endpoint, probeOptions)
   connector.connect = async (...args): Promise<unknown> => {
     assertPrototypeClean()
     const stream = await connect(...args)
