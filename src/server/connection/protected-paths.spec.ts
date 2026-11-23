@@ -315,6 +315,55 @@ describe('implicit iteration in the protected paths', () => {
   })
 })
 
+/**
+ * How many times a source hands `defineProperty` a descriptor written as an object literal. The
+ * built-in reads `get` and `set` off a descriptor through its prototype chain, so a literal throws, or
+ * defines an accessor, while either name is planted on `Object.prototype`.
+ */
+function descriptorLiterals(source: string): number {
+  return [...strip(source).matchAll(/defineProperty\s*\(\s*[^,()]+,\s*[^,()]+,\s*\{/g)].length
+}
+
+/**
+ * The descriptor literals each protected source may keep, with why. Every one runs while the guard has
+ * passed, or on a host's own object; where it does not, the descriptor has no prototype.
+ */
+const EXEMPT_DESCRIPTORS: Record<string, { count: number; reason: string }> = {
+  'config/read-by-name.ts': {
+    count: 2,
+    reason: 'copies host options at setup, after the guard has passed; a planted get fails closed',
+  },
+  'config/snapshot-options.ts': {
+    count: 1,
+    reason: 'copies host options at setup, after the guard has passed; a planted get fails closed',
+  },
+  'config/guarded-read.ts': {
+    count: 1,
+    reason: 'attaches the cause to a refusal that is thrown anyway; a planted get replaces it',
+  },
+}
+
+describe('descriptors in the protected paths', () => {
+  it.each(PATHS)('%s writes no descriptor literal it has not excused', (path) => {
+    const found = descriptorLiterals(readFileSync(join(ROOT, path), 'utf8'))
+
+    expect(found).toBe(EXEMPT_DESCRIPTORS[path]?.count ?? 0)
+  })
+
+  it('has a reason for every excused descriptor', () => {
+    for (const { reason } of Object.values(EXEMPT_DESCRIPTORS)) {
+      expect(reason.length).toBeGreaterThan(10)
+    }
+  })
+
+  it('the scan sees a literal and ignores a named descriptor', () => {
+    expect(descriptorLiterals('Object.defineProperty(target, key, { value: 1 })')).toBe(1)
+    expect(descriptorLiterals('defineProperty(options, key, {\n value: undefined,\n})')).toBe(1)
+    expect(descriptorLiterals('defineProperty(options, key, SHADOW_DESCRIPTOR)')).toBe(0)
+    expect(descriptorLiterals("// defineProperty(a, 'b', { value: 1 })")).toBe(0)
+  })
+})
+
 describe('the scan can fail', () => {
   it('finds a static call on a global the baseline lacks', () => {
     const found = scan('export const top = (a: number, b: number): number => Math.max(a, b)')
