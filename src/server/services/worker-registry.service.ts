@@ -9,9 +9,11 @@
  * @layer server/services
  */
 
+import { shadowJobOptions } from '../utils/shadow-job-options'
+import { assertPrototypeClean } from '../connection/prototype-guard'
 import { isAbsolute, extname } from 'node:path'
 import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common'
-import { Worker } from 'bullmq'
+import { DelayedError, Worker } from 'bullmq'
 import type { Job, WorkerOptions as BullWorkerOptions } from 'bullmq'
 import type { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
@@ -22,6 +24,7 @@ import { observeAttempt } from '../observability/observe-attempt'
 import { QueueObserverRegistry } from '../observability/queue-observer'
 import { isTimerDelayMs } from '../utils/timer-delay'
 import { workerOptionProblem } from '../utils/worker-option-problem'
+import { readWorkerConfig, snapshotWorkerOptions } from '../utils/snapshot-worker-options'
 import { isAbandoned } from '../utils/abandoned-workers'
 import type { WorkerOptions } from '../interfaces/worker-options.interface'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
@@ -136,7 +139,16 @@ export class WorkerRegistry {
   register<TData = unknown, TResult = unknown>(
     config: ProgrammaticWorkerConfig<TData, TResult>,
   ): Worker<TData, TResult> {
-    const { queueName, handler, options } = config
+    const [queueName, handler, rawOptions] = readWorkerConfig(config, [
+      'queueName',
+      'handler',
+      'options',
+    ]) as [
+      string,
+      ProgrammaticWorkerConfig<TData, TResult>['handler'],
+      ProgrammaticWorkerConfig<TData, TResult>['options'],
+    ]
+    const options = snapshotWorkerOptions(rawOptions)
     this.guardDuplicate(queueName)
     this.validateOptions(options)
 
@@ -190,7 +202,12 @@ export class WorkerRegistry {
    *   invalid or the BullMQ `Worker` constructor throws.
    */
   registerSandboxed(config: SandboxedWorkerConfig): Worker {
-    const { queueName, processorFile, options } = config
+    const [queueName, processorFile, rawOptions] = readWorkerConfig(config, [
+      'queueName',
+      'processorFile',
+      'options',
+    ]) as [string, SandboxedWorkerConfig['processorFile'], SandboxedWorkerConfig['options']]
+    const options = snapshotWorkerOptions(rawOptions, ['useWorkerThreads'])
     if (options?.jobTimeoutMs !== undefined) {
       throw new QueueException(
         QUEUE_ERROR_CODES.WORKER_REGISTRATION_FAILED,
@@ -438,6 +455,13 @@ export class WorkerRegistry {
     // Propagate the configured telemetry instance so spans cross from enqueue()
     // into the worker; the key stays absent when telemetry is not configured.
     if (this.options.telemetry !== undefined) result.telemetry = this.options.telemetry
+    // BullMQ keeps these options in an ordinary object and reads them while it finishes a job
+    // (`removeOnComplete`, `removeOnFail`, `limiter`, `name`, `metrics`): a name nobody set is looked up on
+    // `Object.prototype`, so each gets an own `undefined`, which is what an absent option is to it.
+    const shadowed = result as unknown as Record<string, unknown>
+    for (const name of WORKER_SHADOWED_OPTIONS) {
+      if (!Object.hasOwn(shadowed, name)) shadowed[name] = undefined
+    }
     return result
   }
 }
@@ -487,6 +511,60 @@ function adaptHandler<TData, TResult>(
   }
 }
 
+/** The options of a BullMQ `Worker` that have no default and are read after the handler settled. */
+const WORKER_SHADOWED_OPTIONS: readonly string[] = [
+  'removeOnComplete',
+  'removeOnFail',
+  'name',
+  'limiter',
+  'metrics',
+  'maxStartedAttempts',
+  'skipLockRenewal',
+  'skipStalledCheck',
+  'settings',
+]
+
+/** The built-ins the refusal path runs on, taken when this module loaded. */
+const create = Object.create
+const dateNow = Object.getOwnPropertyDescriptor(Date, 'now')?.value as () => number
+
+/** How long a job refused under a polluted `Object.prototype` waits before it is offered again. */
+const REFUSED_JOB_DELAY_MS = 5000
+
+/**
+ * Put a job the guard refused back in the delayed set, and end the attempt with BullMQ's own signal
+ * for it, so the job is neither failed nor counted as an attempt, and survives until the prototype is
+ * clean. When the job cannot be moved (Redis is unreachable), the error of that move ends the attempt.
+ */
+async function deferRefusedJob<TData, TResult>(
+  job: Job<TData, TResult>,
+  token: string | undefined,
+): Promise<never> {
+  // BullMQ's own `Job.moveToDelayed` hands the backend an options literal that inherits from
+  // `Object.prototype`, where a planted `fetchNext` would pull another job to active and a planted
+  // `fieldsToUpdate` would be written to the job's hash. The backend is called with an object that has
+  // no prototype and every name it reads.
+  const now = dateNow()
+  const options = create(null) as Record<string, unknown>
+  options.skipAttempt = true
+  options.fetchNext = false
+  options.fieldsToUpdate = undefined
+  const backend = (job as unknown as { backend: DelayBackend }).backend
+  await backend.moveToDelayed(job.id, now, REFUSED_JOB_DELAY_MS, token, options)
+  throw new DelayedError()
+}
+
+/** The part of BullMQ's queue backend that moves a job to the delayed set. */
+interface DelayBackend {
+  moveToDelayed(
+    jobId: string | undefined,
+    timestamp: number,
+    delay: number,
+    token: string | undefined,
+    options: object,
+  ): Promise<unknown>
+}
+
 /**
  * The processor BullMQ is given: the adapted handler, whose outcome is dropped once the worker has
  * been abandoned by the shutdown. A dropped outcome leaves the returned promise pending for good,
@@ -501,17 +579,43 @@ function toProcessor<TData, TResult>(
   observe?: { registry: QueueObserverRegistry; queue: string },
 ): (job: Job<TData, TResult>, token?: string, signal?: AbortSignal) => Promise<TResult> {
   const adapted = adaptHandler(handler, timeoutMs)
+  // The guard runs again once the handler has settled, inside the attempt an observer sees, so a
+  // refusal is reported as the failure it is and never as a completed attempt.
+  const settled: typeof adapted = (job, token, signal) =>
+    adapted(job, token, signal).then(
+      (value) => {
+        assertPrototypeClean()
+        return value
+      },
+      (error: unknown) => {
+        assertPrototypeClean()
+        throw error
+      },
+    )
   const run: typeof adapted =
     observe === undefined
-      ? adapted
+      ? settled
       : (job, token, signal) =>
-          observeAttempt(observe.registry, observe.queue, job, () => adapted(job, token, signal))
-  return (job, token, signal) =>
-    run(job, token, signal).then(
+          observeAttempt(observe.registry, observe.queue, job, () => settled(job, token, signal))
+  return (job, token, signal) => {
+    // A polluted `Object.prototype` is refused before each job, as it is before each add. The job
+    // goes back to the delayed set and is not failed: BullMQ's failure path reads `removeOnFail` off
+    // an options object it rebuilds as an ordinary one, so a planted `removeOnFail: true` would
+    // delete a job another producer enqueued.
+    // BullMQ reads job options off an ordinary object while it finishes the job, whether the handler
+    // ran or the job was deferred: they get own values first.
+    shadowJobOptions(job)
+    try {
+      assertPrototypeClean()
+    } catch {
+      return deferRefusedJob(job, token)
+    }
+    return run(job, token, signal).then(
       (value) => (abandoned() ? new Promise<never>(() => undefined) : value),
       (error: unknown) => {
         if (abandoned()) return new Promise<never>(() => undefined)
         throw error
       },
     )
+  }
 }

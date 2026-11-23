@@ -563,11 +563,13 @@ describe('WorkerRegistry — constructor option forwarding', () => {
   })
 
   it('omits limiter, lockDuration, and stalledInterval when not provided', () => {
-    // Absent optional fields must never appear on the constructed options.
+    // Absent optional fields must carry no value. `limiter` is held as an own `undefined`, which keeps
+    // BullMQ from reading one off `Object.prototype`; the options with a default stay absent.
     const registry = new WorkerRegistry(fakeConnection(), makeOptions())
     registry.register({ queueName: 'email', handler: noopHandler })
     const opts = lastWorkerOptions()
-    expect('limiter' in opts).toBe(false)
+    expect(opts.limiter).toBeUndefined()
+    expect(Object.hasOwn(opts, 'limiter')).toBe(true)
     expect('lockDuration' in opts).toBe(false)
     expect('stalledInterval' in opts).toBe(false)
   })

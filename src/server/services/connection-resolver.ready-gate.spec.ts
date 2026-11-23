@@ -8,7 +8,11 @@ import { EventEmitter } from 'node:events'
 import type { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
 
-jest.mock('ioredis', () => ({ Redis: jest.fn() }))
+jest.mock('ioredis', () => ({
+  AbstractConnector: jest.requireActual<{ AbstractConnector: unknown }>('ioredis')
+    .AbstractConnector,
+  Redis: jest.fn(),
+}))
 
 /** A scripted client: a status and the events ioredis emits. */
 class FakeRedis extends EventEmitter {

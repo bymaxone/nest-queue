@@ -8,6 +8,7 @@
  * @layer server/module
  */
 
+import { defineOwn, splitField } from './config/read-by-name'
 import {
   ConfigurableModuleBuilder,
   type DynamicModule,
@@ -19,7 +20,8 @@ import type { Redis } from 'ioredis'
 import type { BymaxQueueModuleOptions } from './interfaces/queue-module-options.interface'
 import type { QueueConnectionMode } from './interfaces/queue-connection.interface'
 import { snapshotOptions } from './config/snapshot-options'
-import { validateOptions } from './config/validate-options'
+import { guarded } from './config/guarded-read'
+import { checkFlag, validateOptions } from './config/validate-options'
 import { applyDefaults, type ResolvedQueueOptions } from './config/resolved-options'
 import {
   BYMAX_QUEUE_OPTIONS,
@@ -63,6 +65,50 @@ export const { ConfigurableModuleClass, MODULE_OPTIONS_TOKEN, OPTIONS_TYPE, ASYN
  *   useFactory: (client: Redis) => ({ connection: { client } }),
  * })
  */
+/** The fields Nest reads from the options of an asynchronous registration. */
+const REGISTRATION_FIELDS = [
+  'imports',
+  'inject',
+  'provideInjectionTokensFrom',
+  'useClass',
+  'useExisting',
+  'useFactory',
+] as const
+
+/**
+ * Read the options a host passes to `forRootAsync` once, under a guard, so Nest is handed the copy.
+ * An `isGlobal` that is `undefined` is not given, so the module keeps its default; any other value
+ * that is not a boolean is refused, as it is in `forRoot`, since `'false'` would read as true.
+ */
+function readRegistrationOptions(options: typeof ASYNC_OPTIONS_TYPE): typeof ASYNC_OPTIONS_TYPE {
+  const read = guarded('the registration options', () =>
+    splitField(options, 'isGlobal', REGISTRATION_FIELDS),
+  )
+  const isGlobal = read.value as boolean | undefined
+  checkFlag('isGlobal', isGlobal)
+  // The copy has no prototype and `isGlobal` goes into it, never a spread, so Nest reads plainly
+  // from an object that holds nothing the host did not give.
+  if (isGlobal !== undefined) defineOwn(read.rest, 'isGlobal', isGlobal)
+  return read.rest
+}
+
+/**
+ * The provider of `BYMAX_QUEUE_OPTIONS` for an asynchronous registration. The factory result is read
+ * once, here, and validated: the resolved options and the connection resolver both read this snapshot,
+ * never the host's object again.
+ */
+function asyncOptionsProvider(): Provider {
+  return {
+    provide: BYMAX_QUEUE_OPTIONS,
+    useFactory: (opts: BymaxQueueModuleOptions): BymaxQueueModuleOptions => {
+      const snapshot = snapshotOptions(opts)
+      validateOptions(snapshot)
+      return snapshot
+    },
+    inject: [MODULE_OPTIONS_TOKEN],
+  }
+}
+
 @Module({})
 export class BymaxQueueModule extends ConfigurableModuleClass {
   /**
@@ -105,7 +151,10 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
             new MetricsService(qs, resolved.metrics.enabled, resolved.metrics.cacheTtlMs),
           inject: [QueueService],
         },
-        ...BymaxQueueModule.buildCoreProviders(),
+        ...BymaxQueueModule.buildCoreProviders({
+          provide: BYMAX_QUEUE_OPTIONS,
+          useExisting: MODULE_OPTIONS_TOKEN,
+        }),
       ],
       exports: BymaxQueueModule.buildExports(),
     }
@@ -123,11 +172,7 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
    * @returns The configured dynamic module.
    */
   static forRootAsync(options: typeof ASYNC_OPTIONS_TYPE): DynamicModule {
-    // An `isGlobal` that holds `undefined` or `null` is not given, so the module keeps its default.
-    const { isGlobal, ...rest } = options
-    const base = super.forRootAsync(
-      isGlobal === undefined || (isGlobal as boolean | null) === null ? rest : options,
-    )
+    const base = super.forRootAsync(readRegistrationOptions(options))
 
     return {
       ...base,
@@ -136,12 +181,9 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
         ...(base.providers ?? []),
         {
           provide: BYMAX_QUEUE_RESOLVED_OPTIONS,
-          useFactory: (opts: BymaxQueueModuleOptions): Readonly<ResolvedQueueOptions> => {
-            const snapshot = snapshotOptions(opts)
-            validateOptions(snapshot)
-            return applyDefaults(snapshot)
-          },
-          inject: [MODULE_OPTIONS_TOKEN],
+          useFactory: (snapshot: BymaxQueueModuleOptions): Readonly<ResolvedQueueOptions> =>
+            applyDefaults(snapshot),
+          inject: [BYMAX_QUEUE_OPTIONS],
         },
         {
           provide: FlowService,
@@ -166,7 +208,7 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
             new MetricsService(qs, resolved.metrics.enabled, resolved.metrics.cacheTtlMs),
           inject: [QueueService, BYMAX_QUEUE_RESOLVED_OPTIONS],
         },
-        ...BymaxQueueModule.buildCoreProviders(),
+        ...BymaxQueueModule.buildCoreProviders(asyncOptionsProvider()),
       ],
       exports: BymaxQueueModule.buildExports(),
     }
@@ -178,11 +220,12 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
    * singleton services. `BYMAX_QUEUE_RESOLVED_OPTIONS`, `FlowService`, and
    * `MetricsService` are intentionally omitted — they differ per path.
    *
+   * @param optionsProvider - What `BYMAX_QUEUE_OPTIONS` resolves to: the one snapshot every consumer reads.
    * @returns The shared provider list.
    */
-  private static buildCoreProviders(): Provider[] {
+  private static buildCoreProviders(optionsProvider: Provider): Provider[] {
     return [
-      { provide: BYMAX_QUEUE_OPTIONS, useExisting: MODULE_OPTIONS_TOKEN },
+      optionsProvider,
       {
         provide: ConnectionResolver,
         useFactory: async (opts: BymaxQueueModuleOptions): Promise<ConnectionResolver> => {

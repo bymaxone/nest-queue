@@ -436,6 +436,32 @@ describe.each(['traceEnqueue', 'traceProcess'] as const)(
       expect(settled).toHaveBeenCalledTimes(1)
     })
 
+    it('returns the result of the operation when an observer runs it and resolves with nothing', async () => {
+      const registry = new QueueObserverRegistry()
+      // A hook that awaits the operation and resolves with nothing of its own, as one written in
+      // JavaScript does; the single assertion marks the one place the types are not honoured.
+      registry.register(
+        observe(async (_info, _carrier, run) => {
+          await run()
+          return undefined as never
+        }),
+      )
+
+      await expect(operate(registry, () => Promise.resolve('result'))).resolves.toBe('result')
+    })
+
+    it('keeps a null the observer returns on purpose, since only an omitted result is not a result', async () => {
+      const registry = new QueueObserverRegistry()
+      registry.register(
+        observe(async (_info, _carrier, run) => {
+          await run()
+          return null as never
+        }),
+      )
+
+      await expect(operate(registry, () => Promise.resolve('operation'))).resolves.toBeNull()
+    })
+
     it('returns the operation result when the observer fails after running it', async () => {
       const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
       const registry = new QueueObserverRegistry()

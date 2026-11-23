@@ -19,12 +19,15 @@ import {
   DEFAULT_CONNECTION_READY_TIMEOUT_MS,
   DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS,
 } from '../constants/default-options'
+import { withOwnKeys } from '../connection/driver-option-names'
+import { GuardedConnector, guardSentinelConnector } from '../connection/guarded-connector'
+import { assertPrototypeClean } from '../connection/prototype-guard'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { disconnectUnlessEnded } from '../utils/disconnect-unless-ended'
 import { quitWithin } from '../utils/quit-within'
 import { isCommandTimeout, unavailableException } from '../utils/command-timeout'
-import { logEvent, QUEUE_LOG_EVENTS } from '../utils/log-event'
+import { logEvent, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
 
 /**
  * The exact options shape ioredis 6's `Redis` constructor accepts.
@@ -80,19 +83,25 @@ export class ConnectionResolver {
 
   /** Resolve and validate the connection. Call once during module bootstrap. */
   async init(): Promise<void> {
+    assertPrototypeClean()
     const cfg = this.#options.connection
     if ('client' in cfg) {
       this.initModeA(cfg.client)
       return
     }
     this.mode = 'mode-b-owned'
+    const sentinel = Boolean(cfg.options?.sentinels)
     this.#client =
       'url' in cfg
         ? new Redis(cfg.url, this.ownedOptions(cfg.options))
         : new Redis(this.ownedOptions(cfg.options))
+    // ioredis starts the first connect inside its constructor, before a wrap is possible, so a
+    // sentinel client is built lazy, wrapped, and connected here.
+    if (sentinel) guardSentinelConnector(this.#client)
     // Before the first await, and for good: the startup race below removes its own listener once
     // the client is ready, and a client with none prints every later outage to raw stderr.
     attachClientErrorListener(this.#client, this.#logger, 'owned')
+    if (sentinel) this.#client.connect().catch(() => undefined)
     try {
       await this.waitReady(
         this.#options.connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS,
@@ -116,13 +125,17 @@ export class ConnectionResolver {
    * rejects.
    */
   private ownedOptions(options?: Partial<RedisOptions>): OwnedRedisOptions {
-    return {
+    const sentinel = Boolean(options?.sentinels)
+    return withOwnKeys({
       commandTimeout: this.#options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS,
       enableOfflineQueue: false,
       disconnectTimeout: DISCONNECT_TIMEOUT_MS,
       ...(options ?? {}),
-      lazyConnect: false,
-    } as OwnedRedisOptions
+      // After the host's options, so a `Connector` of the host's cannot remove the guard. A sentinel
+      // client builds its own connector, which is guarded after it is built, and takes none.
+      Connector: sentinel ? undefined : GuardedConnector,
+      lazyConnect: sentinel,
+    }) as OwnedRedisOptions
   }
 
   /** The resolved Queue-role client. */
@@ -206,7 +219,9 @@ export class ConnectionResolver {
       )
     }
     if (client.options.maxRetriesPerRequest === null) {
-      this.#logger.warn(
+      writeLog(
+        this.#logger,
+        'warn',
         logEvent(
           QUEUE_LOG_EVENTS.UNBOUNDED_RETRIES,
           'The shared client has maxRetriesPerRequest: null, so a command issued while Redis is ' +

@@ -126,7 +126,8 @@ describe('applyDefaults', () => {
     const connection: BymaxQueueModuleOptions['connection'] = { url: 'redis://localhost:6379' }
     const resolved = applyDefaults({ connection })
 
-    expect(resolved.connection).toBe(connection)
+    // A copy of what was read, so the resolver never reads the host's object a second time.
+    expect({ ...resolved.connection }).toEqual(connection)
   })
 
   it('returns a frozen object that rejects mutation', () => {

@@ -326,7 +326,7 @@ describe('assertJobInputs — the options are read once', () => {
     const copy = assertJobInputs(new Options(4), 'options') as { attempts: number }
 
     expect(copy.attempts).toBe(4)
-    expect(Object.getPrototypeOf(copy)).toBe(Object.prototype)
+    expect(Object.getPrototypeOf(copy)).toBeNull()
   })
 
   it('reads a getter one time, and reads the objects the options hold one time', () => {
@@ -373,7 +373,7 @@ describe('assertJobInputs — the options are read once', () => {
     const given: Record<string, unknown> = { delay: undefined, jobId: 'a', custom: null }
     const copy = assertJobInputs(given, 'options')
 
-    expect(copy).toStrictEqual({ delay: undefined, jobId: 'a', custom: null })
+    expect({ ...copy }).toStrictEqual({ delay: undefined, jobId: 'a', custom: null })
     expect(Object.keys(assertJobInputs({}, 'options') ?? {})).toEqual([])
   })
 
@@ -386,7 +386,7 @@ describe('assertJobInputs — the options are read once', () => {
 
     const copy = assertJobInputs(options, 'options')!
 
-    expect(Object.getPrototypeOf(copy)).toBe(Object.prototype)
+    expect(Object.getPrototypeOf(copy)).toBeNull()
     expect(copy.attempts).toBeUndefined()
     expect(Object.keys(copy).sort()).toEqual(['__proto__', 'jobId'])
   })

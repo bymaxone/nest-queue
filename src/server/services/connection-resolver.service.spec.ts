@@ -8,6 +8,7 @@ import { EventEmitter } from 'node:events'
 import { inspect } from 'node:util'
 import { Logger } from '@nestjs/common'
 import type { Redis } from 'ioredis'
+import { GuardedConnector } from '../connection/guarded-connector'
 import { ConnectionResolver } from './connection-resolver.service'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
@@ -16,6 +17,8 @@ import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options
 const redisConstructor = jest.fn<Redis, unknown[]>()
 
 jest.mock('ioredis', () => ({
+  AbstractConnector: jest.requireActual<{ AbstractConnector: unknown }>('ioredis')
+    .AbstractConnector,
   Redis: jest.fn().mockImplementation((...args: unknown[]): Redis => redisConstructor(...args)),
 }))
 
@@ -153,6 +156,7 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
       commandTimeout: 5000,
       disconnectTimeout: 1,
       enableOfflineQueue: false,
+      Connector: GuardedConnector,
     })
     expect(resolver.getMode()).toBe('mode-b-owned')
     expect(resolver.isOwned()).toBe(true)
@@ -180,6 +184,7 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
       commandTimeout: 5000,
       disconnectTimeout: 1,
       enableOfflineQueue: false,
+      Connector: GuardedConnector,
     })
   })
 
@@ -230,6 +235,7 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
       commandTimeout: 5000,
       disconnectTimeout: 1,
       enableOfflineQueue: false,
+      Connector: GuardedConnector,
     })
   })
 

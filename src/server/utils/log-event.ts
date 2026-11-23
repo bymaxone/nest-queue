@@ -7,6 +7,11 @@
  * @layer server/utils
  */
 
+import type { Logger } from '@nestjs/common'
+
+/** The logger methods the library writes through. */
+type EventLogger = Pick<Logger, 'log' | 'warn' | 'error'>
+
 /** Every code a log event of the library carries, in the order the README lists them. */
 export const QUEUE_LOG_EVENTS = {
   /** The module finished closing its queues, flow producer and connection. */
@@ -78,4 +83,28 @@ export function logFailure(
   fields: Readonly<Record<string, string | number | boolean>>,
 ): QueueLogMessage {
   return { event, message, ...fields, err }
+}
+
+/**
+ * Hand a log event to the logger, and absorb a throw of that logger. A host may replace Nest's
+ * logger with `app.useLogger`, and a logger of its own can throw; the throw would escape from the
+ * library code that reports a fault: a listener of an `error` event, a shutdown step, a failure
+ * path. A promise the host logger returns is out of reach: Nest's `Logger` does not return it, so
+ * the rejection of an asynchronous transport is dropped, becomes an unhandled rejection and ends
+ * the process with exit code 1 unless the application handles `unhandledRejection`.
+ *
+ * @param logger - The logger of the class that reports the event.
+ * @param level - How serious the event is.
+ * @param message - The event, built with {@link logEvent} or {@link logFailure}.
+ */
+export function writeLog(
+  logger: EventLogger,
+  level: 'log' | 'warn' | 'error',
+  message: QueueLogMessage,
+): void {
+  try {
+    logger[level](message)
+  } catch {
+    // A logger that throws must not fail the code that was reporting something else.
+  }
 }

@@ -25,17 +25,21 @@ function priorityProblem(path: string, value: unknown): string | undefined {
     : `${path} must be a whole number from 0 to ${String(MAX_JOB_PRIORITY)}, received ${received(value)}`
 }
 
+/** The type of a value, in words, and never the value: `null`, `an array`, `an object` or `a <typeof>`. */
+export function kindOf(value: unknown): string {
+  if (value === null) return 'null'
+  if (Array.isArray(value)) return 'an array'
+  const type = typeof value
+  return type === 'object' ? 'an object' : `a ${type}`
+}
+
 /**
  * What was received, for a refusal: a finite number as it is, `null`, or only the type of anything
  * else, never any other value, which can come from a request or a file and may be a secret.
  */
 export function received(value: unknown): string {
-  if (value === null) return 'null'
-  if (typeof value === 'number')
-    return Number.isFinite(value) ? String(value) : 'a number that is not finite'
-  if (Array.isArray(value)) return 'an array'
-  const type = typeof value
-  return type === 'object' ? 'an object' : `a ${type}`
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return typeof value === 'number' ? 'a number that is not finite' : kindOf(value)
 }
 
 /** The reason `value` is not a whole number >= 0, when `value` is set. */

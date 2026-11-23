@@ -4,6 +4,7 @@
  */
 
 import type { Redis } from 'ioredis'
+import { guardSentinelConnector } from '../connection/guarded-connector'
 
 /**
  * Duplicate an ioredis client for use by a Worker or QueueEvents instance. The
@@ -11,6 +12,10 @@ import type { Redis } from 'ioredis'
  * BullMQ requires on the blocking connections it uses for `BRPOPLPUSH` /
  * `BZPOPMIN` / `BLMOVE`, and drops the producer's fail-fast policy: a blocking command outlasts
  * any command deadline, and the worker loop has to ride out a reconnect on a live offline queue.
+ *
+ * A client in sentinel mode builds its own connector, which a duplicate would build again without
+ * the guard, so the duplicate is built lazy, its connector is guarded, and it connects on its first
+ * command or `connect()`, as BullMQ does.
  *
  * @param client - The source client (the Queue-role connection).
  * @returns A duplicated client suitable for blocking commands.
@@ -25,5 +30,24 @@ export function duplicateConnection(client: Redis): Redis {
     enableOfflineQueue: true,
     commandTimeout: undefined,
   }
-  return client.duplicate(override)
+  // A client that carries no options is not one ioredis built, so it has no sentinels to guard.
+  const options = client.options as typeof client.options | undefined
+  if (!options?.sentinels) return client.duplicate(override)
+  return guardSentinelClient(client.duplicate({ ...override, lazyConnect: true }))
+}
+
+/**
+ * Guard the connector of a sentinel client and of every client it duplicates: BullMQ's queue events
+ * duplicate the connection they are handed, and ioredis would build that one's connector again
+ * without the guard.
+ *
+ * @param client - A sentinel client built lazy.
+ * @returns The same client, whose `duplicate` builds guarded lazy clients in turn.
+ */
+function guardSentinelClient(client: Redis): Redis {
+  guardSentinelConnector(client)
+  const duplicate = client.duplicate.bind(client)
+  client.duplicate = (override?: Parameters<Redis['duplicate']>[0]): Redis =>
+    guardSentinelClient(duplicate({ ...override, lazyConnect: true }))
+  return client
 }

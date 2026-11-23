@@ -248,3 +248,48 @@ describe('validateOptions', () => {
     },
   )
 })
+
+describe('validateOptions — a switch must be a boolean', () => {
+  /** The module options with `path` set to `value`. */
+  function withFlag(path: string, value: unknown): BymaxQueueModuleOptions {
+    const base: Record<string, unknown> = { connection: { url: 'redis://localhost:6379' } }
+    const [head, tail] = path.split('.')
+    if (tail === undefined) base[head!] = value
+    else base[head!] = { [tail]: value }
+    return base as unknown as BymaxQueueModuleOptions
+  }
+
+  const flags = ['isGlobal', 'flows.enabled', 'metrics.enabled', 'shutdown.drainOnShutdown']
+  const refused: [string, unknown, string][] = [
+    ['a string', 'false', 'a string'],
+    ['an empty string', '', 'a string'],
+    ['a number', 1, 'a number'],
+    ['zero', 0, 'a number'],
+    ['an object', {}, 'an object'],
+    ['a boxed false', new Boolean(false), 'an object'],
+    ['an array', [], 'an array'],
+    ['null', null, 'null'],
+  ]
+
+  it.each(
+    flags.flatMap((flag) => refused.map(([label, value, type]) => [flag, label, value, type])),
+  )(
+    'refuses %s when it is %s, naming the option and only the type',
+    (flag, _label, value, type) => {
+      expect(
+        reasonOf(() => {
+          validateOptions(withFlag(flag as string, value))
+        }),
+      ).toBe(`${flag as string} must be a boolean, received ${type as string}`)
+    },
+  )
+
+  it.each(flags.flatMap((flag) => [true, false, undefined].map((value) => [flag, value])))(
+    'accepts %s set to %s',
+    (flag, value) => {
+      expect(() => {
+        validateOptions(withFlag(flag as string, value))
+      }).not.toThrow()
+    },
+  )
+})

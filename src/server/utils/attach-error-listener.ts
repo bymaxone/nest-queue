@@ -5,7 +5,7 @@
  */
 
 import type { Logger } from '@nestjs/common'
-import { logFailure, QUEUE_LOG_EVENTS } from './log-event'
+import { logFailure, QUEUE_LOG_EVENTS, writeLog } from './log-event'
 
 /** The slice of an emitter this helper needs — every BullMQ emitter satisfies it. */
 interface ErrorEmitter {
@@ -43,7 +43,9 @@ export function attachDefaultErrorListener(
   // `emit('error', value)` accepts any value, so the listener must not assume an `Error`: a throw
   // inside it escapes `emit` to the emitter's caller.
   emitter.on('error', (err: unknown) => {
-    logger.error(
+    writeLog(
+      logger,
+      'error',
       logFailure(
         QUEUE_LOG_EVENTS.EMITTER_ERROR,
         `${kind} for queue "${queueName}" emitted an error`,

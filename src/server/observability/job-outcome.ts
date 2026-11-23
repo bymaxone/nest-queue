@@ -30,15 +30,42 @@ export function optionsOf(job: Job): JobsOptions | undefined {
 }
 
 /**
+ * Whether BullMQ can read what the processor threw. Before it moves a job it reads the `message`, the
+ * prototype (for `instanceof`) and the `name` of the error, unguarded, so a `null`, an `undefined`, or
+ * a value one of whose reads throws ends in BullMQ's own handling, which emits `error`, leaves the job
+ * active and schedules no retry: the attempt has neither been retried nor failed.
+ */
+function isReadableByBullMq(error: unknown): boolean {
+  const read = error as { message?: unknown; name?: unknown }
+  return [
+    unreadableAs(() => read.message),
+    unreadableAs(() => Object.getPrototypeOf(error)),
+    unreadableAs(() => read.name),
+  ].every((value) => value !== UNREADABLE)
+}
+
+/** What a read of the error answers when it throws, which no value of the error can be. */
+const UNREADABLE = Symbol('unreadable')
+
+/** The value `read` answers, or {@link UNREADABLE} when it throws; a `null` or an `undefined` throws. */
+function unreadableAs(read: () => unknown): unknown {
+  try {
+    return read()
+  } catch {
+    return UNREADABLE
+  }
+}
+
+/**
  * Classify the end of one attempt that threw.
  *
  * @param job - The job, as the processor received it; `attemptsMade` counts the attempts before this one.
  * @param error - What the processor threw.
  * @returns `retried` when BullMQ runs the job again, `failed` when it does not, `undefined` for an
- *   error that moves the job instead of failing it.
+ *   error that moves the job instead of failing it, and for one BullMQ cannot read.
  */
 export function failureOutcome(job: Job, error: unknown): JobOutcome | undefined {
-  if (handBackOf(error) !== undefined) return undefined
+  if (handBackOf(error) !== undefined || !isReadableByBullMq(error)) return undefined
   if (isUnrecoverable(error)) return 'failed'
   return job.attemptsMade + 1 < (optionsOf(job)?.attempts ?? 1) ? 'retried' : 'failed'
 }

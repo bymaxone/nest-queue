@@ -87,16 +87,16 @@ describe('failureOutcome', () => {
     ['a name that is not a string', { name: 5 }],
     ['a name that only prints as one', { name: ['DelayedError'] }],
     ['a name that is the constructor', Object.assign(new Error('x'), { name: 'constructor' })],
-    ['null', null],
     ['an object with no name', {}],
   ])('counts %s as a failure of the work', (_label, error) => {
     expect(handBackOf(error)).toBeUndefined()
     expect(failureOutcome(jobWith(2, 3), error)).toBe('failed')
   })
 
-  it('classifies something that is not an Error by the attempts', () => {
+  it('classifies a thrown string by the attempts', () => {
+    // `null` and `undefined` are not here: BullMQ cannot read them, see "an error BullMQ cannot read".
     expect(failureOutcome(jobWith(0, 2), 'text')).toBe('retried')
-    expect(failureOutcome(jobWith(1, 2), undefined)).toBe('failed')
+    expect(failureOutcome(jobWith(1, 2), 'text')).toBe('failed')
   })
 })
 
@@ -119,13 +119,15 @@ describe('failureOutcome — an error whose members throw when read', () => {
     })
 
   it.each(['name', 'message'] as const)(
-    'reads an error whose %s getter throws as an ordinary failure, and never throws',
+    'reads an error whose %s getter throws as no hand-back and no outcome, and never throws',
     (member) => {
       const error = hostile(member)
 
+      // BullMQ reads both members of the error unguarded, so such an error leaves the job active (measured):
+      // neither `failed` nor `retried` is true of the attempt.
       expect(handBackOf(error)).toBeUndefined()
-      expect(failureOutcome(jobWith(2, 3), error)).toBe('failed')
-      expect(failureOutcome(jobWith(0, 3), error)).toBe('retried')
+      expect(failureOutcome(jobWith(2, 3), error)).toBeUndefined()
+      expect(failureOutcome(jobWith(0, 3), error)).toBeUndefined()
     },
   )
 })
@@ -156,6 +158,58 @@ describe('handBackOf — a member that throws does not hide the other', () => {
       },
     })
 
-    expect(failureOutcome(jobWith(0, 3), hostile)).toBe('retried')
+    // BullMQ runs `instanceof` on the error before it moves the job, so this one leaves the job
+    // active and unclassified, measured against a real Redis: nothing is retried and nothing fails.
+    expect(failureOutcome(jobWith(0, 3), hostile)).toBeUndefined()
+  })
+})
+
+describe('failureOutcome — an error BullMQ cannot read', () => {
+  // Measured against a real Redis with attempts: 3. For each of these BullMQ throws inside its own
+  // failure handling, emits `error` twice, leaves the job active with `attemptsMade` 0 and schedules
+  // no retry, so neither `retried` nor `failed` is true of the attempt; a plain error is retried
+  // twice and fails on the third, and a thrown string does the same.
+  const unreadable: [string, () => unknown][] = [
+    ['null', () => null],
+    ['undefined', () => undefined],
+    [
+      'an error whose message getter throws',
+      () =>
+        Object.defineProperty(new Error('x'), 'message', {
+          get: () => {
+            throw new Error('getter')
+          },
+        }),
+    ],
+    [
+      'an error whose name getter throws',
+      () =>
+        Object.defineProperty(new Error('x'), 'name', {
+          get: () => {
+            throw new Error('getter')
+          },
+        }),
+    ],
+    [
+      'an error whose prototype lookup throws',
+      () =>
+        new Proxy(new Error('x'), {
+          getPrototypeOf: () => {
+            throw new Error('trap')
+          },
+        }),
+    ],
+  ]
+
+  it.each(unreadable)('reports no outcome for %s while attempts remain', (_label, make) => {
+    expect(failureOutcome(jobWith(0, 3), make())).toBeUndefined()
+  })
+
+  it.each(unreadable)('reports no outcome for %s on the last attempt', (_label, make) => {
+    expect(failureOutcome(jobWith(2, 3), make())).toBeUndefined()
+  })
+
+  it('still says retried for a thrown string, which BullMQ retries', () => {
+    expect(failureOutcome(jobWith(0, 3), 'plain string')).toBe('retried')
   })
 })
