@@ -99,6 +99,29 @@ describe('shadowJobOptions', () => {
     expect(Object.hasOwn(opts, 'debounce')).toBe(false)
   })
 
+  it.each([
+    ['get', 'x'],
+    ['set', 'x'],
+    ['get', () => 1],
+    ['set', () => 1],
+  ])('still shadows while `%s` holds %p on Object.prototype', (name, planted) => {
+    const opts = {}
+    Object.defineProperty(Object.prototype, name, {
+      value: planted,
+      configurable: true,
+      writable: true,
+    })
+    try {
+      shadowJobOptions({ opts })
+    } finally {
+      Reflect.deleteProperty(Object.prototype, name)
+    }
+
+    for (const key of [...JOB_OPTION_KEYS, 'repeat']) {
+      expect(Object.hasOwn(opts, key)).toBe(true)
+    }
+  })
+
   describe('with a built-in replaced after the module loaded', () => {
     /** Run the shadow while `restore`-able replacement is in place and assert every own key exists. */
     function shadowedWhile(replace: () => () => void): void {

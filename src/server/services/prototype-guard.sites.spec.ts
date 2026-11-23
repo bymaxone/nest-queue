@@ -352,6 +352,26 @@ describe('the processor the worker registry gives BullMQ', () => {
     expect.assertions(JOB_OPTION_KEYS.length + 3)
   })
 
+  it('moves a refused job and shadows its options while get is planted on Object.prototype', async () => {
+    const moveToDelayed = jest.fn().mockResolvedValue(undefined)
+    const refused = Object.assign({}, jobFields, {
+      opts: {},
+      backend: { moveToDelayed },
+    }) as unknown as Job
+    const processor = registered(jest.fn())
+    Object.defineProperty(Object.prototype, 'get', { value: 'x', configurable: true })
+    let outcome: unknown
+    try {
+      outcome = await processor(refused, 'token').catch((e: unknown) => e)
+    } finally {
+      delete (Object.prototype as Record<string, unknown>).get
+    }
+
+    expect(outcome).toBeInstanceOf(DelayedError)
+    expect(moveToDelayed).toHaveBeenCalledTimes(1)
+    expect(Object.hasOwn((refused as unknown as { opts: object }).opts, 'removeOnFail')).toBe(true)
+  })
+
   it('moves the job with a prototype-less options object and a finite time when Object.create and Date.now are replaced', async () => {
     const moveToDelayed = jest.fn().mockResolvedValue(undefined)
     const processor = registered(jest.fn())

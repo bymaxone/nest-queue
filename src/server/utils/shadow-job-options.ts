@@ -16,6 +16,18 @@ const hasOwn = Object.hasOwn
 const defineProperty = Object.defineProperty
 
 /**
+ * The descriptor every shadow is defined with. `defineProperty` reads `get` and `set` off a descriptor
+ * through its prototype chain, so a literal would throw while either name is planted on
+ * `Object.prototype`; one that has no prototype never meets them.
+ */
+const SHADOW_DESCRIPTOR = Object.assign(Object.create(null) as object, {
+  value: undefined,
+  enumerable: false,
+  writable: true,
+  configurable: true,
+})
+
+/**
  * The names BullMQ reads off `job.opts`: every job option, and `repeat`, which the type of the job
  * options does not list and which BullMQ reads for a scheduler job (where it is stored with the job, so
  * the shadow is a safeguard here). `debounce` is left out on purpose: BullMQ asks whether the job holds
@@ -40,12 +52,7 @@ export function shadowJobOptions(job: { opts?: object }): void {
   while (position < SHADOWED_NAMES.length) {
     const key = at(SHADOWED_NAMES, position)
     if (!hasOwn(options, key)) {
-      defineProperty(options, key, {
-        value: undefined,
-        enumerable: false,
-        writable: true,
-        configurable: true,
-      })
+      defineProperty(options, key, SHADOW_DESCRIPTOR)
     }
     position += 1
   }
