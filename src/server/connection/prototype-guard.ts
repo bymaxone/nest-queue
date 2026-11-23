@@ -86,8 +86,7 @@ const FIELD_NAMES = ['value', 'get', 'set', 'writable', 'enumerable', 'configura
  * ordinary object, so reading `get`, `set` or `value` off a data descriptor would find, and run, an
  * accessor planted on `Object.prototype` under that name.
  */
-function fieldsOf(descriptor: PropertyDescriptor | undefined): DescriptorFields | undefined {
-  if (descriptor === undefined) return undefined
+function copyFields(descriptor: PropertyDescriptor): DescriptorFields {
   const fields = create(null) as Record<string, unknown>
   let position = 0
   while (position < FIELD_NAMES.length) {
@@ -98,6 +97,11 @@ function fieldsOf(descriptor: PropertyDescriptor | undefined): DescriptorFields 
     position += 1
   }
   return fields as unknown as DescriptorFields
+}
+
+/** The copied fields of a descriptor, or `undefined` when the key is missing. */
+function fieldsOf(descriptor: PropertyDescriptor | undefined): DescriptorFields | undefined {
+  return descriptor === undefined ? undefined : copyFields(descriptor)
 }
 
 /** The descriptor of the standard key at `position`, now. */
@@ -228,7 +232,7 @@ const BASELINE_GLOBALS = [
 interface BaselineEntry {
   readonly owner: object
   readonly key: PropertyKey
-  readonly was: DescriptorFields | undefined
+  readonly was: DescriptorFields
 }
 
 /** Add `owner` to `owners` unless it is already there. */
@@ -239,6 +243,28 @@ function addOwner(owners: object[], owner: object): void {
     position += 1
   }
   owners[owners.length] = owner
+}
+
+/** Every own property of each owner, with the descriptor it has now. */
+function describeOwners(owners: readonly object[]): BaselineEntry[] {
+  const entries: BaselineEntry[] = []
+  let position = 0
+  while (position < owners.length) {
+    const owner = at(owners, position)
+    const keys = ownKeys(owner)
+    let keyPosition = 0
+    while (keyPosition < keys.length) {
+      const key = at(keys, keyPosition)
+      entries[entries.length] = {
+        owner,
+        key,
+        was: copyFields(getOwnPropertyDescriptor(owner, key) as unknown as PropertyDescriptor),
+      }
+      keyPosition += 1
+    }
+    position += 1
+  }
+  return entries
 }
 
 /** Every own property of the built-ins above and of their prototypes, as they were at load. */
@@ -275,20 +301,7 @@ const BASELINE: readonly BaselineEntry[] = (() => {
     addOwner(owners, getPrototypeOf(iterator) as object)
     position += 1
   }
-  const entries: BaselineEntry[] = []
-  position = 0
-  while (position < owners.length) {
-    const owner = at(owners, position)
-    const keys = ownKeys(owner)
-    let keyPosition = 0
-    while (keyPosition < keys.length) {
-      const key = at(keys, keyPosition)
-      entries[entries.length] = { owner, key, was: fieldsOf(getOwnPropertyDescriptor(owner, key)) }
-      keyPosition += 1
-    }
-    position += 1
-  }
-  return entries
+  return describeOwners(owners)
 })()
 
 /** The globals that name the built-ins above, as they were at load. */
@@ -324,9 +337,9 @@ function replacedBuiltins(): number {
   return count
 }
 
-/** Whether two copies of a descriptor hold the same fields, or both are missing. */
-function sameFields(was: DescriptorFields | undefined, now: DescriptorFields | undefined): boolean {
-  if (was === undefined || now === undefined) return was === now
+/** Whether the descriptor a listed key held at load is the one it holds now; a removed key is not. */
+function sameFields(was: DescriptorFields, now: DescriptorFields | undefined): boolean {
+  if (now === undefined) return false
   return (
     is(was.value, now.value) &&
     was.get === now.get &&

@@ -456,3 +456,52 @@ describe('a guard loaded after propertyIsEnumerable was removed', () => {
     expect(response.error.details.count).toBe(2)
   })
 })
+
+describe('a built-in that is removed or written in JavaScript', () => {
+  it('refuses while a baselined built-in has been removed', () => {
+    const original = Object.getOwnPropertyDescriptor(Number, 'isSafeInteger')
+    if (original === undefined) throw new Error('nothing to remove')
+    Reflect.deleteProperty(Number, 'isSafeInteger')
+    let error: unknown
+    try {
+      error = outcomeOf(assertPrototypeClean)
+    } finally {
+      Object.defineProperty(Number, 'isSafeInteger', original)
+    }
+
+    expect(bodyOf(error).details.count).toBe(1)
+  })
+
+  it('does not take a function that only mentions the native marker for a native one', () => {
+    const original = Object.getOwnPropertyDescriptor(Object.prototype, 'hasOwnProperty')
+    if (original === undefined) throw new Error('nothing to replace')
+    const nest = jest.requireActual<object>('@nestjs/common')
+    const exception = jest.requireActual<object>('../errors/queue-exception')
+    const codes = jest.requireActual<object>('../constants/error-codes')
+    jest.doMock('@nestjs/common', () => nest)
+    jest.doMock('../errors/queue-exception', () => exception)
+    jest.doMock('../constants/error-codes', () => codes)
+    let outcome: unknown = 'not run'
+    try {
+      // The source text holds the marker, but does not end with it.
+      // It carries the key's own name, so only the text can tell it from the engine's function.
+      const imitation = function hasOwnProperty(): string {
+        return '{ [native code] }'
+      }
+      Object.defineProperty(Object.prototype, 'hasOwnProperty', { ...original, value: imitation })
+      jest.isolateModules(() => {
+        const loaded = jest.requireActual<{ assertPrototypeClean: () => void }>('./prototype-guard')
+        outcome = outcomeOf(() => {
+          loaded.assertPrototypeClean()
+        })
+      })
+    } finally {
+      Object.defineProperty(Object.prototype, 'hasOwnProperty', original)
+      jest.dontMock('@nestjs/common')
+      jest.dontMock('../errors/queue-exception')
+      jest.dontMock('../constants/error-codes')
+    }
+
+    expect(bodyOf(outcome).details.count).toBe(1)
+  })
+})
