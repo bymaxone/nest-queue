@@ -33,14 +33,24 @@ jobs:
   full:
     uses: bymaxone/.github/.github/workflows/mutation-full.yml@v1
     with:
-      # The ceiling is per shard job. One job with one worker had tested 1604 of 1862 mutants after
-      # 59 minutes, with about three hours still estimated, so one job no longer fits any ceiling
-      # worth setting. Four shards of two workers each ran in 604, 756, 786 and 811 seconds on one
-      # run and in 592, 697, 844 and 917 seconds on the next (runs 44816318328 and 44880817336, job
-      # durations including set-up). 23 minutes is 1.5 times the slowest, 917 seconds. A cancelled
-      # run leaves no score and no baseline for the week, so the ceiling stays a margin over the
-      # heaviest shard and not a figure to the minute; re-measure it when the source grows.
-      timeout-minutes: 23
+      # The ceiling is per shard job, and a cancelled run leaves no score and no baseline for the
+      # week, so it is sized from a measurement and kept well clear of the heaviest shard. One cold
+      # run on 99734c9 (run 45285656883) measured, per shard, the dry-run time of the shard's tests
+      # and the static mutants Stryker detected, and shard 1 ran to the end:
+      #   shard  mutants  static  dry run (net)  result
+      #   1        151   not flagged   4.9 s     finished, 824 s of mutation (10.9 s per mutant per worker)
+      #   2        691      133        7.8 s     cut off at the ceiling
+      #   3        848      161        9.7 s     cut off at the ceiling
+      #   4        927      348       10.6 s     cut off at the ceiling
+      # A static mutant runs the whole shard suite. Shard 1's 10.9 s per mutant per worker is 2.2
+      # times its net dry-run time, and that ratio is taken as the cost of one static mutant in
+      # every shard. A shard is therefore estimated as
+      # (static x net x 2.2 + other mutants x 3.9 s) / 2 workers, where 3.9 s is the per-mutant
+      # average of the previous cold run (917 s, 2 workers, about 465 mutants a shard): about 37,
+      # 51 and 86 minutes for shards 2, 3 and 4. The ceiling is 1.5 times the slowest, rounded up.
+      # The cut-off shards give only a lower bound (they ran past 23 minutes), so re-measure from the
+      # job durations of the next scored run and tighten it then.
+      timeout-minutes: 130
       # A unit test the cold run did not run fails the job: it would never be held to killing a
       # mutant, and the score cannot notice. The tooling specs that reach no source are listed in
       # scripts/mutation-inventory.exempt.json.
