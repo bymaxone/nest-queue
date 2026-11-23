@@ -213,10 +213,11 @@ describe('the connector, run by hand', () => {
   })
 
   it('takes its disconnect timeout from the options, and has none by default', () => {
-    expect(new GuardedConnector({ host: 'h', disconnectTimeout: 7 })).toBeInstanceOf(
-      GuardedConnector,
-    )
-    expect(new GuardedConnector({ host: 'h' })).toBeInstanceOf(GuardedConnector)
+    const given = new GuardedConnector({ host: 'h', disconnectTimeout: 7 })
+    const absent = new GuardedConnector({ host: 'h' })
+
+    expect((given as unknown as { disconnectTimeout: number }).disconnectTimeout).toBe(7)
+    expect((absent as unknown as { disconnectTimeout: number }).disconnectTimeout).toBe(0)
   })
 
   it('is refused with the text of ioredis when it is disconnected before the socket opens', async () => {
