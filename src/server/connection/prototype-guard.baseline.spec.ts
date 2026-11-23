@@ -424,3 +424,35 @@ describe('the engine’s own text for a native function', () => {
     expect(outcome).toBeUndefined()
   })
 })
+
+describe('a guard loaded after propertyIsEnumerable was removed', () => {
+  it('refuses with the library code instead of failing on the missing method', () => {
+    const real = Object.getOwnPropertyDescriptor(Object.prototype, 'propertyIsEnumerable')
+    const nest = jest.requireActual<object>('@nestjs/common')
+    const exception = jest.requireActual<object>('../errors/queue-exception')
+    const codes = jest.requireActual<object>('../constants/error-codes')
+    jest.doMock('@nestjs/common', () => nest)
+    jest.doMock('../errors/queue-exception', () => exception)
+    jest.doMock('../constants/error-codes', () => codes)
+    let outcome: unknown = 'not run'
+    try {
+      Reflect.deleteProperty(Object.prototype, 'propertyIsEnumerable')
+      jest.isolateModules(() => {
+        const loaded = jest.requireActual<{ assertPrototypeClean: () => void }>('./prototype-guard')
+        outcome = outcomeOf(() => {
+          loaded.assertPrototypeClean()
+        })
+      })
+    } finally {
+      if (real !== undefined) Object.defineProperty(Object.prototype, 'propertyIsEnumerable', real)
+      jest.dontMock('@nestjs/common')
+      jest.dontMock('../errors/queue-exception')
+      jest.dontMock('../constants/error-codes')
+    }
+
+    const response = (outcome as { getResponse: () => { error: Body } }).getResponse()
+    expect(response.error.code).toBe('queue.invalid_options')
+    // The removed key itself, plus the test runner's symbol that can no longer be proved non-enumerable.
+    expect(response.error.details.count).toBe(2)
+  })
+})

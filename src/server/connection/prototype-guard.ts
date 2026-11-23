@@ -27,8 +27,15 @@ const ownKeys = Reflect.ownKeys
 const getOwnPropertySymbols = Object.getOwnPropertySymbols
 const registered = Symbol.for
 const apply = Reflect.apply
-const isEnumerable = Object.getOwnPropertyDescriptor(Object.prototype, 'propertyIsEnumerable')
-  ?.value as (this: object, key: PropertyKey) => boolean
+const capturedIsEnumerable: unknown = Object.getOwnPropertyDescriptor(
+  Object.prototype,
+  'propertyIsEnumerable',
+)?.value
+/** The engine's method, or one that reports every key enumerable when it was removed or replaced before load. */
+const isEnumerable: (this: object, key: PropertyKey) => boolean =
+  typeof capturedIsEnumerable === 'function'
+    ? (capturedIsEnumerable as (this: object, key: PropertyKey) => boolean)
+    : () => true
 const isProxy = types.isProxy
 const objectPrototype = Object.prototype
 const nativeToString = Object.getOwnPropertyDescriptor(Function.prototype, 'toString')?.value as (
