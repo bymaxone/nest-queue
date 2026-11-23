@@ -127,15 +127,77 @@ describe('assertPrototypeClean refuses a planted key', () => {
     expect((body.details as { count: number }).count).toBe(2)
   })
 
-  it('does not count a symbol key', () => {
-    const symbol = Symbol('planted')
-    Object.defineProperty(Object.prototype, symbol, { value: 1, configurable: true })
+  /** The code of the refusal while `symbol` sits on `Object.prototype` with `descriptor`, or `clean`. */
+  function whileSymbol(symbol: symbol, descriptor: PropertyDescriptor): Refusal | 'clean' {
+    Object.defineProperty(Object.prototype, symbol, descriptor)
     try {
-      expect(() => {
+      return refusalOf(() => {
         assertPrototypeClean()
-      }).not.toThrow()
+      }).body
+    } catch {
+      return 'clean'
     } finally {
       Reflect.deleteProperty(Object.prototype, symbol)
+    }
+  }
+
+  it.each([
+    ['an unregistered symbol', Symbol('planted'), { value: 1, configurable: true }],
+    [
+      'an unregistered symbol that is enumerable',
+      Symbol('planted'),
+      { value: 1, configurable: true, enumerable: true },
+    ],
+    [
+      'a registry symbol that is not the runner’s',
+      Symbol.for('zzOther'),
+      { value: 1, configurable: true },
+    ],
+    [
+      'an unregistered symbol with the runner’s description',
+      Symbol('$$jest-protect-from-deletion'),
+      { value: [], configurable: true },
+    ],
+  ])('counts %s', (_label, symbol, descriptor) => {
+    const outcome = whileSymbol(symbol, descriptor)
+
+    expect(outcome).not.toBe('clean')
+    expect((outcome as Refusal).details).toEqual({
+      reason: 'Object.prototype holds keys the libraries would read as their own',
+      count: 1,
+    })
+  })
+
+  it('counts a planted Symbol.iterator, which changes how objects are iterated', () => {
+    const outcome = whileSymbol(Symbol.iterator, {
+      value: () => ({ next: () => ({ done: true }) }),
+      configurable: true,
+    })
+
+    expect(outcome).not.toBe('clean')
+  })
+
+  it('does not count the runner’s own registered symbol while it is not enumerable', () => {
+    const key = Symbol.for('$$jest-protect-from-deletion')
+
+    expect(Object.getOwnPropertyDescriptor(Object.prototype, key)?.enumerable).toBe(false)
+    expect(() => {
+      assertPrototypeClean()
+    }).not.toThrow()
+  })
+
+  it('counts the runner’s own registered symbol once it is enumerable', () => {
+    const key = Symbol.for('$$jest-protect-from-deletion')
+    const original = Object.getOwnPropertyDescriptor(Object.prototype, key)!
+    Object.defineProperty(Object.prototype, key, { ...original, enumerable: true })
+    try {
+      const { body } = refusalOf(() => {
+        assertPrototypeClean()
+      })
+
+      expect((body.details as { count: number }).count).toBe(1)
+    } finally {
+      Object.defineProperty(Object.prototype, key, original)
     }
   })
 

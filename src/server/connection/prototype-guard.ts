@@ -23,6 +23,8 @@ const is = Object.is
 const create = Object.create
 const getPrototypeOf = Object.getPrototypeOf
 const ownKeys = Reflect.ownKeys
+const getOwnPropertySymbols = Object.getOwnPropertySymbols
+const registered = Symbol.for
 const apply = Reflect.apply
 const isProxy = types.isProxy
 const objectPrototype = Object.prototype
@@ -156,6 +158,28 @@ function isOverwritten(position: number): boolean {
     was.enumerable !== now.enumerable ||
     was.configurable !== now.configurable
   )
+}
+
+/**
+ * The one symbol key a test runner puts on `Object.prototype` of every test: Jest's own registry key,
+ * non-enumerable. It is exempt only while it is exactly this registered symbol and not enumerable.
+ */
+const TEST_RUNNER_SYMBOL = registered('$$jest-protect-from-deletion')
+
+/** How many symbol keys `Object.prototype` holds beyond the test runner's own, enumerable or not. */
+function plantedSymbols(): number {
+  const symbols = getOwnPropertySymbols(objectPrototype)
+  let count = 0
+  let position = 0
+  while (position < symbols.length) {
+    const symbol = at(symbols, position)
+    const described = fieldsOf(getOwnPropertyDescriptor(objectPrototype, symbol))
+    if (symbol !== TEST_RUNNER_SYMBOL || described === undefined || described.enumerable === true) {
+      count += 1
+    }
+    position += 1
+  }
+  return count
 }
 
 /** Whether `name` is one of the standard keys, by comparison and not by a lookup in a collection. */
@@ -320,9 +344,11 @@ const REFUSAL = new QueueException(
 /**
  * Refuse while `Object.prototype` holds a string key it does not hold by default, or a standard key that
  * is not what the language gives it or not what it was when this module loaded, or while a built-in
- * the options and job paths call (or the global that names it) is not what it was when this module loaded. A symbol key is not a
- * name the libraries read. It does not cover `Array.prototype`, `Function.prototype` or the prototype
- * of `Buffer`, and a key planted after the last check is still read by the objects built later.
+ * the options and job paths call (or the global that names it) is not what it was when this module
+ * loaded, or while a symbol key sits on `Object.prototype` (a planted `Symbol.iterator` changes how
+ * objects are iterated; only the test runner's own non-enumerable key is exempt). A name added to a
+ * built-in prototype after load is not counted, only a replaced or removed one, and the prototype of
+ * `Buffer` is not covered; a key planted after the last check is still read by the objects built later.
  *
  * @throws {QueueException} `INVALID_OPTIONS` with the count of the keys, never a key or a value.
  */
@@ -339,6 +365,7 @@ export function assertPrototypeClean(): void {
     if (BASELINE_DEFECT[position] === true || isOverwritten(position)) count += 1
     position += 1
   }
+  count += plantedSymbols()
   count += replacedBuiltins()
   if (count > 0) {
     REFUSAL_DETAILS.count = count
