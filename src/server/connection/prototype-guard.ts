@@ -319,9 +319,7 @@ function replacedBuiltins(): number {
 
 /** Whether two copies of a descriptor hold the same fields, or both are missing. */
 function sameFields(was: DescriptorFields | undefined, now: DescriptorFields | undefined): boolean {
-  // Stryker disable next-line ConditionalExpression: a key listed when the module loaded always has a descriptor, so `was` is never undefined
-  if (was === undefined) return now === undefined
-  if (now === undefined) return false
+  if (was === undefined || now === undefined) return was === now
   return (
     is(was.value, now.value) &&
     was.get === now.get &&
