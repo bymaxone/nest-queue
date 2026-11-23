@@ -315,13 +315,41 @@ describe('implicit iteration in the protected paths', () => {
   })
 })
 
+/** The top-level arguments of the call whose `(` is at `open`, each trimmed. */
+function argumentsOf(code: string, open: number): string[] {
+  const args: string[] = []
+  let depth = 0
+  let start = open + 1
+  for (let index = open; index < code.length; index += 1) {
+    const char = code.charAt(index)
+    if (char === '(' || char === '{' || char === '[') depth += 1
+    else if (char === ')' || char === '}' || char === ']') depth -= 1
+    if (depth === 0) {
+      args.push(code.slice(start, index).trim())
+      break
+    }
+    if (depth === 1 && char === ',') {
+      args.push(code.slice(start, index).trim())
+      start = index + 1
+    }
+  }
+  return args
+}
+
 /**
- * How many times a source hands `defineProperty` a descriptor written as an object literal. The
- * built-in reads `get` and `set` off a descriptor through its prototype chain, so a literal throws, or
- * defines an accessor, while either name is planted on `Object.prototype`.
+ * How many times a source hands `defineProperty` a descriptor that is not a bare name. The built-in
+ * reads `get` and `set` off a descriptor through its prototype chain, so a literal throws, or defines an
+ * accessor, while either name is planted on `Object.prototype`; a parenthesized literal, a call that
+ * returns one and a spread are all that, and only a name can be built with no prototype.
  */
 function descriptorLiterals(source: string): number {
-  return [...strip(source).matchAll(/defineProperty\s*\(\s*[^,()]+,\s*[^,()]+,\s*\{/g)].length
+  const code = strip(source)
+  let count = 0
+  for (const match of code.matchAll(/defineProperty\s*\(/g)) {
+    const descriptor = argumentsOf(code, match.index + match[0].length - 1)[2] ?? ''
+    if (!/^[A-Za-z_$][\w$]*$/.test(descriptor)) count += 1
+  }
+  return count
 }
 
 /**
@@ -361,6 +389,10 @@ describe('descriptors in the protected paths', () => {
     expect(descriptorLiterals('defineProperty(options, key, {\n value: undefined,\n})')).toBe(1)
     expect(descriptorLiterals('defineProperty(options, key, SHADOW_DESCRIPTOR)')).toBe(0)
     expect(descriptorLiterals("// defineProperty(a, 'b', { value: 1 })")).toBe(0)
+    expect(descriptorLiterals('defineProperty(options, key, ({ value: undefined }))')).toBe(1)
+    expect(descriptorLiterals('defineProperty(options, pick(key, 1), { value: 1 })')).toBe(1)
+    expect(descriptorLiterals('defineProperty(options, key, { ...base, value: 1 })')).toBe(1)
+    expect(descriptorLiterals('defineProperty(options, key, make(key))')).toBe(1)
   })
 })
 
