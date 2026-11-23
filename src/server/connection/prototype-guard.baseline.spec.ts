@@ -82,6 +82,12 @@ const REPLACED: readonly [string, object, PropertyKey][] = [
   ['Reflect.getPrototypeOf', Reflect, 'getPrototypeOf'],
   ['Number.isSafeInteger', Number, 'isSafeInteger'],
   ['Array.prototype[Symbol.iterator]', Array.prototype, Symbol.iterator],
+  ['RegExp.prototype[Symbol.match]', RegExp.prototype, Symbol.match],
+  ['RegExp.prototype[Symbol.matchAll]', RegExp.prototype, Symbol.matchAll],
+  ['RegExp.prototype[Symbol.replace]', RegExp.prototype, Symbol.replace],
+  ['RegExp.prototype[Symbol.search]', RegExp.prototype, Symbol.search],
+  ['RegExp.prototype[Symbol.split]', RegExp.prototype, Symbol.split],
+  ['Symbol.prototype[Symbol.toPrimitive]', Symbol.prototype, Symbol.toPrimitive],
   ['Function.prototype.call', Function.prototype, 'call'],
   ['Function.prototype.apply', Function.prototype, 'apply'],
   ['Function.prototype.bind', Function.prototype, 'bind'],
@@ -174,6 +180,7 @@ describe('Promise and Date are exempt', () => {
   it.each([
     ['Promise.prototype.then', Promise.prototype, 'then'],
     ['Date.now', Date, 'now'],
+    ['Date.prototype[Symbol.toPrimitive]', Date.prototype, Symbol.toPrimitive],
   ] as const)('stays quiet while %s is replaced', (_label, owner, name) => {
     expect(outcomeWhileReplaced(owner, name)).toBeUndefined()
   })
