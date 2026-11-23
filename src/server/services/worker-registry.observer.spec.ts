@@ -155,4 +155,22 @@ describe('WorkerRegistry — observed attempts', () => {
 
     expect(finished).toMatchObject([{ queue: 'email', outcome: 'failed' }])
   })
+
+  it('reports the refusal, not the handler error, when a key is planted while the handler rejects', async () => {
+    const observers = new QueueObserverRegistry()
+    const finished: JobFinishedEvent[] = []
+    observers.register({ jobFinished: (event) => finished.push(event) })
+    const processor = registered(() => {
+      ;(Object.prototype as Record<string, unknown>).zzPlantedBeforeRejecting = 1
+      return Promise.reject(new Error('the handler failed'))
+    }, observers)
+
+    try {
+      await expect(processor(jobWith(undefined, 0, 1))).rejects.toBeInstanceOf(QueueException)
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'zzPlantedBeforeRejecting')
+    }
+
+    expect(finished).toMatchObject([{ queue: 'email', outcome: 'failed' }])
+  })
 })
