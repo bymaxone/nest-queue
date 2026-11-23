@@ -7,6 +7,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import net from 'node:net'
 import type { Server, Socket } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -339,35 +340,40 @@ interface IPair {
   key: string
 }
 
-/** Make a throwaway certificate for `localhost` and `127.0.0.1` with `openssl`. */
+/**
+ * Make a throwaway certificate for `localhost` and `127.0.0.1` with `openssl`. The output goes to
+ * files: a child's piped stdout is a socket, which Linux refuses to open as `/dev/stdout`.
+ */
 function makePair(): IPair {
-  const pem = execFileSync(
-    'openssl',
-    [
-      'req',
-      '-x509',
-      '-newkey',
-      'rsa:2048',
-      '-nodes',
-      '-days',
-      '2',
-      '-subj',
-      '/CN=localhost',
-      '-addext',
-      'subjectAltName=DNS:localhost,IP:127.0.0.1',
-      '-keyout',
-      '/dev/stdout',
-      '-out',
-      '/dev/stdout',
-    ],
-    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
-  )
-  return {
-    certificate:
-      /-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/.exec(pem)?.[0] ?? '',
-    key:
-      /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+?-----END [A-Z ]*PRIVATE KEY-----/.exec(pem)?.[0] ??
-      '',
+  const directory = mkdtempSync(join(tmpdir(), 'queue-tls-'))
+  try {
+    execFileSync(
+      'openssl',
+      [
+        'req',
+        '-x509',
+        '-newkey',
+        'rsa:2048',
+        '-nodes',
+        '-days',
+        '2',
+        '-subj',
+        '/CN=localhost',
+        '-addext',
+        'subjectAltName=DNS:localhost,IP:127.0.0.1',
+        '-keyout',
+        join(directory, 'key.pem'),
+        '-out',
+        join(directory, 'certificate.pem'),
+      ],
+      { stdio: 'ignore' },
+    )
+    return {
+      certificate: readFileSync(join(directory, 'certificate.pem'), 'utf8'),
+      key: readFileSync(join(directory, 'key.pem'), 'utf8'),
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
   }
 }
 
