@@ -645,6 +645,11 @@ describe('GuardedConnector seals the table of listeners of its socket', () => {
       }),
     )
     const proto = await nodeObjectPrototype()
+    // The plant is on the prototype of the whole process, which outlives this test: a test that
+    // times out never reaches its `finally`, so the cleanup of the file runs it as well.
+    closers.push(() => {
+      for (const event of EVENTS) Reflect.deleteProperty(proto, event)
+    })
     for (const event of EVENTS) {
       Object.defineProperty(proto, event, { value: 'planted', configurable: true, writable: true })
     }
