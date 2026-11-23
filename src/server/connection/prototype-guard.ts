@@ -27,6 +27,8 @@ const ownKeys = Reflect.ownKeys
 const getOwnPropertySymbols = Object.getOwnPropertySymbols
 const registered = Symbol.for
 const apply = Reflect.apply
+const isEnumerable = Object.getOwnPropertyDescriptor(Object.prototype, 'propertyIsEnumerable')
+  ?.value as (this: object, key: PropertyKey) => boolean
 const isProxy = types.isProxy
 const objectPrototype = Object.prototype
 const nativeToString = Object.getOwnPropertyDescriptor(Function.prototype, 'toString')?.value as (
@@ -172,9 +174,10 @@ function plantedSymbols(): number {
   let position = 0
   while (position < symbols.length) {
     const symbol = at(symbols, position)
-    const described = fieldsOf(getOwnPropertyDescriptor(objectPrototype, symbol))
-    // Stryker disable next-line OptionalChaining: a symbol listed just now always has a descriptor, so `described` is never undefined
-    if (symbol !== TEST_RUNNER_SYMBOL || described?.enumerable !== false) {
+    if (
+      symbol !== TEST_RUNNER_SYMBOL ||
+      apply<object, [PropertyKey], boolean>(isEnumerable, objectPrototype, [symbol])
+    ) {
       count += 1
     }
     position += 1
