@@ -6,6 +6,7 @@
  * @layer server/services
  */
 
+import { QueueException } from '../errors/queue-exception'
 import type { Job } from 'bullmq'
 import { EventEmitter } from 'node:events'
 import type { Redis } from 'ioredis'
@@ -135,5 +136,23 @@ describe('WorkerRegistry — observed attempts', () => {
     const processor = registered(() => Promise.resolve('plain'))
 
     await expect(processor(jobWith(undefined))).resolves.toBe('plain')
+  })
+
+  it('reports the refusal of a key planted while the handler ran as a failed attempt, never as completed', async () => {
+    const observers = new QueueObserverRegistry()
+    const finished: JobFinishedEvent[] = []
+    observers.register({ jobFinished: (event) => finished.push(event) })
+    const processor = registered(() => {
+      ;(Object.prototype as Record<string, unknown>).zzPlantedInTheHandler = 1
+      return Promise.resolve('done')
+    }, observers)
+
+    try {
+      await expect(processor(jobWith(undefined, 0, 1))).rejects.toBeInstanceOf(QueueException)
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'zzPlantedInTheHandler')
+    }
+
+    expect(finished).toMatchObject([{ queue: 'email', outcome: 'failed' }])
   })
 })

@@ -575,11 +575,24 @@ function toProcessor<TData, TResult>(
   observe?: { registry: QueueObserverRegistry; queue: string },
 ): (job: Job<TData, TResult>, token?: string, signal?: AbortSignal) => Promise<TResult> {
   const adapted = adaptHandler(handler, timeoutMs)
+  // The guard runs again once the handler has settled, inside the attempt an observer sees, so a
+  // refusal is reported as the failure it is and never as a completed attempt.
+  const settled: typeof adapted = (job, token, signal) =>
+    adapted(job, token, signal).then(
+      (value) => {
+        assertPrototypeClean()
+        return value
+      },
+      (error: unknown) => {
+        assertPrototypeClean()
+        throw error
+      },
+    )
   const run: typeof adapted =
     observe === undefined
-      ? adapted
+      ? settled
       : (job, token, signal) =>
-          observeAttempt(observe.registry, observe.queue, job, () => adapted(job, token, signal))
+          observeAttempt(observe.registry, observe.queue, job, () => settled(job, token, signal))
   return (job, token, signal) => {
     // A polluted `Object.prototype` is refused before each job, as it is before each add. The job
     // goes back to the delayed set and is not failed: BullMQ's failure path reads `removeOnFail` off
@@ -594,14 +607,9 @@ function toProcessor<TData, TResult>(
     // now, and the guard runs again once the handler has settled.
     shadowJobOptions(job)
     return run(job, token, signal).then(
-      (value) => {
-        if (abandoned()) return new Promise<never>(() => undefined)
-        assertPrototypeClean()
-        return value
-      },
+      (value) => (abandoned() ? new Promise<never>(() => undefined) : value),
       (error: unknown) => {
         if (abandoned()) return new Promise<never>(() => undefined)
-        assertPrototypeClean()
         throw error
       },
     )
