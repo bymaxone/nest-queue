@@ -221,6 +221,14 @@ describe('FlowService under a polluted Object.prototype', () => {
     expect(producers[0]?.addBulk).not.toHaveBeenCalled()
   })
 
+  it('add refuses a polluted prototype before it looks at whether flows are enabled', async () => {
+    const service = new FlowService(connection(), false, 'bull')
+
+    const code = await planted(() => refusedWith(() => service.add(flow)))
+
+    expect(code).toBe('queue.invalid_options')
+  })
+
   it.each(calls)('%s runs when Object.prototype is clean', async (_name, call) => {
     const service = new FlowService(connection(), true, 'bull')
 

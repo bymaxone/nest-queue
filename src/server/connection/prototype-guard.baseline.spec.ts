@@ -112,6 +112,8 @@ describe('a replaced built-in is refused on a clean Object.prototype', () => {
     const error = outcomeWhileReplaced(owner, name)
 
     expect(bodyOf(error).code).toBe('queue.invalid_options')
+    // One entry, one count: the prototype the iterators share is listed once however many samples reach it.
+    expect(bodyOf(error).details.count).toBe(1)
   })
 
   it('refuses a built-in that is deleted', () => {
@@ -335,5 +337,90 @@ describe('the baseline of a runtime that lacks one of the built-ins', () => {
     }
 
     expect(isolated).toBeDefined()
+  })
+})
+
+/** Run `body` with `change` applied to the descriptor of `name` of `owner`, restoring it in `finally`. */
+function redefined<T>(
+  owner: object,
+  name: PropertyKey,
+  change: PropertyDescriptor,
+  body: () => T,
+): T {
+  const original = Object.getOwnPropertyDescriptor(owner, name)
+  if (original === undefined) throw new Error('nothing to redefine')
+  Object.defineProperty(owner, name, { ...original, ...change })
+  try {
+    return body()
+  } finally {
+    Object.defineProperty(owner, name, original)
+  }
+}
+
+describe('each attribute of a baselined entry counts on its own', () => {
+  // `RegExp.$1` is an accessor with a getter and a setter, both functions of the engine.
+  it('refuses while only the getter of an accessor is replaced', () => {
+    const error = redefined(RegExp, '$1', { get: () => 'other' }, () =>
+      outcomeOf(assertPrototypeClean),
+    )
+
+    expect(bodyOf(error).details.count).toBe(1)
+  })
+
+  it('refuses while only the setter of an accessor is replaced', () => {
+    const error = redefined(RegExp, '$1', { set: () => undefined }, () =>
+      outcomeOf(assertPrototypeClean),
+    )
+
+    expect(bodyOf(error).details.count).toBe(1)
+  })
+
+  it('refuses while only the enumerable flag of a data property is flipped', () => {
+    const error = redefined(Number, 'isSafeInteger', { enumerable: true }, () =>
+      outcomeOf(assertPrototypeClean),
+    )
+
+    expect(bodyOf(error).details.count).toBe(1)
+  })
+})
+
+describe('the engine’s own text for a native function', () => {
+  it('is accepted whatever whitespace surrounds the marker', () => {
+    const realToString = Function.prototype.toString
+    const spaced = function toString(this: unknown): string {
+      const text = Reflect.apply<unknown, [], string>(realToString, this, [])
+      return text.replace(/\{ \[native code\] \}$/, '{\n\t [native code]\r\n  }\n ')
+    }
+    const nest = jest.requireActual<object>('@nestjs/common')
+    const exception = jest.requireActual<object>('../errors/queue-exception')
+    const codes = jest.requireActual<object>('../constants/error-codes')
+    jest.doMock('@nestjs/common', () => nest)
+    jest.doMock('../errors/queue-exception', () => exception)
+    jest.doMock('../constants/error-codes', () => codes)
+    let outcome: unknown = 'not run'
+    try {
+      Object.defineProperty(Function.prototype, 'toString', {
+        value: spaced,
+        writable: true,
+        configurable: true,
+      })
+      jest.isolateModules(() => {
+        const loaded = jest.requireActual<{ assertPrototypeClean: () => void }>('./prototype-guard')
+        outcome = outcomeOf(() => {
+          loaded.assertPrototypeClean()
+        })
+      })
+    } finally {
+      Object.defineProperty(Function.prototype, 'toString', {
+        value: realToString,
+        writable: true,
+        configurable: true,
+      })
+      jest.dontMock('@nestjs/common')
+      jest.dontMock('../errors/queue-exception')
+      jest.dontMock('../constants/error-codes')
+    }
+
+    expect(outcome).toBeUndefined()
   })
 })

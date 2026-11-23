@@ -157,6 +157,8 @@ describe('the connector, run by hand', () => {
     expect(error).toBeUndefined()
     expect(stream?.remoteAddress).toBeUndefined()
     expect(stream?.connecting).toBe(false)
+    // Reached the socket at the path, not the host and port next to it, which could not be reached.
+    expect(stream?.readyState).toBe('open')
     connector.disconnect()
   })
 

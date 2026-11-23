@@ -78,7 +78,7 @@ export class GuardedConnector extends AbstractConnector {
       // Stryker disable next-line ConditionalExpression: Node reads an own `undefined` or `null` family as an absent one (measured), so setting it always connects the same
       if (options.family != null) target.family = options.family
     }
-    if (options.tls) Object.assign(target, options.tls)
+    Object.assign(target, options.tls)
 
     return new Promise<Socket>((resolve, reject) => {
       process.nextTick(() => {

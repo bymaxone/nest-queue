@@ -10,6 +10,7 @@
  */
 
 import { JOB_OPTION_KEYS } from '../config/snapshot-options'
+import { at } from './at'
 
 /** The built-ins this module runs on, taken when it loaded. */
 const hasOwn = Object.hasOwn
@@ -34,11 +35,6 @@ const SHADOW_DESCRIPTOR = Object.assign(Object.create(null) as object, {
  * it of its own.
  */
 const SHADOWED_NAMES: readonly string[] = [...JOB_OPTION_KEYS, 'repeat']
-
-/** The element of `list` at `position`, which the loop below keeps inside its length. */
-function at<T>(list: readonly T[], position: number): T {
-  return list[position] as T
-}
 
 /**
  * Give `job.opts` an own, non-enumerable `undefined` for every job option it does not hold itself.

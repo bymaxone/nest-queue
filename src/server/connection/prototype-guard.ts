@@ -14,6 +14,7 @@ import { types } from 'node:util'
 import { HttpStatus } from '@nestjs/common'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { QueueException } from '../errors/queue-exception'
+import { at } from '../utils/at'
 
 /** The built-ins the guard runs on, taken when this module loaded. */
 const getOwnPropertyNames = Object.getOwnPropertyNames
@@ -69,11 +70,6 @@ interface DescriptorFields {
   readonly configurable: unknown
 }
 
-/** The element of `list` at `position`, which the loops below keep inside its length. */
-function at<T>(list: readonly T[], position: number): T {
-  return list[position] as T
-}
-
 const FIELD_NAMES = ['value', 'get', 'set', 'writable', 'enumerable', 'configurable'] as const
 
 /**
@@ -102,6 +98,7 @@ function descriptorNow(position: number): DescriptorFields | undefined {
 
 /** The descriptors of the standard keys as they were when this module loaded. */
 const SNAPSHOT: readonly (DescriptorFields | undefined)[] = (() => {
+  // Stryker disable next-line ArrayDeclaration: every index from zero is assigned below before the list is read, so a seed element is overwritten
   const taken: (DescriptorFields | undefined)[] = []
   let position = 0
   while (position < STANDARD_NAMES.length) {
@@ -116,6 +113,7 @@ function isNative(value: unknown): boolean {
   return (
     typeof value === 'function' &&
     !isProxy(value) &&
+    // Stryker disable next-line ArrayDeclaration: `Function.prototype.toString` ignores its arguments
     regExpTest.call(NATIVE_CODE, apply<unknown, [], string>(nativeToString, value, []))
   )
 }
@@ -136,6 +134,7 @@ function hasExpectedKind(name: string, descriptor: DescriptorFields | undefined)
 
 /** Whether the standard key at each position was not what the language gives it when this module loaded. */
 const BASELINE_DEFECT: readonly boolean[] = (() => {
+  // Stryker disable next-line ArrayDeclaration: every index from zero is assigned below before the list is read, so a seed element is overwritten
   const flags: boolean[] = []
   let position = 0
   while (position < STANDARD_NAMES.length) {
@@ -174,7 +173,8 @@ function plantedSymbols(): number {
   while (position < symbols.length) {
     const symbol = at(symbols, position)
     const described = fieldsOf(getOwnPropertyDescriptor(objectPrototype, symbol))
-    if (symbol !== TEST_RUNNER_SYMBOL || described === undefined || described.enumerable === true) {
+    // Stryker disable next-line OptionalChaining: a symbol listed just now always has a descriptor, so `described` is never undefined
+    if (symbol !== TEST_RUNNER_SYMBOL || described?.enumerable !== false) {
       count += 1
     }
     position += 1
@@ -186,7 +186,7 @@ function plantedSymbols(): number {
 function isStandard(name: string): boolean {
   let position = 0
   while (position < STANDARD_NAMES.length) {
-    if (STANDARD_NAMES[position] === name) return true
+    if (at(STANDARD_NAMES, position) === name) return true
     position += 1
   }
   return false
@@ -251,9 +251,11 @@ const BASELINE: readonly BaselineEntry[] = (() => {
   // The prototypes of the iterators that for-of and spread create, and the one above them: their
   // `next` is what a loop calls.
   const samples: object[] = [
+    // Stryker disable next-line ArrayDeclaration: an array iterator has the same prototype whatever the array holds
     [][Symbol.iterator](),
     new Set()[Symbol.iterator](),
     new Map()[Symbol.iterator](),
+    // Stryker disable next-line StringLiteral: a string iterator has the same prototype whatever the string holds
     ''[Symbol.iterator](),
   ]
   position = 0
@@ -281,6 +283,7 @@ const BASELINE: readonly BaselineEntry[] = (() => {
 
 /** The globals that name the built-ins above, as they were at load. */
 const GLOBAL_BINDINGS: readonly unknown[] = (() => {
+  // Stryker disable next-line ArrayDeclaration: every index from zero is assigned below before the list is read, so a seed element is overwritten
   const bound: unknown[] = []
   let position = 0
   while (position < BASELINE_GLOBALS.length) {
@@ -313,7 +316,9 @@ function replacedBuiltins(): number {
 
 /** Whether two copies of a descriptor hold the same fields, or both are missing. */
 function sameFields(was: DescriptorFields | undefined, now: DescriptorFields | undefined): boolean {
-  if (was === undefined || now === undefined) return was === now
+  // Stryker disable next-line ConditionalExpression: a key listed when the module loaded always has a descriptor, so `was` is never undefined
+  if (was === undefined) return now === undefined
+  if (now === undefined) return false
   return (
     is(was.value, now.value) &&
     was.get === now.get &&

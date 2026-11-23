@@ -45,6 +45,7 @@ function unreadable(what: string): QueueException {
  */
 export function snapshotWorkerOptions<T extends WorkerOptions | undefined>(
   options: T,
+  // Stryker disable next-line ArrayDeclaration: a name the host did not give is not copied, so a seed name leaves no key
   extraKeys: readonly string[] = [],
 ): T {
   return guarded(
