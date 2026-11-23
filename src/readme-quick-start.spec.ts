@@ -123,7 +123,12 @@ describe('README Quick Start', () => {
     added.length = 0
     processors.clear()
     received.length = 0
-    app = await NestFactory.createApplicationContext(AppModule, { logger: false })
+    // A boot that fails must fail this test: by default Nest aborts the process, which ends a
+    // mutation-testing worker instead of killing the mutant that broke the boot.
+    app = await NestFactory.createApplicationContext(AppModule, {
+      logger: false,
+      abortOnError: false,
+    })
     await app.init()
   })
 
