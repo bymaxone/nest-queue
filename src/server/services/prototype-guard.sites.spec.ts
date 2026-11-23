@@ -11,6 +11,8 @@ import { EventEmitter } from 'node:events'
 import type { FlowJob, Job } from 'bullmq'
 import { FlowService } from './flow.service'
 import { QueueService } from './queue.service'
+import { QueueObserverRegistry } from '../observability/queue-observer'
+import { JOB_OPTION_KEYS } from '../config/snapshot-options'
 import { WorkerRegistry } from './worker-registry.service'
 import { QueueException } from '../errors/queue-exception'
 import type { ConnectionResolver } from './connection-resolver.service'
@@ -231,6 +233,57 @@ describe('FlowService under a polluted Object.prototype', () => {
   })
 })
 
+describe('FlowService when a key is planted after the call started', () => {
+  const second = { name: 'second', queueName: 'q', data: {} } as FlowJob
+
+  /** The error code and the details a call rejected with. */
+  async function rejection(
+    run: () => Promise<unknown>,
+  ): Promise<{ code: string; details: Record<string, unknown> }> {
+    let error: unknown
+    try {
+      error = await run().catch((caught: unknown) => caught)
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'zzPlanted')
+    }
+    if (!(error instanceof QueueException)) throw new Error('the call was not refused')
+    return (error.getResponse() as { error: { code: string; details: Record<string, unknown> } })
+      .error
+  }
+
+  it('refuses an add whose observer plants a key, and never calls the producer', async () => {
+    const observers = new QueueObserverRegistry()
+    observers.register({
+      async traceEnqueue(_info, _carrier, run) {
+        ;(Object.prototype as Record<string, unknown>).zzPlanted = 'planted-value'
+        return await run()
+      },
+    })
+    const service = new FlowService(connection(), true, 'bull', undefined, 10000, observers)
+
+    const error = await rejection(() => service.add(flow))
+
+    expect(error.code).toBe('queue.invalid_options')
+    expect(producers[0]?.add).not.toHaveBeenCalled()
+  })
+
+  it('refuses the second tree of a bulk before its add when the first add planted a key', async () => {
+    const service = new FlowService(connection(), true, 'bull')
+    const producer = producers[0]
+    producer?.add.mockImplementationOnce(() => {
+      ;(Object.prototype as Record<string, unknown>).zzPlanted = 'planted-value'
+      return Promise.resolve({ job: { id: 'first' } })
+    })
+
+    const error = await rejection(() => service.addBulk([flow, second]))
+
+    expect(producer?.add).toHaveBeenCalledTimes(1)
+    // Measured: the refusal is reported as the bulk's own failure, not as INVALID_OPTIONS.
+    expect(error.code).toBe('queue.bulk_enqueue_failed')
+    expect(error.details).toMatchObject({ landed: [0], failed: [1], notStarted: [] })
+  })
+})
+
 describe('the processor the worker registry gives BullMQ', () => {
   const jobFields = { id: '1', name: 'send', data: {} }
   const job = jobFields as unknown as Job
@@ -276,6 +329,56 @@ describe('the processor the worker registry gives BullMQ', () => {
       fieldsToUpdate: undefined,
     })
     expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('has shadowed the options of a refused job, repeat and removeOnFail included, when it is moved', async () => {
+    const moveToDelayed = jest.fn().mockImplementation(function (this: unknown) {
+      const opts = (refused as unknown as { opts: object }).opts
+      for (const key of [...JOB_OPTION_KEYS, 'repeat']) {
+        expect(Object.getOwnPropertyDescriptor(opts, key)).toMatchObject({ value: undefined })
+      }
+      expect(Object.hasOwn(opts, 'removeOnFail')).toBe(true)
+      return Promise.resolve()
+    })
+    const refused = Object.assign({}, jobFields, {
+      opts: {},
+      backend: { moveToDelayed },
+    }) as unknown as Job
+    const processor = registered(jest.fn())
+
+    await planted(() => processor(refused, 'token').catch((e: unknown) => e))
+
+    expect(moveToDelayed).toHaveBeenCalledTimes(1)
+    expect.assertions(JOB_OPTION_KEYS.length + 3)
+  })
+
+  it('moves the job with a prototype-less options object and a finite time when Object.create and Date.now are replaced', async () => {
+    const moveToDelayed = jest.fn().mockResolvedValue(undefined)
+    const processor = registered(jest.fn())
+    const { create } = Object
+    const { now } = Date
+    let outcome: unknown
+    try {
+      // Replacing Object.create makes the guard refuse, which is the scenario.
+      Object.create = (() => ({})) as typeof Object.create
+      Date.now = () => NaN
+      outcome = await processor(jobWith(moveToDelayed), 'token').catch((e: unknown) => e)
+    } finally {
+      Object.create = create
+      Date.now = now
+    }
+
+    expect(outcome).toBeInstanceOf(DelayedError)
+    const [, timestamp, delay, , moved] = moveToDelayed.mock.calls[0] as [
+      string,
+      number,
+      number,
+      string,
+      object,
+    ]
+    expect(Object.getPrototypeOf(moved)).toBeNull()
+    expect(Number.isFinite(timestamp)).toBe(true)
+    expect(delay).toBe(5000)
   })
 
   it('ends the attempt with the error of the move when the job cannot be moved', async () => {

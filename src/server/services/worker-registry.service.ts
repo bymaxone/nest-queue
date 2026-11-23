@@ -524,6 +524,10 @@ const WORKER_SHADOWED_OPTIONS: readonly string[] = [
   'settings',
 ]
 
+/** The built-ins the refusal path runs on, taken when this module loaded. */
+const create = Object.create
+const dateNow = Object.getOwnPropertyDescriptor(Date, 'now')?.value as () => number
+
 /** How long a job refused under a polluted `Object.prototype` waits before it is offered again. */
 const REFUSED_JOB_DELAY_MS = 5000
 
@@ -540,8 +544,8 @@ async function deferRefusedJob<TData, TResult>(
   // `Object.prototype`, where a planted `fetchNext` would pull another job to active and a planted
   // `fieldsToUpdate` would be written to the job's hash. The backend is called with an object that has
   // no prototype and every name it reads.
-  const now = Date.now()
-  const options = Object.create(null) as Record<string, unknown>
+  const now = dateNow()
+  const options = create(null) as Record<string, unknown>
   options.skipAttempt = true
   options.fetchNext = false
   options.fieldsToUpdate = undefined
@@ -598,14 +602,14 @@ function toProcessor<TData, TResult>(
     // goes back to the delayed set and is not failed: BullMQ's failure path reads `removeOnFail` off
     // an options object it rebuilds as an ordinary one, so a planted `removeOnFail: true` would
     // delete a job another producer enqueued.
+    // BullMQ reads job options off an ordinary object while it finishes the job, whether the handler
+    // ran or the job was deferred: they get own values first.
+    shadowJobOptions(job)
     try {
       assertPrototypeClean()
     } catch {
       return deferRefusedJob(job, token)
     }
-    // BullMQ reads job options off an ordinary object after the handler settles: they get own values
-    // now, and the guard runs again once the handler has settled.
-    shadowJobOptions(job)
     return run(job, token, signal).then(
       (value) => (abandoned() ? new Promise<never>(() => undefined) : value),
       (error: unknown) => {

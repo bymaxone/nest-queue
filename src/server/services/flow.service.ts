@@ -153,7 +153,12 @@ export class FlowService {
    * node, unless BullMQ's own telemetry is configured, which stores its own.
    */
   private addTree(producer: FlowProducer, flow: FlowJob): Promise<JobNode> {
-    const add = (): Promise<JobNode> => producer.add(flow)
+    // The guard runs in the turn of each BullMQ `add`, after the observers' hooks and between the trees
+    // of a bulk, as `QueueService.call` does for its calls.
+    const add = (): Promise<JobNode> => {
+      assertPrototypeClean()
+      return producer.add(flow)
+    }
     if (this.#observers === undefined) return add()
     return this.#observers.traceEnqueue({ queue: flow.queueName, job: flow.name }, (carrier) => {
       if (!this.#telemetry) stampFlow(flow, carrier)
