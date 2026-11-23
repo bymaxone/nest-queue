@@ -64,7 +64,7 @@ describe('shadowJobOptions', () => {
     }).not.toThrow()
   })
 
-  it('gives `repeat`, which BullMQ reads after a scheduler job completes, an own non-enumerable undefined', () => {
+  it('gives `repeat`, which the type of the job options does not list, an own non-enumerable undefined', () => {
     const opts = {}
 
     shadowJobOptions({ opts })
