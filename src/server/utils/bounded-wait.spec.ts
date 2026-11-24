@@ -305,9 +305,9 @@ describe('joinAll', () => {
         }, ms),
       )
 
-    await joinAll([after(30, 'slow'), after(5, 'fast')])
+    await joinAll([after(5, 'fast'), after(30, 'slow')])
 
-    expect(done.sort()).toEqual(['fast', 'slow'])
+    expect(done).toEqual(['fast', 'slow'])
   })
 
   it('rethrows the first rejection in order and leaves no later rejection unheard', async () => {
