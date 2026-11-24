@@ -36,31 +36,7 @@ export class QueueHealthIndicator implements IHealthIndicator {
    * @param signal - Aborted when the aggregator stops waiting.
    * @returns `up` when Redis answered in time, `down` otherwise, with the connection mode as detail.
    */
-  async check(signal?: AbortSignal): Promise<HealthIndicatorResult> {
-    const details = { mode: this.connection.getMode() }
-    const releases: (() => void)[] = []
-    try {
-      // The ping is made first: if getting the client throws, no wait has been started that could
-      // reject with nobody listening.
-      const ping = this.connection.getClient().ping()
-      const stopped = new Promise<never>((_, reject) => {
-        const stop = (): void => {
-          reject(new Error())
-        }
-        const timer = setTimeout(stop, PING_TIMEOUT_MS)
-        if (signal?.aborted === true) stop()
-        signal?.addEventListener('abort', stop)
-        releases.push(() => {
-          clearTimeout(timer)
-          signal?.removeEventListener('abort', stop)
-        })
-      })
-      await Promise.race([ping, stopped])
-      return { status: 'up', details }
-    } catch {
-      return { status: 'down', details }
-    } finally {
-      for (const release of releases) release()
-    }
+  check(signal?: AbortSignal): Promise<HealthIndicatorResult> {
+    return this.connection.ping(PING_TIMEOUT_MS, signal)
   }
 }

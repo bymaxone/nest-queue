@@ -50,5 +50,9 @@
   {
     "file": "src/server/utils/log-calls.spec.ts",
     "reason": "Scans the source files for a log method called straight on a logger instead of through writeLog; executes no code under src, so it can kill no mutant."
+  },
+  {
+    "file": "src/server/utils/promise-sites.spec.ts",
+    "reason": "Scans the source files for Promise statics and then, catch and finally calls and checks each file against a listed count; executes no code under src, so it can kill no mutant."
   }
 ]

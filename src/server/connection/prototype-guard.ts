@@ -350,6 +350,43 @@ function sameFields(was: DescriptorFields, now: DescriptorFields | undefined): b
   )
 }
 
+/**
+ * The intrinsic `Promise`, taken from the promise an async function returns and never from the
+ * global binding, which a host may have replaced with its own class before this module loaded.
+ * `await` and the promises the library builds both resolve against it, so it is the one the guard
+ * watches.
+ */
+export const NativePromise: PromiseConstructor = (
+  getPrototypeOf(
+    (async (): Promise<void> => {
+      // Nothing to await: only the intrinsic promise this returns is wanted.
+    })(),
+  ) as {
+    constructor: PromiseConstructor
+  }
+).constructor
+
+/** The prototype of the intrinsic `Promise`, whose `constructor` an `await` reads to pick its path. */
+const NATIVE_PROMISE_PROTOTYPE: object = NativePromise.prototype
+
+/**
+ * How many of the promise defects are present: a `then` on `Array.prototype` or `Function.prototype`
+ * (one on `Object.prototype` is counted with the other planted keys), which an object or array
+ * resolved into a promise would call; and a `constructor` of the intrinsic promise that is not the
+ * intrinsic one, which makes `await` call the `then` of the promise it is given.
+ */
+function promiseDefects(): number {
+  let count = 0
+  if (hasOwn(Array.prototype, 'then')) count += 1
+  if (hasOwn(Function.prototype, 'then')) count += 1
+  if (
+    fieldsOf(getOwnPropertyDescriptor(NATIVE_PROMISE_PROTOTYPE, 'constructor'))?.value !==
+    NativePromise
+  )
+    count += 1
+  return count
+}
+
 /** The `details` of the refusal; its count is set each time the refusal is thrown. */
 const REFUSAL_DETAILS = {
   reason: 'Object.prototype holds keys the libraries would read as their own',
@@ -393,8 +430,17 @@ export function assertPrototypeClean(): void {
   }
   count += plantedSymbols()
   count += replacedBuiltins()
+  count += promiseDefects()
   if (count > 0) {
     REFUSAL_DETAILS.count = count
     throw REFUSAL
   }
+}
+
+/**
+ * Whether `err` is the refusal this module throws, by identity: a caller that logs a refusal tells it
+ * from an ordinary failure without reading any property of it.
+ */
+export function isGuardRefusal(err: unknown): boolean {
+  return err === REFUSAL
 }

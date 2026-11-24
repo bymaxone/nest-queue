@@ -286,9 +286,9 @@ describe('FlowService when a key is planted after the call started', () => {
     const error = await rejection(() => service.addBulk([flow, second]))
 
     expect(producer?.add).toHaveBeenCalledTimes(1)
-    // Measured: the refusal is reported as the bulk's own failure, not as INVALID_OPTIONS.
-    expect(error.code).toBe('queue.bulk_enqueue_failed')
-    expect(error.details).toMatchObject({ landed: [0], failed: [1], notStarted: [] })
+    // The verdict of the bulk is read under the guard, so the refusal answers in place of the bulk's
+    // own failure: the first tree has landed (one add), and the details of the bulk are not reported.
+    expect(error.code).toBe('queue.invalid_options')
   })
 })
 

@@ -5,7 +5,15 @@
  */
 
 import type { Redis } from 'ioredis'
-import { quitWithin } from './quit-within'
+import { quitWithin as quitBounded } from './quit-within'
+
+/** A logger whose methods are spies. */
+const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() }
+
+/** `quitWithin` with the logger of this spec. */
+function quitWithin(client: Redis, timeoutMs: number): Promise<void> {
+  return quitBounded(client, timeoutMs, logger)
+}
 
 /** A client stub in `status` whose `quit` is `quit`, and its `disconnect` spy. */
 function clientWith(

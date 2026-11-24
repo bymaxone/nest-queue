@@ -8,6 +8,7 @@
  */
 
 import type { Logger } from '@nestjs/common'
+import { isGuardRefusal } from '../connection/prototype-guard'
 
 /** The logger methods the library writes through. */
 type EventLogger = Pick<Logger, 'log' | 'warn' | 'error'>
@@ -34,6 +35,8 @@ export const QUEUE_LOG_EVENTS = {
   OBSERVER_FAILED: 'QUEUE_OBSERVER_FAILED',
   /** The shared client keeps commands queued for as long as an outage lasts. */
   UNBOUNDED_RETRIES: 'QUEUE_UNBOUNDED_RETRIES',
+  /** The prototype guard refused where the library could not throw, so it failed closed. */
+  GUARD_REFUSED: 'QUEUE_GUARD_REFUSED',
 } as const
 
 /** A code of {@link QUEUE_LOG_EVENTS}. */
@@ -107,4 +110,24 @@ export function writeLog(
   } catch {
     // A logger that throws must not fail the code that was reporting something else.
   }
+}
+
+/**
+ * Report a refusal of the prototype guard where the code cannot throw it (a health check, a
+ * teardown) and fails closed instead, as loudly as the outage that would otherwise be reported. Any
+ * other error is left to its own handler.
+ *
+ * @param logger - Where the refusal is written.
+ * @param err - What was caught.
+ * @param site - Which path failed closed.
+ */
+export function reportRefusal(logger: EventLogger, err: unknown, site: string): void {
+  if (!isGuardRefusal(err)) return
+  writeLog(
+    logger,
+    'error',
+    logFailure(QUEUE_LOG_EVENTS.GUARD_REFUSED, 'The prototype guard refused; failed closed', err, {
+      site,
+    }),
+  )
 }

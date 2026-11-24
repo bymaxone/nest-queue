@@ -22,12 +22,14 @@ import {
 import { withOwnKeys } from '../connection/driver-option-names'
 import { GuardedConnector, guardSentinelConnector } from '../connection/guarded-connector'
 import { assertPrototypeClean } from '../connection/prototype-guard'
+import { startWait } from '../utils/bounded-wait'
+import { pingResult, type PingResult } from '../utils/ping-result'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { disconnectUnlessEnded } from '../utils/disconnect-unless-ended'
 import { quitWithin } from '../utils/quit-within'
 import { isCommandTimeout, unavailableException } from '../utils/command-timeout'
-import { logEvent, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
+import { logEvent, QUEUE_LOG_EVENTS, reportRefusal, writeLog } from '../utils/log-event'
 
 /**
  * The exact options shape ioredis 6's `Redis` constructor accepts.
@@ -204,7 +206,34 @@ export class ConnectionResolver {
    * @param timeoutMs - The longest the quit may take. Default: the shutdown drain budget.
    */
   async teardown(timeoutMs: number = DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS): Promise<void> {
-    if (this.isOwned() && this.#client) await quitWithin(this.#client, timeoutMs)
+    if (this.isOwned() && this.#client) await quitWithin(this.#client, timeoutMs, this.#logger)
+  }
+
+  /**
+   * Ping Redis for a readiness check, inside a bound. It never rejects once the connection is
+   * initialised: a ping that fails, is unanswered at the bound or after `signal` aborts, or is run
+   * under a prototype the guard refuses (logged), reports `down`.
+   *
+   * @param timeoutMs - The longest the ping may take, in milliseconds.
+   * @param signal - Aborted when the caller stops waiting.
+   * @returns `up` when Redis answered in time, `down` otherwise, with the connection mode.
+   */
+  async ping(timeoutMs: number, signal?: AbortSignal): Promise<PingResult> {
+    const mode = this.getMode()
+    let up = false
+    try {
+      assertPrototypeClean()
+      const wait = startWait(this.getClient().ping(), timeoutMs, signal ? { signal } : {})
+      try {
+        assertPrototypeClean()
+        up = (await wait.result).state === 'done'
+      } finally {
+        wait.release()
+      }
+    } catch (error) {
+      reportRefusal(this.#logger, error, 'health')
+    }
+    return pingResult(up, mode)
   }
 
   /** Validate and adopt a bring-your-own client for the Queue role. */

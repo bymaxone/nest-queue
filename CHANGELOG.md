@@ -17,7 +17,7 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ## [1.2.27] — 2026-11-20
 
-Against 1.2.26 the declared types do not change; the runtime of the main entry does.
+Against 1.2.26 the declared types gain `ConnectionResolver.ping` and the `PingResult` type (see the note below); the runtime of the main entry changes.
 
 ### Fixed
 
@@ -28,6 +28,7 @@ Against 1.2.26 the declared types do not change; the runtime of the main entry d
 - **The options a host hands over are read once, under a guard, and none is dropped.** A getter or a Proxy trap that threw surfaced as the host's own error; it is now refused with `INVALID_OPTIONS` (`WORKER_REGISTRATION_FAILED`, `INVALID_REPEAT_OPTIONS` or `BULK_ENQUEUE_FAILED` for a worker, a schedule or a bulk list) and keeps the error as the `cause`. The connection, the queue options, the options of a worker, the schedule and template of a job scheduler and the jobs of a bulk enqueue are copied when they are read, so a `url` checked as one value is no longer connected as another. A bulk list is copied by index with its length read once: an `Array` subclass whose `map` returned nothing sent nothing and refused nothing. The job options are read by every key BullMQ's `JobsOptions` has, so a `deduplication` or a `lifo` defined as a getter or a hidden field reaches BullMQ.
 - **An observer whose hook cannot be read no longer fails the enqueue or the attempt.** A trace hook whose getter threw, or that was not a function, failed the operation with the host's own error. It is read once inside the registry and logged as `QUEUE_OBSERVER_FAILED`, and the operation runs.
 - **An attempt that BullMQ cannot classify is reported as neither retried nor failed.** A processor that throws `null`, `undefined`, or a value whose `message`, `name` or prototype lookup throws, makes BullMQ throw inside its own failure handling. Measured against a real Redis with `attempts: 3`: the job stayed active with `attemptsMade` 0, nothing was retried and nothing failed. The observers were told `retried` or `failed`; they are now told nothing, as for a job handed back to BullMQ.
+- **A host that replaces a `Promise` static, or plants a `then`, can no longer decide a deadline, a shutdown or a readiness verdict.** The bounded waits (`withDeadline`, the bounded `quit` of a connection the library owns, and the readiness ping) were built on `Promise.race` and an async return, so a replaced `Promise.race` or `Promise.resolve`, or a `then` planted on `Object.prototype`, `Array.prototype` or `Function.prototype` that erased itself when read, could answer in the work's place: a hung Redis reported `up`, a failed work resolved. Each wait is now one native promise made from the intrinsic constructor taken when the library loaded, settled by an `await` of the work through an object with no prototype, with the timer armed after the wait on the work has started and the prototype guard run immediately before each decision `await`. The guard also refuses a `then` present on those three prototypes and a replaced `Promise.prototype.constructor`. The readiness check, the teardown and the bounded waits run it at entry, not only at boot: a refusal there is logged as `QUEUE_GUARD_REFUSED` and fails closed (`down`, or the connection is still disconnected). A source scan holds every `Promise` static and every `then`, `catch` and `finally` in the library to a listed file count with a reason.
 
 ### Added
 
@@ -36,10 +37,23 @@ Against 1.2.26 the declared types do not change; the runtime of the main entry d
 - **The options a host injects are a copy.** `BYMAX_QUEUE_OPTIONS` resolves to the validated snapshot of the module options, an object with no prototype, never the object the host passed; a host that injects it reads its fields as before, and the discovery of processors skips an object that has no constructor.
 - **The refusal also covers the built-ins the options and job paths call.** While `Object`, `Reflect`, `Array`, `Number`, `String`, `Function`, `Symbol`, `JSON`, `Set`, `Map`, `RegExp`, `WeakMap`, `WeakSet`, `Boolean`, `BigInt`, a prototype of them, the prototype of an Array, Set, Map or String iterator, the iterator prototype above them, or the global that names one is not what it was when the library loaded, the library refuses with the same count-only `INVALID_OPTIONS` (`Promise` and `Date` are left out; a test suite that spies on `JSON.stringify` or another baselined built-in is refused until the spy is restored); the refusal also counts every symbol key on `Object.prototype` (a planted `Symbol.iterator` changes how objects are iterated), except the non-enumerable registry key Jest puts there; the refusal itself is built when the library loads; the guard runs again when the handler of an in-process worker settles and in the turn that makes each `QueueService` Redis call and each flow `add`; and the options of a worker and of each job an in-process worker runs carry an own `undefined` for every name BullMQ reads while it finishes a job, so a key planted while such a handler runs cannot delete a job another producer enqueued. The jobs of a sandboxed worker get neither the per-job guard, nor the job-option shadow, nor the settle guard.
 - **The refusal of a polluted `Object.prototype` runs on the built-ins as they were when the library loaded**, so replacing `Object.getOwnPropertyNames`, a method of `Array.prototype` or `Set.prototype`, or `Reflect.apply` after the import cannot blind it.
+- **`QUEUE_GUARD_REFUSED` (error, fields `site` and `err`)** is logged when the prototype guard refuses on a path that cannot throw: the readiness ping (`site: 'health'`) and the teardown (`site: 'teardown'`).
 
 ### Changed
 
 - **The main entry bundle is larger.** The guarded reads and copies of the options a host hands over are new runtime code: the brotli budget of `dist/server/index.mjs` was raised to fit it, and `pnpm size` holds the figure in `scripts/check-size.mjs`. The observability and shared budgets are unchanged.
+
+### Known limits
+
+- A dependency that reads a `Promise` static inside its own code (ioredis, BullMQ) is outside what the library's code can cover; only the library's own waits are built without statics.
+- Code running concurrently that plants a `then` and erases it again between the entry check and the work's own resolution cannot be seen afterwards.
+- The guard watches the engine's intrinsic `Promise`, not the `globalThis.Promise` binding.
+
+#### Apply to a derived backend
+
+- `ConnectionResolver` gains `ping(timeoutMs, signal?)`, which resolves to a `PingResult` (`{ status: 'up' | 'down', details: { mode } }`, objects with no prototype) and rejects only when the connection is not initialised. `QueueHealthIndicator.check` delegates to it; a host that built its own indicator over `getClient().ping()` can call it instead.
+- A refusal of the prototype guard during the verdict of a bulk (`enqueueBulk`, `FlowService.addBulk`) now rejects with `INVALID_OPTIONS`, where it used to be reported as `BULK_ENQUEUE_FAILED` with the landed and failed sets: those sets are not read once the guard has refused. Only a polluted prototype or a replaced built-in reaches it.
+- `QUEUE_GUARD_REFUSED` is a new log event; a pipeline that alerts on the library's error events should include it.
 
 ## [1.2.26] — 2026-11-20
 
