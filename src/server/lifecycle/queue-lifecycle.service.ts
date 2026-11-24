@@ -22,8 +22,10 @@ import {
   type OnApplicationShutdown,
   type OnModuleDestroy,
 } from '@nestjs/common'
+import type { Worker } from 'bullmq'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
+import { joinAll, own } from '../utils/bounded-wait'
 import { withDeadline } from '../utils/with-deadline'
 import { abandonWorker } from '../utils/abandoned-workers'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
@@ -127,13 +129,10 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
    */
   private async closeWorkers(deadline: number): Promise<number> {
     let undrained = 0
-    await Promise.all(
+    await joinAll(
       Array.from(this.workers.getAll(), async ([name, worker]) => {
         try {
-          await bounded(
-            worker.pause().then(() => worker.close()),
-            deadline,
-          )
+          await bounded(pauseThenClose(worker), deadline)
         } catch (cause) {
           undrained++
           abandonWorker(worker)
@@ -170,7 +169,7 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
 
   /** Close every cached `QueueEvents` in parallel within the budget, swallowing failures. */
   private async closeQueueEvents(deadline: number): Promise<void> {
-    await Promise.all(
+    await joinAll(
       Array.from(this.events.getAll().values(), async (queueEvents) => {
         await bounded(queueEvents.close(), deadline).catch(() => undefined)
       }),
@@ -189,7 +188,7 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
       ...this.workers.getConnections().values(),
       ...this.events.getConnections().values(),
     ]
-    await Promise.all(
+    await joinAll(
       connections.map(async (connection) => {
         await bounded(connection.quit(), deadline).catch(() => {
           disconnectUnlessEnded(connection)
@@ -242,6 +241,12 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
       .teardown(Math.max(budget - Date.now(), FORCE_CLOSE_GRACE_MS))
       .catch(() => undefined)
   }
+}
+
+/** Pause `worker` and then close it, each through an owned await, so a replaced `then` relays nothing. */
+async function pauseThenClose(worker: Worker): Promise<void> {
+  await own(worker.pause())
+  await own(worker.close())
 }
 
 /**

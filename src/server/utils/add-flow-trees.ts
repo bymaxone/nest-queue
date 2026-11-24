@@ -11,7 +11,7 @@ import type { FlowJob, JobNode } from 'bullmq'
 import { assertPrototypeClean } from '../connection/prototype-guard'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { QueueException } from '../errors/queue-exception'
-import { own } from './bounded-wait'
+import { joinAll, own } from './bounded-wait'
 import { errorSummary, timeoutException } from './command-timeout'
 
 /** What became of every tree of a batch, as indexes into the batch; the four lists partition it. */
@@ -98,22 +98,15 @@ function outcomeOf(state: readonly TreeState[]): FlowBulkOutcome {
 }
 
 /**
- * Join the workers of a bulk add by awaiting each in turn, not through `Promise.all`: a replaced
- * static would settle the join at once and report a batch that had not run. A worker never rejects,
- * since it records its failure in the closure state; the guard runs after the last await, and
- * `finish` reads that state.
+ * Join the workers of a bulk add through `joinAll`, not `Promise.all`: a replaced static would settle
+ * the join at once and report a batch that had not run. A worker never rejects, since it records its
+ * failure in the closure state; the guard runs after the last await, and `finish` reads that state.
  */
 async function joinWorkers(
   workers: readonly Promise<void>[],
   finish: () => JobNode[],
 ): Promise<JobNode[]> {
-  // Every worker takes the intrinsic constructor before the first await, so a host that plants one
-  // while a worker settles cannot make a later await read it and call a replaced `then`.
-  for (const running of workers) void own(running)
-  for (const running of workers) {
-    assertPrototypeClean()
-    await running
-  }
+  await joinAll(workers)
   assertPrototypeClean()
   return finish()
 }

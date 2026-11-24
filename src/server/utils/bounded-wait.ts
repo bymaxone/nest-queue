@@ -38,18 +38,18 @@ function ownConstructor(promise: Promise<unknown>): void {
 }
 
 /**
- * Give `promise` the intrinsic `constructor` when it is a native promise, and hand it back, so that
+ * Give `value` the intrinsic `constructor` when it is a native promise, and hand it back, so that
  * the `await` that follows reads nothing a host can replace. A value that is not a native promise,
- * such as a foreign thenable, is returned untouched.
+ * such as a foreign thenable or `undefined`, is returned untouched.
  *
- * @param promise - The promise about to be awaited.
- * @returns The same promise.
+ * @param value - The promise about to be awaited.
+ * @returns The same value.
  * @example
  * const value = await own(startTheWork())
  */
-export function own<T>(promise: Promise<T>): Promise<T> {
-  if (isNativePromise(promise)) ownConstructor(promise)
-  return promise
+export function own<P>(value: P): P {
+  if (isNativePromise(value)) ownConstructor(value)
+  return value
 }
 
 /** Awaits `work` and says nothing: its only purpose is to be a listener for the rejection. */
@@ -68,8 +68,10 @@ async function hearRejectionOf(work: Promise<unknown>): Promise<void> {
  * attaches its listener directly, where `then` would read the constructor and its species. A value
  * that is not a native promise is left to the await that follows, so a foreign thenable is not
  * subscribed twice.
+ *
+ * @param work - The promise whose rejection is heard.
  */
-function hearRejection(work: Promise<unknown>): void {
+export function hear(work: Promise<unknown>): void {
   if (!isNativePromise(work)) return
   ownConstructor(work)
   void hearRejectionOf(work)
@@ -80,6 +82,9 @@ export type WaitOutcome<T> =
   | { readonly state: 'done'; readonly v: T }
   | { readonly state: 'failed'; readonly v: unknown }
   | { readonly state: 'expired'; readonly v: undefined }
+
+/** How a piece of work ended when no bound was set: it answered or it failed. */
+export type Ended<T> = Exclude<WaitOutcome<T>, { readonly state: 'expired' }>
 
 /** A running wait: the verdict, and what to call once it has been read. */
 export interface BoundedWait<T> {
@@ -130,7 +135,7 @@ export function startWait<T>(
   timeoutMs: number,
   options: BoundedWaitOptions = {},
 ): BoundedWait<T> {
-  hearRejection(work)
+  hear(work)
   let settle: (outcome: WaitOutcome<T>) => void
   const result = new NativePromise<WaitOutcome<T>>((resolve) => {
     settle = resolve
@@ -162,4 +167,66 @@ export function startWait<T>(
       signal?.removeEventListener('abort', expire)
     },
   }
+}
+
+/**
+ * Run `call` and say how it ended, as a verdict with no prototype, through an `await` of the promise
+ * it returns. The promise handed back never rejects and has the intrinsic `constructor`, so a caller
+ * that awaits it reads nothing a host can replace, and nothing a host holds is ever awaited: `call`
+ * may hand its own promise to a host, since only the verdict leaves this function.
+ *
+ * @param call - Starts the work; a throw ends it as `failed`.
+ * @returns The verdict, `done` or `failed`.
+ * @example
+ * const outcome = await outcomeOf(() => client.ping())
+ */
+export function outcomeOf<T>(call: () => Promise<T>): Promise<Ended<T>> {
+  const run = async (): Promise<Ended<T>> => {
+    try {
+      return verdict<T>('done', await own(call())) as Ended<T>
+    } catch (error) {
+      return verdict<T>('failed', error) as Ended<T>
+    }
+  }
+  return own(run())
+}
+
+/**
+ * Await the work `call` starts through an owned `await`, run `settled` once it has ended either way,
+ * and hand the outcome on: the value, or the error it failed with. `settled` runs after the last
+ * replaceable call and right before the return, which is where the prototype guard belongs. When
+ * `abandoned` says the outcome is no longer wanted, the relay waits on a promise that never settles
+ * instead, so nothing is handed on and nothing adopts a promise to settle.
+ *
+ * @param call - Starts the work.
+ * @param settled - Runs once the work has ended; a throw replaces the outcome.
+ * @param abandoned - Whether the outcome is dropped; read once the work has ended.
+ * @example
+ * return relayOutcome(() => handler(job), assertPrototypeClean)
+ */
+export async function relayOutcome<T>(
+  call: () => Promise<T>,
+  settled: () => void,
+  abandoned: () => boolean = () => false,
+): Promise<T> {
+  const outcome = await own(outcomeOf(call))
+  if (abandoned()) await own(new NativePromise<never>(() => undefined))
+  settled()
+  if (outcome.state === 'failed') throw outcome.v
+  return outcome.v
+}
+
+/**
+ * Wait for every promise through owned awaits, one after another, rather than through
+ * `Promise.all`: a replaced static would answer at once and report work that had not finished. Every
+ * promise takes the intrinsic constructor and a rejection listener before the first await, so one
+ * that a host plants while another settles is not read, and a rejection that is not the first is
+ * not left unheard. The first rejection, in order, is rethrown. The caller runs the guard once the
+ * join is over, when it decides something from it.
+ *
+ * @param promises - What to wait for.
+ */
+export async function joinAll(promises: readonly Promise<unknown>[]): Promise<void> {
+  for (const promise of promises) hear(promise)
+  for (const promise of promises) await promise
 }

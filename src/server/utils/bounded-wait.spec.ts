@@ -7,7 +7,7 @@
 
 import { getEventListeners } from 'node:events'
 import { NativePromise } from '../connection/prototype-guard'
-import { own, startWait } from './bounded-wait'
+import { hear, joinAll, outcomeOf, own, relayOutcome, startWait } from './bounded-wait'
 
 afterEach(() => {
   jest.useRealTimers()
@@ -209,5 +209,118 @@ describe('own', () => {
 
     expect(own(frozen)).toBe(frozen)
     expect(Object.hasOwn(frozen, 'constructor')).toBe(false)
+  })
+})
+
+describe('hear', () => {
+  it('gives a native promise the intrinsic constructor and leaves a foreign thenable alone', () => {
+    const promise = Promise.resolve(1)
+    const thenable = { then: (): void => undefined } as unknown as Promise<number>
+
+    hear(promise)
+    hear(thenable)
+
+    expect(Object.hasOwn(promise, 'constructor')).toBe(true)
+    expect(Object.hasOwn(thenable, 'constructor')).toBe(false)
+  })
+})
+
+describe('outcomeOf', () => {
+  it('says done with the value, as an object with no prototype', async () => {
+    const outcome = await outcomeOf(() => Promise.resolve('v'))
+
+    expect(outcome).toEqual({ state: 'done', v: 'v' })
+    expect(Object.getPrototypeOf(outcome)).toBeNull()
+  })
+
+  it('says failed for a rejection and for a synchronous throw', async () => {
+    const failure = new Error('boom')
+
+    const rejected = await outcomeOf(() => Promise.reject(failure))
+    const thrown = await outcomeOf((): Promise<never> => {
+      throw failure
+    })
+
+    expect(rejected).toEqual({ state: 'failed', v: failure })
+    expect(thrown).toEqual({ state: 'failed', v: failure })
+  })
+})
+
+describe('relayOutcome', () => {
+  it('hands on the value, after running settled once', async () => {
+    const settled = jest.fn()
+
+    await expect(relayOutcome(() => Promise.resolve(7), settled)).resolves.toBe(7)
+    expect(settled).toHaveBeenCalledTimes(1)
+  })
+
+  it('rethrows the failure, after running settled once', async () => {
+    const settled = jest.fn()
+    const failure = new Error('boom')
+
+    await expect(relayOutcome(() => Promise.reject(failure), settled)).rejects.toBe(failure)
+    expect(settled).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets a throw of settled replace the outcome', async () => {
+    const refusal = new Error('refused')
+
+    await expect(
+      relayOutcome(
+        () => Promise.resolve(1),
+        () => {
+          throw refusal
+        },
+      ),
+    ).rejects.toBe(refusal)
+  })
+
+  it('never settles for an abandoned outcome, and does not run settled', async () => {
+    const settled = jest.fn()
+    let seen = 'pending'
+    void relayOutcome(
+      () => Promise.resolve(1),
+      settled,
+      () => true,
+    ).then(
+      () => (seen = 'resolved'),
+      () => (seen = 'rejected'),
+    )
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 20))
+
+    expect(seen).toBe('pending')
+    expect(settled).not.toHaveBeenCalled()
+  })
+})
+
+describe('joinAll', () => {
+  it('waits for every promise, even when a later one outlasts an earlier one', async () => {
+    const done: string[] = []
+    const after = (ms: number, name: string): Promise<void> =>
+      new Promise((resolve) =>
+        setTimeout(() => {
+          done.push(name)
+          resolve()
+        }, ms),
+      )
+
+    await joinAll([after(30, 'slow'), after(5, 'fast')])
+
+    expect(done.sort()).toEqual(['fast', 'slow'])
+  })
+
+  it('rethrows the first rejection in order and leaves no later rejection unheard', async () => {
+    const unhandled = jest.fn()
+    process.on('unhandledRejection', unhandled)
+    const first = new Error('first')
+
+    await expect(
+      joinAll([Promise.reject(first), Promise.reject(new Error('second'))]),
+    ).rejects.toBe(first)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    process.off('unhandledRejection', unhandled)
+
+    expect(unhandled).not.toHaveBeenCalled()
   })
 })

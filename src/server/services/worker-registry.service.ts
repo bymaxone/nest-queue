@@ -11,6 +11,7 @@
 
 import { shadowJobOptions } from '../utils/shadow-job-options'
 import { assertPrototypeClean, NativePromise } from '../connection/prototype-guard'
+import { relayOutcome } from '../utils/bounded-wait'
 import { isAbsolute, extname } from 'node:path'
 import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import { DelayedError, Worker } from 'bullmq'
@@ -504,13 +505,17 @@ function adaptHandler<TData, TResult>(
       })
       return handler(job, own.signal)
     })()
-    return withDeadline(called, timeoutMs, () => {
-      const error = new JobTimeoutError(timeoutMs)
-      own.abort(error)
-      return error
-    }).finally(() => {
-      signal?.removeEventListener('abort', relay)
-    })
+    return relayOutcome(
+      () =>
+        withDeadline(called, timeoutMs, () => {
+          const error = new JobTimeoutError(timeoutMs)
+          own.abort(error)
+          return error
+        }),
+      () => {
+        signal?.removeEventListener('abort', relay)
+      },
+    )
   }
 }
 
@@ -585,16 +590,7 @@ function toProcessor<TData, TResult>(
   // The guard runs again once the handler has settled, inside the attempt an observer sees, so a
   // refusal is reported as the failure it is and never as a completed attempt.
   const settled: typeof adapted = (job, token, signal) =>
-    adapted(job, token, signal).then(
-      (value) => {
-        assertPrototypeClean()
-        return value
-      },
-      (error: unknown) => {
-        assertPrototypeClean()
-        throw error
-      },
-    )
+    relayOutcome(() => adapted(job, token, signal), assertPrototypeClean)
   const run: typeof adapted =
     observe === undefined
       ? settled
@@ -613,12 +609,6 @@ function toProcessor<TData, TResult>(
     } catch {
       return deferRefusedJob(job, token)
     }
-    return run(job, token, signal).then(
-      (value) => (abandoned() ? new NativePromise<never>(() => undefined) : value),
-      (error: unknown) => {
-        if (abandoned()) return new NativePromise<never>(() => undefined)
-        throw error
-      },
-    )
+    return relayOutcome(() => run(job, token, signal), assertPrototypeClean, abandoned)
   }
 }

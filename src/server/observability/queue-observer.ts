@@ -8,7 +8,7 @@
 
 import { readByName } from '../config/read-by-name'
 import { NativePromise } from '../connection/prototype-guard'
-import { own } from '../utils/bounded-wait'
+import { hear, outcomeOf, own, type Ended } from '../utils/bounded-wait'
 import { Injectable, Logger } from '@nestjs/common'
 import { logEvent, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
 
@@ -76,6 +76,30 @@ export interface QueueObserver {
 }
 
 /**
+ * A promise that ends as the private verdict `outcome` says, for a host to hold. The registry awaits
+ * the verdict and never this promise, so what a host does to it, such as giving it a `constructor` or
+ * a `then`, changes nothing the registry decides. Its rejection is heard here, so a host that does not
+ * await it leaves no unhandled rejection behind.
+ */
+function mirror<T>(outcome: Promise<Ended<T>>): Promise<T> {
+  let give: (ended: Ended<T>) => void = () => undefined
+  const view = new NativePromise<T>((resolve, reject) => {
+    // What the operation rejected with, whatever its type, reaches the host unchanged.
+    const fail: (reason: unknown) => void = reject
+    give = (ended) => {
+      if (ended.state === 'done') resolve(ended.v)
+      else fail(ended.v)
+    }
+  })
+  hear(view)
+  const relay = async (): Promise<void> => {
+    give(await own(outcome))
+  }
+  void relay()
+  return view
+}
+
+/**
  * Holds the observers of one module and runs them around the queue's operations. With none
  * registered every method runs the operation and nothing else.
  */
@@ -112,15 +136,19 @@ export class QueueObserverRegistry {
   traceEnqueue<T>(info: QueueObserveInfo, run: (carrier: TraceCarrier) => Promise<T>): Promise<T> {
     const carrier: TraceCarrier = {}
     const inner = (): Promise<T> => run(carrier)
-    return this.#observers.reduceRight<() => Promise<T>>(
-      (next, observer) => () => {
-        const hook = this.#hookOf<T>(observer, 'traceEnqueue')
-        return hook === undefined
-          ? next()
-          : this.#guarded('traceEnqueue', (once) => hook(info, carrier, once), next)
-      },
-      inner,
-    )()
+    // Owned before it is handed back, in the same step that a hook ran in: a caller's `await` then
+    // reads nothing that hook planted.
+    return own(
+      this.#observers.reduceRight<() => Promise<T>>(
+        (next, observer) => () => {
+          const hook = this.#hookOf<T>(observer, 'traceEnqueue')
+          return hook === undefined
+            ? next()
+            : this.#guarded('traceEnqueue', (once) => hook(info, carrier, once), next)
+        },
+        inner,
+      )(),
+    )
   }
 
   /**
@@ -135,15 +163,19 @@ export class QueueObserverRegistry {
     carrier: Readonly<TraceCarrier>,
     run: () => Promise<T>,
   ): Promise<T> {
-    return this.#observers.reduceRight<() => Promise<T>>(
-      (next, observer) => () => {
-        const hook = this.#hookOf<T>(observer, 'traceProcess')
-        return hook === undefined
-          ? next()
-          : this.#guarded('traceProcess', (once) => hook(info, carrier, once), next)
-      },
-      run,
-    )()
+    // Owned before it is handed back, in the same step that a hook ran in: a caller's `await` then
+    // reads nothing that hook planted.
+    return own(
+      this.#observers.reduceRight<() => Promise<T>>(
+        (next, observer) => () => {
+          const hook = this.#hookOf<T>(observer, 'traceProcess')
+          return hook === undefined
+            ? next()
+            : this.#guarded('traceProcess', (once) => hook(info, carrier, once), next)
+        },
+        run,
+      )(),
+    )
   }
 
   /**
@@ -204,9 +236,11 @@ export class QueueObserverRegistry {
    * operation runs once however the observer behaves: when the hook throws or rejects without calling
    * `once`, or returns without calling it, the operation runs afterwards in its place. What the
    * operation itself rejects with reaches the caller untouched, and an observer that fails is logged.
-   * The operation's promise always has a handler here, so an observer that starts it and does not
-   * await it can never leave an unhandled rejection that ends the process, and its rejection reaches
-   * the caller even when the observer returned a result of its own.
+   * The operation is followed by a private promise that never leaves this class, and the host is
+   * handed a separate one that mirrors it, so what a host does to the promise it holds cannot change
+   * what is awaited here. An observer that starts the operation and does not await it can never leave
+   * an unhandled rejection that ends the process, and the operation's rejection reaches the caller
+   * even when the observer returned a result of its own.
    *
    * @param hook - The hook, for the log line.
    * @param call - Calls the observer's hook with `once` as the operation.
@@ -217,46 +251,45 @@ export class QueueObserverRegistry {
     call: (once: () => Promise<T>) => Promise<T> | undefined,
     next: () => Promise<T>,
   ): Promise<T> {
-    let started: Promise<T> | undefined
-    // The promise constructor turns a synchronous throw of the operation into the rejection stored
-    // here, so `started` is set once the operation has been called, however it fails.
-    const once = (): Promise<T> => {
-      if (started === undefined) {
-        started = new NativePromise<T>((resolve) => {
-          resolve(next())
-        })
-        own(started).catch(() => undefined)
+    let running: { readonly tracked: Promise<Ended<T>>; readonly view: Promise<T> } | undefined
+    // `outcomeOf` turns a synchronous throw of the operation into a verdict, so the operation is
+    // tracked once it has been called, however it fails.
+    const begin = (): NonNullable<typeof running> => {
+      if (running === undefined) {
+        const tracked = outcomeOf(next)
+        running = { tracked, view: mirror(tracked) }
       }
-      return started
+      return running
     }
+    const once = (): Promise<T> => begin().view
     let traced: T | undefined
     let failure: { readonly error: unknown } | undefined
     try {
-      traced = await call(once)
+      traced = await own(call(once))
     } catch (error) {
       failure = { error }
     }
-    if (failure === undefined && started !== undefined) {
+    if (failure === undefined && running !== undefined) {
       // The observer ran the operation and did not fail, so what it returns is the result. The
       // operation is waited for first: its rejection reaches the caller whatever the observer did
       // with it, since a job whose processor failed must not be reported as done.
-      const outcome = await started
+      const outcome = await own(running.tracked)
+      if (outcome.state === 'failed') throw outcome.v
       // A hook that awaited the operation and resolved with nothing (`undefined`, written in
       // JavaScript or cast) has not replaced the result, so the result of the operation is what the
       // caller gets. `null` is a value and stays.
-      if (traced === undefined) return outcome
+      if (traced === undefined) return outcome.v
       return traced
     }
     // The observer failed, or returned without running the operation. The operation's own outcome decides.
-    try {
-      const outcome = await once()
-      this.#failed(hook)
-      return outcome
-    } catch (error) {
+    const outcome = await own(begin().tracked)
+    if (outcome.state === 'failed') {
       // An observer that rethrew the error of the operation is only passing it on.
-      if (failure?.error !== error) this.#failed(hook)
-      throw error
+      if (failure?.error !== outcome.v) this.#failed(hook)
+      throw outcome.v
     }
+    this.#failed(hook)
+    return outcome.v
   }
 
   #failed(hook: string): void {

@@ -50,15 +50,15 @@ const EXEMPT: readonly Exemption[] = [
   },
   {
     file: 'server/lifecycle/queue-lifecycle.service.ts',
-    count: 11,
+    count: 7,
     reason:
-      'Shutdown fan-out and error absorption (close, pause, drain, quit). Each close is bounded by the deadline helpers and no step reads a verdict from them.',
+      'Each `catch` absorbs the failure of one close, drain or quit during shutdown. The joins that decide how many workers were stopped, and the pause-then-close of a worker, are owned awaits.',
   },
   {
     file: 'server/observability/queue-observer.ts',
-    count: 3,
+    count: 2,
     reason:
-      'Absorbs the rejection of a host observer hook so it reaches no one; nothing reads the value.',
+      "Absorbs the rejection of a host's `jobFinished` hook so it reaches no one; the event is told after the job ended and nothing reads the value.",
   },
   {
     file: 'server/services/connection-resolver.service.ts',
@@ -88,12 +88,6 @@ const EXEMPT: readonly Exemption[] = [
     count: 2,
     reason:
       'Chains the readiness of a queue and absorbs a failed close; neither is a guard verdict.',
-  },
-  {
-    file: 'server/services/worker-registry.service.ts',
-    count: 3,
-    reason:
-      'Runs a host job handler inside a promise and relays its result to BullMQ; the handler is the host work, bounded by withDeadline.',
   },
 ]
 

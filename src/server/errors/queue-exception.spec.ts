@@ -17,9 +17,13 @@ function bodyOf(exception: QueueException): {
 describe('QueueException', () => {
   it('resolves a known code to its catalog message and keeps details', () => {
     // A catalog code surfaces its human-readable message and scalar details.
-    const exception = new QueueException(QUEUE_ERROR_CODES.CONNECTION_TIMEOUT, HttpStatus.INTERNAL_SERVER_ERROR, {
-      timeoutMs: 10_000,
-    })
+    const exception = new QueueException(
+      QUEUE_ERROR_CODES.CONNECTION_TIMEOUT,
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      {
+        timeoutMs: 10_000,
+      },
+    )
     const body = bodyOf(exception)
 
     expect(body.error.code).toBe('queue.connection_timeout')
