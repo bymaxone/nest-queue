@@ -11,6 +11,7 @@ import type { Job } from 'bullmq'
 import { EventEmitter } from 'node:events'
 import type { Redis } from 'ioredis'
 import { NativePromise } from '../connection/prototype-guard'
+import { QueueException } from '../errors/queue-exception'
 import { WorkerRegistry } from './worker-registry.service'
 import type { ConnectionResolver } from './connection-resolver.service'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
@@ -51,6 +52,12 @@ afterEach(() => {
   void Object.defineProperty(proto, 'then', realThen)
   void Object.defineProperty(proto, 'constructor', realConstructor)
 })
+
+/** The code of a `QueueException`, or undefined for any other error. */
+function codeOf(error: unknown): string | undefined {
+  if (!(error instanceof QueueException)) return undefined
+  return (error.getResponse() as { error: { code: string } }).error.code
+}
 
 /** Put the host back, run `check`, and report it to `done`. */
 function finish(done: jest.DoneCallback, check: () => void): void {
@@ -118,7 +125,9 @@ describe('the outcome of a job is relayed through owned awaits', () => {
       },
       (error: unknown) => {
         finish(done, () => {
-          expect(error).toBe(failure)
+          // The guard refuses before the await that reads the planted constructor, so the job fails with
+          // the typed refusal; what must never happen is that BullMQ is told it completed.
+          expect(error === failure || codeOf(error) === 'queue.invalid_options').toBe(true)
         })
       },
     ])

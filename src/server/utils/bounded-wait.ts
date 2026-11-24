@@ -175,6 +175,9 @@ export function startWait<T>(
  * that awaits it reads nothing a host can replace, and nothing a host holds is ever awaited: `call`
  * may hand its own promise to a host, since only the verdict leaves this function.
  *
+ * The guard runs right before the await, so a promise that cannot take the own constructor (a frozen
+ * one) is never awaited while the prototype it would read is replaced; a refusal ends as `failed`.
+ *
  * @param call - Starts the work; a throw ends it as `failed`.
  * @returns The verdict, `done` or `failed`.
  * @example
@@ -183,7 +186,10 @@ export function startWait<T>(
 export function outcomeOf<T>(call: () => Promise<T>): Promise<Ended<T>> {
   const run = async (): Promise<Ended<T>> => {
     try {
-      return verdict<T>('done', await own(call())) as Ended<T>
+      const started = call()
+      hear(started)
+      assertPrototypeClean()
+      return verdict<T>('done', await started) as Ended<T>
     } catch (error) {
       return verdict<T>('failed', error) as Ended<T>
     }
