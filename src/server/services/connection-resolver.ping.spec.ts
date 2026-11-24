@@ -150,4 +150,34 @@ describe('ConnectionResolver.ping', () => {
       { event: QUEUE_LOG_EVENTS.GUARD_REFUSED, site: 'health' },
     ])
   })
+
+  it('is down and logs the refusal when the prototype was polluted after the ping was sent and cleaned before it answered', async () => {
+    const realSetTimeout = globalThis.setTimeout
+    const answered = new Promise<string>((resolve) => {
+      setImmediate(() => {
+        Reflect.deleteProperty(Object.prototype, 'zzPlanted')
+        resolve('PONG')
+      })
+    })
+    const resolver = await resolverWith(() => answered)
+    const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    let planted = false
+    jest
+      .spyOn(globalThis, 'setTimeout')
+      .mockImplementation((...args: Parameters<typeof setTimeout>) => {
+        const timer = realSetTimeout(...args)
+        if (!planted) {
+          planted = true
+          ;(Object.prototype as Record<string, unknown>).zzPlanted = 'planted'
+        }
+        return timer
+      })
+
+    const result = await resolver.ping(2000)
+
+    expect(result.status).toBe('down')
+    expect(loggedEvents(error)).toMatchObject([
+      { event: QUEUE_LOG_EVENTS.GUARD_REFUSED, site: 'health' },
+    ])
+  })
 })
