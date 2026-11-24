@@ -111,6 +111,17 @@ function plantConstructor(): void {
   })
 }
 
+/** Give `handed` a `then` of its own that answers `forged`, and report that it was installed. */
+function giveForgingThen(handed: Promise<unknown>): boolean {
+  void Object.defineProperty(handed, 'then', {
+    value: (resolve: (v: unknown) => void) => {
+      resolve('forged')
+    },
+    configurable: true,
+  })
+  return Object.getOwnPropertyDescriptor(handed, 'then') !== undefined
+}
+
 const job = { name: 'send', attemptsMade: 0, opts: { attempts: 1 } } as unknown as Job
 
 /** A registry with one observer whose `traceProcess` is `hook`. */
@@ -149,21 +160,33 @@ describe('a host that touches the promises it can reach does not decide the resu
     })
   })
 
-  it('reports the failure when the host gives the promise it was handed a constructor and a then of its own', (done) => {
+  it('reports the failure when the host gives the promise it was handed a then of its own', (done) => {
+    let installed = false
     const registry = withProcessHook((run) => {
-      const handed = run()
-      void Object.defineProperty(handed, 'constructor', { value: Object, configurable: true })
-      void Object.defineProperty(handed, 'then', {
-        value: (resolve: (v: unknown) => void) => {
-          resolve('forged')
-        },
-        configurable: true,
-      })
+      installed = giveForgingThen(run())
       return Promise.resolve(undefined)
     })
 
     observe(observeAttempt(registry, 'q', job, failing(failure)), done, (r) => {
+      expect(installed).toBe(true)
       expect(r).toEqual({ error: failure })
+    })
+  })
+
+  it('does not let the host redefine the constructor of the promise it was handed', (done) => {
+    let refusal: unknown
+    const registry = withProcessHook((run) => {
+      const handed = run()
+      try {
+        void Object.defineProperty(handed, 'constructor', { value: Object, configurable: true })
+      } catch (error) {
+        refusal = error
+      }
+      return handed
+    })
+
+    observe(observeAttempt(registry, 'q', job, failing(failure)), done, () => {
+      expect(refusal).toBeInstanceOf(TypeError)
     })
   })
 
@@ -186,22 +209,17 @@ describe('a host that touches the promises it can reach does not decide the resu
   })
 
   it('reports a failed add when the host gives the promise of traceEnqueue a then of its own', (done) => {
+    let installed = false
     const registry = new QueueObserverRegistry()
     registry.register({
       traceEnqueue: (_i: unknown, _c: unknown, run: () => Promise<unknown>) => {
-        const handed = run()
-        void Object.defineProperty(handed, 'constructor', { value: Object, configurable: true })
-        void Object.defineProperty(handed, 'then', {
-          value: (resolve: (v: unknown) => void) => {
-            resolve('forged')
-          },
-          configurable: true,
-        })
+        installed = giveForgingThen(run())
         return Promise.resolve(undefined)
       },
     } as never)
 
     observe(registry.traceEnqueue({ queue: 'q' }, failing(failure)), done, (r) => {
+      expect(installed).toBe(true)
       expect(r).toEqual({ error: failure })
     })
   })
