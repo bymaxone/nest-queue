@@ -280,16 +280,27 @@ describe('a host that touches the promises it can reach does not decide the resu
     })
     const result = observeAttempt(registry, 'q', job, failing(failure))
 
-    observe(result, done, () => {
-      expect(handed).toBeDefined()
-    })
-    setTimeout(() => {
+    // The test ends only once the promise the host was given has settled: a fulfilment fails it, and
+    // so does a rejection that is not the operation's own.
+    const readHanded = (): void => {
+      if (handed === undefined) {
+        done(new Error('the host was never handed a promise'))
+        return
+      }
       Reflect.apply(thenOf, handed, [
-        () => undefined,
+        (value: unknown) => {
+          done(new Error(`the host's promise fulfilled with ${String(value)}`))
+        },
         (error: unknown) => {
-          expect(error).toBe(failure)
+          try {
+            expect(error).toBe(failure)
+            done()
+          } catch (failed) {
+            done(failed)
+          }
         },
       ])
-    }, 60)
+    }
+    Reflect.apply(thenOf, result, [readHanded, readHanded])
   })
 })
