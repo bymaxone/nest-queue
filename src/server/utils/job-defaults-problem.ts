@@ -38,7 +38,7 @@ export function kindOf(value: unknown): string {
  * else, never any other value, which can come from a request or a file and may be a secret.
  */
 export function received(value: unknown): string {
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  if (Number.isFinite(value)) return String(value)
   return typeof value === 'number' ? 'a number that is not finite' : kindOf(value)
 }
 
