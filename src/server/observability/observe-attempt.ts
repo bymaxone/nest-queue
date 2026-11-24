@@ -5,6 +5,7 @@
  */
 
 import type { Job } from 'bullmq'
+import { assertPrototypeClean } from '../connection/prototype-guard'
 import { failureOutcome, optionsOf } from './job-outcome'
 import type { QueueObserverRegistry } from './queue-observer'
 import { readTraceMetadata } from './trace-carrier'
@@ -26,17 +27,20 @@ export async function observeAttempt<TResult>(
 ): Promise<TResult> {
   const started = performance.now()
   const seconds = (): number => (performance.now() - started) / 1000
+  let result: TResult
   try {
-    const result = await registry.traceProcess(
+    result = await registry.traceProcess(
       { queue, job: job.name },
       readTraceMetadata(optionsOf(job)?.telemetry?.metadata),
       run,
     )
-    registry.jobFinished({ queue, outcome: 'completed', durationSeconds: seconds() })
-    return result
   } catch (error) {
     const outcome = failureOutcome(job, error)
     if (outcome !== undefined) registry.jobFinished({ queue, outcome, durationSeconds: seconds() })
     throw error
   }
+  registry.jobFinished({ queue, outcome: 'completed', durationSeconds: seconds() })
+  // The hooks above are the host's code and may have planted a `then`; the return below reads it.
+  assertPrototypeClean()
+  return result
 }

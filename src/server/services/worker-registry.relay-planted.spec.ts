@@ -116,18 +116,24 @@ describe('the outcome of a job is relayed through owned awaits', () => {
     const processor = processors.at(-1)!
     const job = { id: '1', name: 'send', data: {}, opts: {} } as unknown as Job
 
+    // BullMQ awaits what the processor returns with a native `await`, so this does the same.
     const told = processor(job)
-    Reflect.apply(thenOf, told, [
-      (value: unknown) => {
-        finish(done, () => {
-          expect(value).toBe('rejected')
-        })
-      },
-      (error: unknown) => {
+    const bullmq = async (): Promise<{ value?: unknown; error?: unknown }> => {
+      try {
+        return { value: await told }
+      } catch (error) {
+        return { error }
+      }
+    }
+    Reflect.apply(thenOf, bullmq(), [
+      (result: { value?: unknown; error?: unknown }) => {
         finish(done, () => {
           // The guard refuses before the await that reads the planted constructor, so the job fails with
           // the typed refusal; what must never happen is that BullMQ is told it completed.
-          expect(error === failure || codeOf(error) === 'queue.invalid_options').toBe(true)
+          expect('value' in result).toBe(false)
+          expect(result.error === failure || codeOf(result.error) === 'queue.invalid_options').toBe(
+            true,
+          )
         })
       },
     ])

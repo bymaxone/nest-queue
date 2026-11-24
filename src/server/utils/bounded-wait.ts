@@ -22,15 +22,16 @@ const isNativePromise = types.isPromise
 /**
  * Give a native promise an own `constructor` that is the intrinsic one, so that an `await` of it
  * takes the path for a promise of its own kind and reads neither `Promise.prototype.constructor`
- * nor a species from anywhere a host could have replaced. Left as it is when the promise cannot
- * take the property (a frozen one): the await then reads the prototype, which the guard checks.
+ * nor a species from anywhere a host could have replaced. The property is neither writable nor
+ * configurable, so a host that holds the promise cannot swap it back. Left as it is when the promise
+ * cannot take the property (a frozen one): the await then reads the prototype, which the guard checks.
  */
 function ownConstructor(promise: Promise<unknown>): void {
   try {
     void define(promise, 'constructor', {
       value: NativePromise,
-      configurable: true,
-      writable: true,
+      configurable: false,
+      writable: false,
     })
   } catch {
     // A promise that cannot take the property keeps reading the one on its prototype.

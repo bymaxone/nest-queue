@@ -11,7 +11,7 @@
 
 import { shadowJobOptions } from '../utils/shadow-job-options'
 import { assertPrototypeClean, NativePromise } from '../connection/prototype-guard'
-import { relayOutcome } from '../utils/bounded-wait'
+import { own as ownPromise, relayOutcome } from '../utils/bounded-wait'
 import { isAbsolute, extname } from 'node:path'
 import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import { DelayedError, Worker } from 'bullmq'
@@ -503,18 +503,20 @@ function adaptHandler<TData, TResult>(
       await new NativePromise<void>((resolve) => {
         resolve()
       })
-      return handler(job, own.signal)
+      return await ownPromise(handler(job, own.signal))
     })()
-    return relayOutcome(
-      () =>
-        withDeadline(called, timeoutMs, () => {
-          const error = new JobTimeoutError(timeoutMs)
-          own.abort(error)
-          return error
-        }),
-      () => {
-        signal?.removeEventListener('abort', relay)
-      },
+    return ownPromise(
+      relayOutcome(
+        () =>
+          withDeadline(called, timeoutMs, () => {
+            const error = new JobTimeoutError(timeoutMs)
+            own.abort(error)
+            return error
+          }),
+        () => {
+          signal?.removeEventListener('abort', relay)
+        },
+      ),
     )
   }
 }
@@ -607,8 +609,8 @@ function toProcessor<TData, TResult>(
     try {
       assertPrototypeClean()
     } catch {
-      return deferRefusedJob(job, token)
+      return ownPromise(deferRefusedJob(job, token))
     }
-    return relayOutcome(() => run(job, token, signal), assertPrototypeClean, abandoned)
+    return ownPromise(relayOutcome(() => run(job, token, signal), assertPrototypeClean, abandoned))
   }
 }

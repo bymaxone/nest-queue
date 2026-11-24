@@ -87,7 +87,7 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
     // One budget for the whole consumption side: every step below gets what is left of it, so the
     // time a stuck worker costs is the drain budget once, not once per worker and again per step.
     const deadline = this.startedAt + this.resolved.shutdown.drainTimeoutMs
-    this.forcedWorkers = await this.closeWorkers(deadline)
+    this.forcedWorkers = await own(this.closeWorkers(deadline))
     await this.closeQueueEvents(deadline)
     await this.closeDuplicatedConnections(deadline)
   }

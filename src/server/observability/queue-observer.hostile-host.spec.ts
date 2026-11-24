@@ -9,6 +9,7 @@
 
 import type { Job } from 'bullmq'
 import { NativePromise } from '../connection/prototype-guard'
+import { own } from '../utils/bounded-wait'
 import { observeAttempt } from './observe-attempt'
 import { QueueObserverRegistry } from './queue-observer'
 
@@ -23,9 +24,13 @@ const realThen = descriptorOf('then')
 const realConstructor = descriptorOf('constructor')
 const thenOf = realThen.value as (this: unknown, ...args: unknown[]) => unknown
 
+const realSpecies = Object.getOwnPropertyDescriptor(NativePromise, Symbol.species)!
+
 afterEach(() => {
   void Object.defineProperty(proto, 'then', realThen)
   void Object.defineProperty(proto, 'constructor', realConstructor)
+  void Object.defineProperty(NativePromise, Symbol.species, realSpecies)
+  void Reflect.deleteProperty(Object.prototype, 'then')
 })
 
 /** Read a promise through the real `then`, so the test's own reading is never the replaced one. */
@@ -48,6 +53,7 @@ function observe(
 function finish(done: jest.DoneCallback, check: (r: unknown) => void, outcome: unknown): void {
   void Object.defineProperty(proto, 'then', realThen)
   void Object.defineProperty(proto, 'constructor', realConstructor)
+  void Reflect.deleteProperty(Object.prototype, 'then')
   try {
     check(outcome)
     done()
@@ -198,6 +204,72 @@ describe('a host that touches the promises it can reach does not decide the resu
     observe(registry.traceEnqueue({ queue: 'q' }, failing(failure)), done, (r) => {
       expect(r).toEqual({ error: failure })
     })
+  })
+
+  it('reports a failed attempt when a jobFinished hook plants a then on Object.prototype that erases itself', (done) => {
+    const registry = new QueueObserverRegistry()
+    registry.register({
+      jobFinished: () => {
+        void Object.defineProperty(Object.prototype, 'then', {
+          configurable: true,
+          get() {
+            void Reflect.deleteProperty(Object.prototype, 'then')
+            return (resolve: (v: unknown) => void) => {
+              resolve({ forged: true })
+            }
+          },
+        })
+      },
+    })
+    const succeeding = (): Promise<unknown> =>
+      new NativePromise<unknown>((resolve) =>
+        setTimeout(() => {
+          resolve({ real: true })
+        }, 40),
+      )
+
+    observe(observeAttempt(registry, 'q', job, succeeding), done, (r) => {
+      expect(r).not.toHaveProperty('value')
+      expect(r).toHaveProperty('error')
+    })
+  })
+
+  it('reports the failure and leaves no unhandled rejection when Promise[Symbol.species] throws', (done) => {
+    const unhandled: unknown[] = []
+    const listen = (reason: unknown): void => {
+      unhandled.push(reason)
+    }
+    process.on('unhandledRejection', listen)
+    void Object.defineProperty(NativePromise, Symbol.species, {
+      configurable: true,
+      get() {
+        throw new Error('species read')
+      },
+    })
+    const registry = withProcessHook((run) => run())
+
+    // The test reads the attempt with a native `await` of an owned promise: `then` would read the
+    // species this case makes throw, which is the very read being ruled out.
+    const read = async (): Promise<void> => {
+      let outcome: { value?: unknown; error?: unknown }
+      try {
+        outcome = { value: await own(observeAttempt(registry, 'q', job, failing(failure))) }
+      } catch (error) {
+        outcome = { error }
+      }
+      void Object.defineProperty(NativePromise, Symbol.species, realSpecies)
+      setTimeout(() => {
+        process.off('unhandledRejection', listen)
+        try {
+          expect(outcome).toEqual({ error: failure })
+          expect(unhandled).toHaveLength(0)
+          done()
+        } catch (failed) {
+          done(failed)
+        }
+      }, 30)
+    }
+    void read()
   })
 
   it('still hands the host the rejection of the operation through the promise it was given', (done) => {
