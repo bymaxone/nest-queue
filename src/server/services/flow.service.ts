@@ -24,6 +24,7 @@ import {
   MAX_BULK_SIZE,
   MAX_FLOW_TREES_IN_FLIGHT,
 } from '../constants/default-options'
+import { own } from '../utils/bounded-wait'
 
 /**
  * Wrapper over the BullMQ `FlowProducer` for hierarchical (parent/child) job
@@ -206,7 +207,11 @@ export class FlowService {
    */
   async close(): Promise<void> {
     if (this.producer) {
-      await this.producer.close().catch(() => undefined)
+      try {
+        await own(this.producer.close())
+      } catch {
+        // A producer that fails to close is gone either way.
+      }
     }
   }
 

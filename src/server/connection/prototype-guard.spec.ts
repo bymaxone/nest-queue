@@ -127,6 +127,27 @@ describe('assertPrototypeClean refuses a planted key', () => {
     expect((body.details as { count: number }).count).toBe(2)
   })
 
+  it('reports a count capped at the most the table holds, as one frozen refusal', () => {
+    const names = Array.from({ length: 70 }, (_, i) => `zzMany${String(i)}`)
+    for (const name of names) {
+      Object.defineProperty(Object.prototype, name, { value: 1, configurable: true })
+    }
+    try {
+      const first = refusalOf(() => {
+        assertPrototypeClean()
+      })
+      const second = refusalOf(() => {
+        assertPrototypeClean()
+      })
+      expect((first.body.details as { count: number }).count).toBe(64)
+      expect(second.error).toBe(first.error)
+      expect(Object.isFrozen(first.error)).toBe(true)
+      expect(Object.isFrozen(first.body.details)).toBe(true)
+    } finally {
+      for (const name of names) Reflect.deleteProperty(Object.prototype, name)
+    }
+  })
+
   /** The code of the refusal while `symbol` sits on `Object.prototype` with `descriptor`, or `clean`. */
   function whileSymbol(symbol: symbol, descriptor: PropertyDescriptor): Refusal | 'clean' {
     Object.defineProperty(Object.prototype, symbol, descriptor)

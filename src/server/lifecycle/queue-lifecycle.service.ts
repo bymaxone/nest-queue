@@ -204,7 +204,9 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
   private async drainQueuesIfRequested(): Promise<void> {
     if (!this.resolved.shutdown.drainOnShutdown) return
     for (const [name, queue] of this.queues.getCachedQueues()) {
-      await queue.drain().catch((cause: unknown) => {
+      try {
+        await own(queue.drain())
+      } catch (cause) {
         writeLog(
           this.logger,
           'warn',
@@ -215,7 +217,7 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
             { queue: name },
           ),
         )
-      })
+      }
     }
   }
 

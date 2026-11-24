@@ -12,12 +12,21 @@
 
 import { types } from 'node:util'
 
-import { assertPrototypeClean, NativePromise } from '../connection/prototype-guard'
+import {
+  assertPrototypeClean,
+  NativePromise,
+  refuseForeignPromise,
+} from '../connection/prototype-guard'
 
 /** The built-ins the wait runs on, taken when this module loaded. */
 const create = Object.create
 const define = Object.defineProperty
 const isNativePromise = types.isPromise
+const descriptorOf = Object.getOwnPropertyDescriptor
+const thenOf = Object.getOwnPropertyDescriptor(NativePromise.prototype, 'then')?.value as (
+  this: Promise<unknown>,
+  ...handlers: unknown[]
+) => unknown
 
 /**
  * Give a native promise an own `constructor` that is the intrinsic one, so that an `await` of it
@@ -39,17 +48,48 @@ function ownConstructor(promise: Promise<unknown>): void {
 }
 
 /**
+ * Whether an `await` of `promise` takes the direct path: it holds no `constructor` of its own other
+ * than the intrinsic one. A promise that kept a host's `constructor` (one that could not be replaced)
+ * would have the await read it and call the `then` of what it builds. A promise with no own
+ * `constructor` that could not take one (a frozen promise) reads the prototype, which the guard checks.
+ */
+function pinned(promise: Promise<unknown>): boolean {
+  const held = descriptorOf(promise, 'constructor')
+  return held === undefined || held.value === NativePromise
+}
+
+/**
+ * Refuse a native promise whose `await` a host could steer, after listening for its rejection so that
+ * none is left unheard. The listener is attached through the captured `then`; a host constructor whose
+ * species throws cannot turn that into anything but the refusal.
+ */
+function refuseUnpinned(promise: Promise<unknown>): void {
+  if (pinned(promise)) return
+  try {
+    void thenOf.call(promise, undefined, () => undefined)
+  } catch {
+    // Nothing more can be done for a promise that cannot be listened to.
+  }
+  refuseForeignPromise()
+}
+
+/**
  * Give `value` the intrinsic `constructor` when it is a native promise, and hand it back, so that
  * the `await` that follows reads nothing a host can replace. A value that is not a native promise,
- * such as a foreign thenable or `undefined`, is returned untouched.
+ * such as a foreign thenable or `undefined`, is returned untouched. A native promise that keeps a
+ * constructor of its own that is not the intrinsic one is refused.
  *
  * @param value - The promise about to be awaited.
  * @returns The same value.
+ * @throws {QueueException} `INVALID_OPTIONS` for a promise that cannot take the intrinsic constructor.
  * @example
  * const value = await own(startTheWork())
  */
 export function own<P>(value: P): P {
-  if (isNativePromise(value)) ownConstructor(value)
+  if (isNativePromise(value)) {
+    ownConstructor(value)
+    refuseUnpinned(value)
+  }
   return value
 }
 
@@ -146,6 +186,7 @@ export function startWait<T>(
     let outcome: WaitOutcome<T>
     try {
       assertPrototypeClean()
+      if (isNativePromise(work)) refuseUnpinned(work)
       outcome = verdict<T>('done', await work)
     } catch (error) {
       outcome = verdict<T>('failed', error)
@@ -190,6 +231,7 @@ export function outcomeOf<T>(call: () => Promise<T>): Promise<Ended<T>> {
       const started = call()
       hear(started)
       assertPrototypeClean()
+      if (isNativePromise(started)) refuseUnpinned(started)
       return verdict<T>('done', await started) as Ended<T>
     } catch (error) {
       return verdict<T>('failed', error) as Ended<T>
@@ -235,5 +277,5 @@ export async function relayOutcome<T>(
  */
 export async function joinAll(promises: readonly Promise<unknown>[]): Promise<void> {
   for (const promise of promises) hear(promise)
-  for (const promise of promises) await promise
+  for (const promise of promises) await own(promise)
 }

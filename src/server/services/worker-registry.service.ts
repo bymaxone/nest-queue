@@ -259,7 +259,7 @@ export class WorkerRegistry {
     const entry = this.#entries.get(queueName)
     if (!entry) return
     try {
-      await entry.worker.close()
+      await ownPromise(entry.worker.close())
     } finally {
       // A close that throws must still release the connection and drop the entry: the worker is
       // gone either way, and keeping the entry would leak the socket and block re-registration.
@@ -311,7 +311,7 @@ export class WorkerRegistry {
    */
   private async closeConnection(connection: Redis): Promise<void> {
     try {
-      await connection.quit()
+      await ownPromise(connection.quit())
     } catch {
       disconnectUnlessEnded(connection)
     }
@@ -515,6 +515,9 @@ function adaptHandler<TData, TResult>(
           }),
         () => {
           signal?.removeEventListener('abort', relay)
+          // The listener is removed through `EventTarget.prototype`, which is the host's to replace;
+          // the return that follows reads whatever it planted.
+          assertPrototypeClean()
         },
       ),
     )
@@ -560,7 +563,7 @@ async function deferRefusedJob<TData, TResult>(
   options.fetchNext = false
   options.fieldsToUpdate = undefined
   const backend = (job as unknown as { backend: DelayBackend }).backend
-  await backend.moveToDelayed(job.id, now, REFUSED_JOB_DELAY_MS, token, options)
+  await ownPromise(backend.moveToDelayed(job.id, now, REFUSED_JOB_DELAY_MS, token, options))
   throw new DelayedError()
 }
 

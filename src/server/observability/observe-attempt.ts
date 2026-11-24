@@ -18,6 +18,8 @@ import { readTraceMetadata } from './trace-carrier'
  * @param job - The job, as the worker received it.
  * @param run - The processor for this attempt.
  * @returns What `run` returns; a rejection of `run` is rethrown as it is.
+ * @remarks A prototype left polluted by the trace hooks is refused before `jobFinished` runs, so no observer is told the
+ * attempt completed. A `jobFinished` hook that pollutes it fails the attempt after the observers were told `completed`.
  */
 export async function observeAttempt<TResult>(
   registry: QueueObserverRegistry,
@@ -39,8 +41,10 @@ export async function observeAttempt<TResult>(
     if (outcome !== undefined) registry.jobFinished({ queue, outcome, durationSeconds: seconds() })
     throw error
   }
+  // The await above and the hooks run the host's code; the guard runs before each hook and the return
+  // reads whatever a hook planted.
+  assertPrototypeClean()
   registry.jobFinished({ queue, outcome: 'completed', durationSeconds: seconds() })
-  // The hooks above are the host's code and may have planted a `then`; the return below reads it.
   assertPrototypeClean()
   return result
 }

@@ -7,7 +7,7 @@
  */
 
 import { readByName } from '../config/read-by-name'
-import { NativePromise } from '../connection/prototype-guard'
+import { assertPrototypeClean, NativePromise } from '../connection/prototype-guard'
 import { hear, outcomeOf, own, type Ended } from '../utils/bounded-wait'
 import { Injectable, Logger } from '@nestjs/common'
 import { logEvent, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
@@ -289,6 +289,8 @@ export class QueueObserverRegistry {
       throw outcome.v
     }
     this.#failed(hook)
+    // The logger is the host's code and may have planted a `then`; the return reads it.
+    assertPrototypeClean()
     return outcome.v
   }
 

@@ -36,6 +36,7 @@ import { withDeadline } from '../utils/with-deadline'
 import { QueueObserverRegistry, type TraceCarrier } from '../observability/queue-observer'
 import { withTraceMetadata } from '../observability/trace-carrier'
 import { errorSummary, timeoutException, withCommandTimeoutCode } from '../utils/command-timeout'
+import { own } from '../utils/bounded-wait'
 
 /** A typed job in the library's public shape. */
 type TypedJob<TData, TResult> = Job<TData, TResult>
@@ -175,21 +176,23 @@ export class QueueService {
    */
   private call<T>(operation: string, queueName: string, run: () => Promise<T>): Promise<T> {
     let expired = false
-    const guarded = withDeadline(
-      this.afterReady(queueName).then(() => {
-        // Stryker disable next-line StringLiteral: equivalent — the deadline already rejected the caller, so this error is absorbed and never read
-        if (expired) throw new Error('the call had already timed out')
-        // Once more, in the turn that makes the call: the awaits before it (the wait for the client,
-        // the observer hooks) leave room for a key to be planted after the guard at the entry.
-        assertPrototypeClean()
-        return run()
-      }),
-      this.options.enqueueTimeoutMs,
-      () => {
-        expired = true
-        return timeoutException(operation, this.options.enqueueTimeoutMs)
-      },
-    )
+    const attempt = async (): Promise<T> => {
+      await own(this.afterReady(queueName))
+      // Stryker disable next-line StringLiteral: equivalent — the deadline already rejected the caller, so this error is absorbed and never read
+      if (expired) throw new Error('the call had already timed out')
+      // Once more, in the turn that makes the call: the awaits before it (the wait for the client,
+      // the observer hooks) leave room for a key to be planted after the guard at the entry.
+      assertPrototypeClean()
+      const value = await own(run())
+      // What Redis answered is returned only after the guard: the return reads a `then` planted while
+      // the call was in flight.
+      assertPrototypeClean()
+      return value
+    }
+    const guarded = withDeadline(attempt(), this.options.enqueueTimeoutMs, () => {
+      expired = true
+      return timeoutException(operation, this.options.enqueueTimeoutMs)
+    })
     return withCommandTimeoutCode(
       operation,
       () => this.connection.getClient().options.commandTimeout ?? this.options.commandTimeoutMs,
@@ -521,7 +524,11 @@ export class QueueService {
    */
   async closeAll(): Promise<void> {
     for (const queue of this.#queues.values()) {
-      await queue.close().catch(() => undefined)
+      try {
+        await own(queue.close())
+      } catch {
+        // A queue that fails to close is dropped from the cache all the same.
+      }
     }
     this.#queues.clear()
     this.#warm.clear()

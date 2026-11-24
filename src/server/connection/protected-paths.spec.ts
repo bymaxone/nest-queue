@@ -60,7 +60,6 @@ const EXEMPT_GLOBALS: Readonly<Record<string, string>> = {
 
 /** Method names only a non-baselined built-in has, each with the reason it is safe to call. */
 const EXEMPT_METHODS: Readonly<Record<string, string>> = {
-  then: 'Promise: exempt with Promise',
   catch: 'Promise: exempt with Promise',
   now: 'Date.now: exempt with Date',
   toISOString: 'Date: exempt with Date',

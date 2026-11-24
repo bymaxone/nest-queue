@@ -50,9 +50,9 @@ const EXEMPT: readonly Exemption[] = [
   },
   {
     file: 'server/lifecycle/queue-lifecycle.service.ts',
-    count: 7,
+    count: 6,
     reason:
-      'Each `catch` absorbs the failure of one close, drain or quit during shutdown. The joins that decide how many workers were stopped, and the pause-then-close of a worker, are owned awaits.',
+      'Each `catch` absorbs the failure of one close or quit during shutdown. The joins that decide how many workers were stopped, and the pause-then-close of a worker, are owned awaits.',
   },
   {
     file: 'server/observability/queue-observer.ts',
@@ -67,11 +67,6 @@ const EXEMPT: readonly Exemption[] = [
       'The absorbed rejection of a sentinel connect; nothing reads its value or feeds a verdict from it.',
   },
   {
-    file: 'server/services/flow.service.ts',
-    count: 1,
-    reason: 'Absorbs a failed close of the flow producer during teardown.',
-  },
-  {
     file: 'server/services/metrics.service.ts',
     count: 1,
     reason:
@@ -82,12 +77,6 @@ const EXEMPT: readonly Exemption[] = [
     count: 3,
     reason:
       'Adapts a host handler into a promise and reports its failure; the handler runs the host work.',
-  },
-  {
-    file: 'server/services/queue.service.ts',
-    count: 2,
-    reason:
-      'Chains the readiness of a queue and absorbs a failed close; neither is a guard verdict.',
   },
 ]
 
