@@ -256,10 +256,10 @@ export function outcomeOf<T>(call: () => Promise<T>): Promise<Ended<T>> {
 export async function relayOutcome<T>(
   call: () => Promise<T>,
   settled: () => void,
-  abandoned: () => boolean = () => false,
+  abandoned?: () => boolean,
 ): Promise<T> {
   const outcome = await own(outcomeOf(call))
-  if (abandoned()) await own(new NativePromise<never>(() => undefined))
+  if (abandoned?.() === true) await own(new NativePromise<never>(() => undefined))
   settled()
   if (outcome.state === 'failed') throw outcome.v
   return outcome.v

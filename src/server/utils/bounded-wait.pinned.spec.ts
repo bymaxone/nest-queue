@@ -8,7 +8,7 @@
  */
 
 import { NativePromise } from '../connection/prototype-guard'
-import { joinAll, outcomeOf, own, startWait } from './bounded-wait'
+import { hear, joinAll, outcomeOf, own, startWait } from './bounded-wait'
 
 const thenOf = Object.getOwnPropertyDescriptor(NativePromise.prototype, 'then')!.value as (
   this: unknown,
@@ -152,6 +152,81 @@ describe('a result that is not a native promise', () => {
           state: 'done',
           v: 'answer',
         })
+      },
+    )
+  })
+})
+
+describe('the constructor an owned promise takes is the intrinsic one and cannot be replaced', () => {
+  const locked = {
+    value: NativePromise,
+    writable: false,
+    enumerable: false,
+    configurable: false,
+  }
+
+  it.each([
+    ['own', own],
+    ['hear', hear],
+  ] as const)('%s leaves a locked own constructor on a native promise', (_name, take) => {
+    const promise = NativePromise.resolve('x')
+
+    void take(promise)
+
+    expect(Object.getOwnPropertyDescriptor(promise, 'constructor')).toEqual(locked)
+  })
+
+  it('startWait locks the constructor of the verdict it hands back', (done) => {
+    const wait = startWait(NativePromise.resolve('x'), 1000)
+
+    read(wait.result, done, () => {
+      wait.release()
+      expect(Object.getOwnPropertyDescriptor(wait.result, 'constructor')).toEqual(locked)
+    })
+  })
+})
+
+describe('a result that is not a promise at all is a plain answer', () => {
+  it('startWait reports undefined as done', (done) => {
+    const wait = startWait(undefined as unknown as Promise<unknown>, 1000)
+
+    read(wait.result, done, (r) => {
+      wait.release()
+      const { value } = r as { value: { state: string; v: unknown } }
+      expect(value.state).toBe('done')
+      expect(value.v).toBeUndefined()
+    })
+  })
+
+  it('outcomeOf reports undefined as done', (done) => {
+    read(
+      outcomeOf(() => undefined as unknown as Promise<unknown>),
+      done,
+      (r) => {
+        const { value } = r as { value: { state: string; v: unknown } }
+        expect(value.state).toBe('done')
+        expect(value.v).toBeUndefined()
+      },
+    )
+  })
+})
+
+describe('outcomeOf runs the guard right after the call', () => {
+  afterEach(() => {
+    void Reflect.deleteProperty(Object.prototype, 'polluted')
+  })
+
+  it('ends as failed when the call itself left the prototype polluted', (done) => {
+    read(
+      outcomeOf(() => {
+        ;(Object.prototype as Record<string, unknown>).polluted = 1
+        return NativePromise.resolve('answer')
+      }),
+      done,
+      (r) => {
+        const { value } = r as { value: { state: string; v: unknown } }
+        expect(value.state).toBe('failed')
+        expect(value.v).not.toBe('answer')
       },
     )
   })

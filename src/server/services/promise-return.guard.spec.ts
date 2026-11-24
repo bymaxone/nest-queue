@@ -215,6 +215,26 @@ describe('what a decision returns is not decided by a host call made just before
     })
   })
 
+  it('does not run the call when the prototype was polluted while the client became ready', (done) => {
+    queues.length = 0
+    const connection = {
+      getClient: jest.fn().mockReturnValue({ options: {} }),
+      awaitReady: jest.fn().mockImplementation(() => {
+        ;(Object.prototype as Record<string, unknown>).polluted = 1
+        return Promise.resolve()
+      }),
+    } as unknown as ConnectionResolver
+    const service = new QueueService(connection, options)
+    service.getOrCreateQueue('email')
+    const getJob = queues.at(-1)!.getJob!
+    getJob.mockResolvedValue({ id: 'found' })
+
+    read(service.getJob('email', '1'), done, (r) => {
+      expect(r).toHaveProperty('error')
+      expect(getJob).not.toHaveBeenCalled()
+    })
+  })
+
   it('reports the refusal of a move to the delayed set, and leaves nothing unheard', (done) => {
     const unhandled: unknown[] = []
     const listen = (reason: unknown): void => {

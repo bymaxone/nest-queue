@@ -7,7 +7,9 @@
  * @layer server/connection
  */
 
+import { runInNewContext } from 'node:vm'
 import type * as Guard from './prototype-guard'
+import './prototype-guard'
 
 const proto = Promise.prototype
 const realConstructor = Object.getOwnPropertyDescriptor(proto, 'constructor')!
@@ -32,10 +34,10 @@ function loadWith(replacement: unknown): typeof Guard {
 }
 
 describe('a constructor replaced before the guard loaded is not taken for the intrinsic one', () => {
-  /** The code of the refusal the load raised; the module is a fresh copy, so its exception class is too. */
-  function refusalCodeOfLoad(replacement: unknown): string | undefined {
+  /** The code of the refusal `run` raised; the module is a fresh copy, so its exception class is too. */
+  function refusalCode(run: () => void): string | undefined {
     try {
-      loadWith(replacement)
+      run()
     } catch (error) {
       const { error: body } = (
         error as { getResponse: () => { error: { code: string } } }
@@ -43,6 +45,13 @@ describe('a constructor replaced before the guard loaded is not taken for the in
       return body.code
     }
     return undefined
+  }
+
+  /** The code of the refusal the load raised. */
+  function refusalCodeOfLoad(replacement: unknown): string | undefined {
+    return refusalCode(() => {
+      void loadWith(replacement)
+    })
   }
 
   it('refuses to load when Promise.prototype.constructor was replaced with Object', () => {
@@ -56,6 +65,26 @@ describe('a constructor replaced before the guard loaded is not taken for the in
     Planted.prototype = proto
 
     expect(refusalCodeOfLoad(Planted)).toBe('queue.invalid_options')
+  })
+
+  it('refuses to load when the constructor is a native Promise of another realm', () => {
+    // Same source text as the intrinsic one, built on a different prototype.
+    expect(refusalCodeOfLoad(runInNewContext('Promise'))).toBe('queue.invalid_options')
+  })
+
+  it('refuses to load when the constructor is not a function, whatever prototype it carries', () => {
+    expect(refusalCodeOfLoad({ prototype: proto })).toBe('queue.invalid_options')
+  })
+
+  it('refuses with its own refusal, not a TypeError, when the constructor was deleted', () => {
+    const guard = loadWith(Promise)
+    void Reflect.deleteProperty(proto, 'constructor')
+
+    expect(
+      refusalCode(() => {
+        guard.assertPrototypeClean()
+      }),
+    ).toBe('queue.invalid_options')
   })
 
   it('refuses while the prototype holds a constructor the guard did not start with', () => {

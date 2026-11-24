@@ -206,6 +206,7 @@ export class FlowService {
    * only caller.
    */
   async close(): Promise<void> {
+    // Stryker disable next-line ConditionalExpression: equivalent — with no producer, `this.producer.close()` throws a TypeError inside the try below, which swallows it, so the outcome is the same
     if (this.producer) {
       try {
         await own(this.producer.close())

@@ -51,6 +51,22 @@ by email.
 
 ---
 
+## Threat model: same-process code
+
+Code that runs in the same process as the library is trusted, as it is in Node itself: it can read
+and replace any built-in, any module and any object the library holds, so no library running inside
+the process can fully defend against it. The prototype and `Promise` guards are best-effort defences
+against accidents and against pollution that arrives through a dependency (a planted `Object.prototype`
+key, a replaced built-in, a `then` planted and erased again). They are not a security boundary
+against code that is written to defeat them.
+
+The limits, in one line: code in the process can still replace what the guards cannot see, such as the
+`Promise[Symbol.species]` of a native promise, or a replacement of the intrinsic `Promise` constructor that
+reproduces its prototype and its native source text. These are listed under Known limits in the
+[CHANGELOG](CHANGELOG.md).
+
+---
+
 ## Provenance
 
 The first release of a package cannot carry an npm provenance attestation: npm

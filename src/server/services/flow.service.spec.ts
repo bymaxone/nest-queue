@@ -142,6 +142,25 @@ describe('FlowService — disabled', () => {
     })
   })
 
+  it('refuses a polluted prototype before it reports that flows are disabled', async () => {
+    // The guard is the first thing addBulk does, ahead of every other check.
+    const service = new FlowService(makeConnection(), false, 'bull')
+    ;(Object.prototype as Record<string, unknown>).polluted = 1
+
+    try {
+      await service.addBulk([]).then(
+        () => {
+          throw new Error('addBulk resolved')
+        },
+        (err: unknown) => {
+          expect(codeOf(err)).toBe(QUEUE_ERROR_CODES.INVALID_OPTIONS)
+        },
+      )
+    } finally {
+      void Reflect.deleteProperty(Object.prototype, 'polluted')
+    }
+  })
+
   it('throws FLOW_DISABLED from addBulk', async () => {
     // addBulk is guarded the same way as add.
     const service = new FlowService(makeConnection(), false, 'bull')
