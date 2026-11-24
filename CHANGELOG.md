@@ -17,7 +17,7 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ## [1.2.27] — 2026-11-20
 
-Against 1.2.26 the declared types gain `ConnectionResolver.ping` and the `PingResult` type (see the note below); the runtime of the main entry changes.
+Against 1.2.26 the declared types gain `ConnectionResolver.ping`, whose return type is not exported by name (see the note below); the runtime of the main entry changes.
 
 ### Fixed
 
@@ -51,7 +51,7 @@ Against 1.2.26 the declared types gain `ConnectionResolver.ping` and the `PingRe
 
 #### Apply to a derived backend
 
-- `ConnectionResolver` gains `ping(timeoutMs, signal?)`, which resolves to a `PingResult` (`{ status: 'up' | 'down', details: { mode } }`, objects with no prototype) and rejects only when the connection is not initialised. `QueueHealthIndicator.check` delegates to it; a host that built its own indicator over `getClient().ping()` can call it instead.
+- `ConnectionResolver` gains `ping(timeoutMs, signal?)`, which resolves to `{ status: 'up' | 'down', details: { mode } }` (an object with no prototype; the type is not exported by name, so use `Awaited<ReturnType<ConnectionResolver['ping']>>`) and rejects only when the connection is not initialised. `QueueHealthIndicator.check` delegates to it; a host that built its own indicator over `getClient().ping()` can call it instead.
 - A refusal of the prototype guard during the verdict of a bulk (`enqueueBulk`, `FlowService.addBulk`) now rejects with `INVALID_OPTIONS`, where it used to be reported as `BULK_ENQUEUE_FAILED` with the landed and failed sets: those sets are not read once the guard has refused. Only a polluted prototype or a replaced built-in reaches it.
 - `QUEUE_GUARD_REFUSED` is a new log event; a pipeline that alerts on the library's error events should include it.
 
