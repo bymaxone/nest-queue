@@ -34,7 +34,7 @@ describe('startWait', () => {
     expect(outcome.v).toBe(failure)
   })
 
-  it('settles failed for work that is not a native promise, once the await reads it', async () => {
+  it('settles done with the value a non-native thenable resolves with', async () => {
     const thenable = {
       then: (resolve: (value: string) => void): void => {
         resolve('late')
@@ -93,15 +93,23 @@ describe('startWait', () => {
     wait.release()
   })
 
-  it('hears the rejection of work that is refused first, so none is left unhandled', async () => {
+  it('hears the rejection of work whose wait is refused before its await, so none is left unhandled', async () => {
     const unhandled = jest.fn()
     process.on('unhandledRejection', unhandled)
-    const wait = startWait(Promise.reject(new Error('late failure')), 1000)
-    await wait.result
-    wait.release()
+    Object.defineProperty(Object.prototype, 'then', { configurable: true, value: () => undefined })
+    let outcome: { state: string; v: unknown }
+    try {
+      const wait = startWait(Promise.reject(new Error('late failure')), 1000)
+      outcome = await wait.result
+      wait.release()
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'then')
+    }
     await new Promise<void>((resolve) => setImmediate(resolve))
     process.off('unhandledRejection', unhandled)
 
+    expect(outcome.state).toBe('failed')
+    expect((outcome.v as Error).message).not.toBe('late failure')
     expect(unhandled).not.toHaveBeenCalled()
   })
 
