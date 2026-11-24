@@ -6,7 +6,7 @@
  * @layer server/utils
  */
 
-import { jobOptionsProblem } from './job-defaults-problem'
+import { jobOptionsProblem, kindOf, received } from './job-defaults-problem'
 
 describe('jobOptionsProblem — a group that holds null', () => {
   it.each(['removeOnComplete', 'removeOnFail', 'backoff'])(
@@ -17,4 +17,39 @@ describe('jobOptionsProblem — a group that holds null', () => {
       )
     },
   )
+})
+
+describe('received and kindOf — what a refusal says about a value', () => {
+  it.each<[string, unknown, string]>([
+    ['a whole number', 5, '5'],
+    ['zero', 0, '0'],
+    ['a fraction', 1.5, '1.5'],
+    ['NaN', Number.NaN, 'a number that is not finite'],
+    ['Infinity', Number.POSITIVE_INFINITY, 'a number that is not finite'],
+    ['-Infinity', Number.NEGATIVE_INFINITY, 'a number that is not finite'],
+    ['a string, never its text', 'a-secret', 'a string'],
+    ['a boolean', true, 'a boolean'],
+    ['a bigint', 1n, 'a bigint'],
+    ['a boxed Number, which is an object and not a number', new Number(1), 'an object'],
+    ['a symbol', Symbol('s'), 'a symbol'],
+    ['a function', () => 1, 'a function'],
+    ['null', null, 'null'],
+    ['an array', [1], 'an array'],
+    ['an object', { key: 'a-secret' }, 'an object'],
+  ])('describes %s as it is received', (_label, value, expected) => {
+    expect(received(value)).toBe(expected)
+  })
+
+  it.each<[string, unknown, string]>([
+    ['a finite number', 5, 'a number'],
+    ['a number that is not finite', Number.NaN, 'a number'],
+    ['a string', 'a-secret', 'a string'],
+    ['a bigint', 1n, 'a bigint'],
+    ['a boxed Number', new Number(1), 'an object'],
+    ['null', null, 'null'],
+    ['an array', [], 'an array'],
+    ['an object', {}, 'an object'],
+  ])('names the type of %s and never the value', (_label, value, expected) => {
+    expect(kindOf(value)).toBe(expected)
+  })
 })
