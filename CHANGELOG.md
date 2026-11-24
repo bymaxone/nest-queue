@@ -50,7 +50,7 @@ Against 1.2.26 the declared types gain `ConnectionResolver.ping`, whose return t
 - The guard watches the engine's intrinsic `Promise`, not the `globalThis.Promise` binding. Every promise the library builds itself comes from the intrinsic constructor, so a replaced binding decides none of them, and a scan in the test suite fails on any `new Promise` that is not listed; the promises that dependencies and host handlers return are not the library's to build.
 - The intrinsic `Promise` constructor is recognised by its `prototype` and by its native source text, read in a fresh realm. A replacement that reproduces both is not told apart from it.
 - `Promise[Symbol.species]` is not checked. Code in the process that replaces the species of the intrinsic constructor changes what `then` builds, and the guard does not look at it.
-- A `then` planted on a prototype other than `Object.prototype`, `Array.prototype`, `Function.prototype` or `Promise.prototype` is not looked for. Code in the process is trusted as in Node; see the threat model in `SECURITY.md`.
+- A `then` planted on a prototype other than `Object.prototype`, `Array.prototype` or `Function.prototype` is not looked for. Code in the process is trusted as in Node; see the threat model in `SECURITY.md`.
 - A handler that returns a thenable that is not a native promise is awaited as the host built it: its `then` decides the result, and the library can only guard before and after the await.
 - The rejection of a native promise that cannot take an own `constructor` (a frozen, sealed or non-extensible promise, or one whose own `constructor` is locked) is heard through `Promise.prototype.constructor`, so a host that makes that read throw leaves such a rejection unheard.
 
