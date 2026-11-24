@@ -235,6 +235,26 @@ describe('what a decision returns is not decided by a host call made just before
     })
   })
 
+  it('does not let a then planted during the call answer in place of what Redis returned', (done) => {
+    queues.length = 0
+    const connection = {
+      getClient: jest.fn().mockReturnValue({ options: {} }),
+      awaitReady: jest.fn().mockResolvedValue(undefined),
+    } as unknown as ConnectionResolver
+    const service = new QueueService(connection, options)
+    service.getOrCreateQueue('email')
+    queues.at(-1)!.getJob!.mockImplementation(() => {
+      const answered = Promise.resolve({ id: 'found' })
+      plantObjectThen()
+      return answered
+    })
+
+    read(service.getJob('email', '1'), done, (r) => {
+      expect(r).not.toHaveProperty('value.forged')
+      expect(r).toHaveProperty('error')
+    })
+  })
+
   it('reports the refusal of a move to the delayed set, and leaves nothing unheard', (done) => {
     const unhandled: unknown[] = []
     const listen = (reason: unknown): void => {
