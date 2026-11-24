@@ -82,7 +82,7 @@ export interface QueueObserver {
  * await it leaves no unhandled rejection behind.
  */
 function mirror<T>(outcome: Promise<Ended<T>>): Promise<T> {
-  let give: (ended: Ended<T>) => void = () => undefined
+  let give!: (ended: Ended<T>) => void
   const view = new NativePromise<T>((resolve, reject) => {
     // What the operation rejected with, whatever its type, reaches the host unchanged.
     const fail: (reason: unknown) => void = reject
