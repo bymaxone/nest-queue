@@ -26,6 +26,7 @@ import type {
   BYMAX_QUEUE_REDIS_CLIENT,
   BYMAX_QUEUE_CONNECTION_MODE,
   BYMAX_QUEUE_RESOLVED_OPTIONS,
+  ConnectionResolver,
   FlowService,
   JobFinishedEvent,
   JobOutcome,
@@ -296,3 +297,9 @@ export type _HandBackIsClosed = Expect<
 export type _HandBackOfAnswersTheClosedSet = Expect<
   Equal<ReturnType<typeof handBackOf>, HandBack | undefined>
 >
+
+// The readiness ping answers a closed status and the connection mode, and its type is reachable
+// from the method alone.
+type PingAnswer = Awaited<ReturnType<ConnectionResolver['ping']>>
+export type _PingStatusIsClosed = Expect<Equal<PingAnswer['status'], 'up' | 'down'>>
+export type _PingDetailsNameTheMode = Expect<Equal<keyof PingAnswer['details'], 'mode'>>

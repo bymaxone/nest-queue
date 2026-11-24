@@ -10,7 +10,8 @@
  */
 
 import { shadowJobOptions } from '../utils/shadow-job-options'
-import { assertPrototypeClean } from '../connection/prototype-guard'
+import { assertPrototypeClean, NativePromise } from '../connection/prototype-guard'
+import { own as ownPromise, relayOutcome } from '../utils/bounded-wait'
 import { isAbsolute, extname } from 'node:path'
 import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import { DelayedError, Worker } from 'bullmq'
@@ -258,7 +259,7 @@ export class WorkerRegistry {
     const entry = this.#entries.get(queueName)
     if (!entry) return
     try {
-      await entry.worker.close()
+      await ownPromise(entry.worker.close())
     } finally {
       // A close that throws must still release the connection and drop the entry: the worker is
       // gone either way, and keeping the entry would leak the socket and block re-registration.
@@ -310,7 +311,7 @@ export class WorkerRegistry {
    */
   private async closeConnection(connection: Redis): Promise<void> {
     try {
-      await connection.quit()
+      await ownPromise(connection.quit())
     } catch {
       disconnectUnlessEnded(connection)
     }
@@ -495,19 +496,31 @@ function adaptHandler<TData, TResult>(
     }
     if (signal?.aborted === true) relay()
     signal?.addEventListener('abort', relay)
-    // Calling the handler inside a promise turns a throw before it returns one into a rejection,
-    // so the cleanup below runs for it too.
-    return withDeadline(
-      Promise.resolve().then(() => handler(job, own.signal)),
-      timeoutMs,
-      () => {
-        const error = new JobTimeoutError(timeoutMs)
-        own.abort(error)
-        return error
-      },
-    ).finally(() => {
-      signal?.removeEventListener('abort', relay)
-    })
+    // The call waits one tick, so the deadline is armed before the handler's synchronous part runs.
+    // Calling it inside an async function turns a throw before it returns a promise into a
+    // rejection, so the cleanup below runs for it too.
+    const called = (async () => {
+      await new NativePromise<void>((resolve) => {
+        resolve()
+      })
+      return await ownPromise(handler(job, own.signal))
+    })()
+    return ownPromise(
+      relayOutcome(
+        () =>
+          withDeadline(called, timeoutMs, () => {
+            const error = new JobTimeoutError(timeoutMs)
+            own.abort(error)
+            return error
+          }),
+        () => {
+          signal?.removeEventListener('abort', relay)
+          // The listener is removed through `EventTarget.prototype`, which is the host's to replace;
+          // the return that follows reads whatever it planted.
+          assertPrototypeClean()
+        },
+      ),
+    )
   }
 }
 
@@ -550,7 +563,7 @@ async function deferRefusedJob<TData, TResult>(
   options.fetchNext = false
   options.fieldsToUpdate = undefined
   const backend = (job as unknown as { backend: DelayBackend }).backend
-  await backend.moveToDelayed(job.id, now, REFUSED_JOB_DELAY_MS, token, options)
+  await ownPromise(backend.moveToDelayed(job.id, now, REFUSED_JOB_DELAY_MS, token, options))
   throw new DelayedError()
 }
 
@@ -582,16 +595,7 @@ function toProcessor<TData, TResult>(
   // The guard runs again once the handler has settled, inside the attempt an observer sees, so a
   // refusal is reported as the failure it is and never as a completed attempt.
   const settled: typeof adapted = (job, token, signal) =>
-    adapted(job, token, signal).then(
-      (value) => {
-        assertPrototypeClean()
-        return value
-      },
-      (error: unknown) => {
-        assertPrototypeClean()
-        throw error
-      },
-    )
+    relayOutcome(() => adapted(job, token, signal), assertPrototypeClean)
   const run: typeof adapted =
     observe === undefined
       ? settled
@@ -608,14 +612,8 @@ function toProcessor<TData, TResult>(
     try {
       assertPrototypeClean()
     } catch {
-      return deferRefusedJob(job, token)
+      return ownPromise(deferRefusedJob(job, token))
     }
-    return run(job, token, signal).then(
-      (value) => (abandoned() ? new Promise<never>(() => undefined) : value),
-      (error: unknown) => {
-        if (abandoned()) return new Promise<never>(() => undefined)
-        throw error
-      },
-    )
+    return ownPromise(relayOutcome(() => run(job, token, signal), assertPrototypeClean, abandoned))
   }
 }

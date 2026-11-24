@@ -57,6 +57,19 @@ describe('observeAttempt', () => {
     expect(finished[0]?.durationSeconds).toBeGreaterThanOrEqual(0)
   })
 
+  it('reports the seconds between the start and the end of the attempt', async () => {
+    const { registry, finished } = recording()
+    const clock = jest.spyOn(performance, 'now').mockReturnValueOnce(1000).mockReturnValueOnce(3500)
+
+    try {
+      await observeAttempt(registry, 'email', jobWith(undefined), () => Promise.resolve('sent'))
+    } finally {
+      clock.mockRestore()
+    }
+
+    expect(finished[0]?.durationSeconds).toBe(2.5)
+  })
+
   it('measures the time the processor ran', async () => {
     const { registry, finished } = recording()
 

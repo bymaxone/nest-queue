@@ -1,123 +1,48 @@
 /**
- * @fileoverview Unit tests for the queue's readiness indicator: `up` when Redis answers a PING,
- * `down` when it fails, does not answer in time or the aggregator stops waiting, and never an error
- * text in the result.
+ * @fileoverview Unit tests for the queue's readiness indicator: it asks the connection to ping inside
+ * the 2 s bound with the aggregator's signal, and reports the connection's answer as it is. The wait
+ * itself, and every way it can fail closed, is held by the specs of `ConnectionResolver.ping`.
  * @layer observability
  */
 
 import 'reflect-metadata'
-import { getEventListeners } from 'node:events'
 import { BYMAX_HEALTH_INDICATOR_METADATA } from '@bymax-one/nest-core/health'
 import type { ConnectionResolver } from '@bymax-one/nest-queue'
 import { QueueHealthIndicator, QUEUE_HEALTH_INDICATOR_NAME } from './queue-health.indicator'
 
-/** An indicator over a connection whose client answers `ping` with `ping`. */
-function indicatorWith(ping: () => Promise<string>): QueueHealthIndicator {
-  const connection = {
-    getMode: () => 'A',
-    getClient: () => ({ ping }),
-  } as unknown as ConnectionResolver
-  return new QueueHealthIndicator(connection)
+/** An indicator over a connection whose `ping` is `ping`. */
+function indicatorWith(ping: jest.Mock): QueueHealthIndicator {
+  return new QueueHealthIndicator({ ping } as unknown as ConnectionResolver)
 }
-
-afterEach(() => {
-  jest.useRealTimers()
-})
 
 describe('QueueHealthIndicator', () => {
   it('is marked so @bymax-one/nest-core finds it, and is named queue', () => {
     expect(Reflect.getMetadata(BYMAX_HEALTH_INDICATOR_METADATA, QueueHealthIndicator)).toBe(true)
-    expect(indicatorWith(() => Promise.resolve('PONG')).name).toBe(QUEUE_HEALTH_INDICATOR_NAME)
+    expect(indicatorWith(jest.fn()).name).toBe(QUEUE_HEALTH_INDICATOR_NAME)
     expect(QUEUE_HEALTH_INDICATOR_NAME).toBe('queue')
   })
 
-  it('is up when Redis answers, with the connection mode as detail', async () => {
-    await expect(indicatorWith(() => Promise.resolve('PONG')).check()).resolves.toEqual({
-      status: 'up',
-      details: { mode: 'A' },
-    })
-  })
-
-  it('is down when the ping fails, and says nothing of the error', async () => {
-    const result = await indicatorWith(() =>
-      Promise.reject(new Error('connect ECONNREFUSED redis://user:SENTINEL@host:6379')),
-    ).check()
-
-    expect(result).toEqual({ status: 'down', details: { mode: 'A' } })
-    expect(JSON.stringify(result)).not.toContain('SENTINEL')
-  })
-
-  it('is down when Redis does not answer within the bound', async () => {
-    jest.useFakeTimers()
-    const pending = indicatorWith(() => new Promise<string>(() => undefined)).check()
-
-    await jest.advanceTimersByTimeAsync(2000)
-
-    await expect(pending).resolves.toEqual({ status: 'down', details: { mode: 'A' } })
-  })
-
-  it('is still up when the answer comes just inside the bound', async () => {
-    jest.useFakeTimers()
-    const pending = indicatorWith(
-      () =>
-        new Promise<string>((resolve) => {
-          setTimeout(() => {
-            resolve('PONG')
-          }, 1999)
-        }),
-    ).check()
-
-    await jest.advanceTimersByTimeAsync(1999)
-
-    await expect(pending).resolves.toMatchObject({ status: 'up' })
-  })
-
-  it('is down at once when the aggregator stops waiting, and when it already has', async () => {
-    jest.useFakeTimers()
-    const stopping = new AbortController()
-    const pending = indicatorWith(() => new Promise<string>(() => undefined)).check(stopping.signal)
-    stopping.abort()
-    await jest.advanceTimersByTimeAsync(0)
-    await expect(pending).resolves.toMatchObject({ status: 'down' })
-
-    const stopped = indicatorWith(() => new Promise<string>(() => undefined)).check(
-      AbortSignal.abort(),
-    )
-    await jest.advanceTimersByTimeAsync(0)
-    await expect(stopped).resolves.toMatchObject({ status: 'down' })
-  })
-
-  it('is down, with no wait left to reject unheard, when the connection has no client and the signal is already aborted', async () => {
-    const unhandled = jest.fn()
-    process.on('unhandledRejection', unhandled)
-    const connection = {
-      getMode: () => 'A',
-      getClient: () => {
-        throw new Error('not initialized')
-      },
-    } as unknown as ConnectionResolver
-
-    const result = await new QueueHealthIndicator(connection).check(AbortSignal.abort())
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    process.off('unhandledRejection', unhandled)
-
-    expect(result).toEqual({ status: 'down', details: { mode: 'A' } })
-    expect(unhandled).not.toHaveBeenCalled()
-  })
-
-  it('removes its listener from the signal once it has answered', async () => {
+  it('asks the connection to ping inside two seconds, with the signal of the aggregator', () => {
+    const ping = jest.fn().mockResolvedValue({ status: 'up' })
     const signal = new AbortController().signal
 
-    await indicatorWith(() => Promise.resolve('PONG')).check(signal)
+    void indicatorWith(ping).check(signal)
 
-    expect(getEventListeners(signal, 'abort')).toHaveLength(0)
+    expect(ping).toHaveBeenCalledTimes(1)
+    expect(ping).toHaveBeenCalledWith(2000, signal)
   })
 
-  it('leaves no timer behind once it has answered', async () => {
-    jest.useFakeTimers()
+  it('reports the answer of the connection as it is, up and down', async () => {
+    const up = { status: 'up', details: { mode: 'A' } }
+    const down = { status: 'down', details: { mode: 'A' } }
 
-    await indicatorWith(() => Promise.resolve('PONG')).check()
+    await expect(indicatorWith(jest.fn().mockResolvedValue(up)).check()).resolves.toBe(up)
+    await expect(indicatorWith(jest.fn().mockResolvedValue(down)).check()).resolves.toBe(down)
+  })
 
-    expect(jest.getTimerCount()).toBe(0)
+  it('rejects when the connection is not initialised, as the connection does', async () => {
+    const failure = new Error('not initialized')
+
+    await expect(indicatorWith(jest.fn().mockRejectedValue(failure)).check()).rejects.toBe(failure)
   })
 })

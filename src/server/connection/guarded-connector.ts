@@ -17,7 +17,8 @@ import { AbstractConnector, Redis } from 'ioredis'
 import type { RedisOptions } from 'ioredis'
 
 import { withOwnKeys } from './driver-option-names'
-import { assertPrototypeClean } from './prototype-guard'
+import { own } from '../utils/bounded-wait'
+import { assertPrototypeClean, NativePromise } from './prototype-guard'
 
 /**
  * Cut the table of listeners of a socket from `Object.prototype`. An emitter looks a listener up with
@@ -80,7 +81,7 @@ export class GuardedConnector extends AbstractConnector {
     }
     Object.assign(target, options.tls)
 
-    return new Promise<Socket>((resolve, reject) => {
+    return new NativePromise<Socket>((resolve, reject) => {
       process.nextTick(() => {
         if (!this.connecting) {
           reject(new Error(CONNECTION_CLOSED_MESSAGE))
@@ -168,7 +169,7 @@ export function guardSentinelConnector<T extends object>(client: T): T {
     guardedProbe(connector.options, endpoint, probeOptions)
   connector.connect = async (...args): Promise<unknown> => {
     assertPrototypeClean()
-    const stream = await connect(...args)
+    const stream = await own(connect(...args))
     sealListeners(stream as Socket)
     try {
       assertPrototypeClean()

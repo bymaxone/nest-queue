@@ -24,6 +24,7 @@ import {
   MAX_BULK_SIZE,
   MAX_FLOW_TREES_IN_FLIGHT,
 } from '../constants/default-options'
+import { own } from '../utils/bounded-wait'
 
 /**
  * Wrapper over the BullMQ `FlowProducer` for hierarchical (parent/child) job
@@ -205,8 +206,13 @@ export class FlowService {
    * only caller.
    */
   async close(): Promise<void> {
+    // Stryker disable next-line ConditionalExpression: equivalent — with no producer, `this.producer.close()` throws a TypeError inside the try below, which swallows it, so the outcome is the same
     if (this.producer) {
-      await this.producer.close().catch(() => undefined)
+      try {
+        await own(this.producer.close())
+      } catch {
+        // A producer that fails to close is gone either way.
+      }
     }
   }
 

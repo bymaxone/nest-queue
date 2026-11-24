@@ -19,6 +19,7 @@ const config: Config = {
     ...(base.testPathIgnorePatterns ?? ['/node_modules/']),
     '/check-api-surface\\.spec\\.ts$',
     '/strip-bundle-comments\\.spec\\.ts$',
+    '/promise-sites\\.spec\\.ts$',
   ],
 }
 
