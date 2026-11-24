@@ -379,8 +379,8 @@ function constructsNativePromises(candidate: unknown): candidate is PromiseConst
  * never from the global binding, which a host may have replaced with its own class before this
  * module loaded. `await` and the promises the library builds both resolve against it, so it is the
  * one the guard watches. A host that replaced that `constructor` before load (with `Object`, say)
- * leaves nothing this module can read the intrinsic one from, so `assertPrototypeClean` refuses for
- * as long as the value does not construct the intrinsic prototype's promises.
+ * leaves nothing this module can read the intrinsic one from, so the module refuses to load: a wait
+ * built on a constructor that does not build promises would never settle.
  */
 export const NativePromise: PromiseConstructor = (
   NATIVE_PROMISE_PROTOTYPE as { constructor: PromiseConstructor }
@@ -397,9 +397,8 @@ function promiseDefects(): number {
   if (hasOwn(Array.prototype, 'then')) count += 1
   if (hasOwn(Function.prototype, 'then')) count += 1
   if (
-    !constructsNativePromises(NativePromise) ||
     fieldsOf(getOwnPropertyDescriptor(NATIVE_PROMISE_PROTOTYPE, 'constructor'))?.value !==
-      NativePromise
+    NativePromise
   )
     count += 1
   return count
@@ -436,6 +435,8 @@ const REFUSALS: readonly QueueException[] = ((): readonly QueueException[] => {
 function refusalFor(count: number): QueueException {
   return at(REFUSALS, (count > MOST_COUNTED ? MOST_COUNTED : count) - 1)
 }
+
+if (!constructsNativePromises(NativePromise)) throw refusalFor(1)
 
 /**
  * Refuse a native promise that carries a `constructor` of its own that is not the intrinsic one and
