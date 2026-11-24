@@ -8,6 +8,7 @@ import { HttpStatus } from '@nestjs/common'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { assertPrototypeClean } from '../connection/prototype-guard'
+import { own } from './bounded-wait'
 
 /**
  * Build the `CONNECTION_TIMEOUT` error a producer or inspection call reports when Redis does not
@@ -157,7 +158,7 @@ export async function withCommandTimeoutCode<T>(
   work: Promise<T>,
 ): Promise<T> {
   try {
-    const value = await work
+    const value = await own(work)
     // The return below reads the value's `then`; the guard runs right before it.
     assertPrototypeClean()
     return value

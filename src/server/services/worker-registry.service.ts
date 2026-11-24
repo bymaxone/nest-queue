@@ -495,9 +495,16 @@ function adaptHandler<TData, TResult>(
     }
     if (signal?.aborted === true) relay()
     signal?.addEventListener('abort', relay)
-    // Calling the handler inside an async function turns a throw before it returns one into a
+    // The call waits one tick, so the deadline is armed before the handler's synchronous part runs.
+    // Calling it inside an async function turns a throw before it returns a promise into a
     // rejection, so the cleanup below runs for it too.
-    return withDeadline((async () => handler(job, own.signal))(), timeoutMs, () => {
+    const called = (async () => {
+      await new NativePromise<void>((resolve) => {
+        resolve()
+      })
+      return handler(job, own.signal)
+    })()
+    return withDeadline(called, timeoutMs, () => {
       const error = new JobTimeoutError(timeoutMs)
       own.abort(error)
       return error

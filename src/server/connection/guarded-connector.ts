@@ -17,6 +17,7 @@ import { AbstractConnector, Redis } from 'ioredis'
 import type { RedisOptions } from 'ioredis'
 
 import { withOwnKeys } from './driver-option-names'
+import { own } from '../utils/bounded-wait'
 import { assertPrototypeClean, NativePromise } from './prototype-guard'
 
 /**
@@ -168,7 +169,7 @@ export function guardSentinelConnector<T extends object>(client: T): T {
     guardedProbe(connector.options, endpoint, probeOptions)
   connector.connect = async (...args): Promise<unknown> => {
     assertPrototypeClean()
-    const stream = await connect(...args)
+    const stream = await own(connect(...args))
     sealListeners(stream as Socket)
     try {
       assertPrototypeClean()

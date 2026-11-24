@@ -105,6 +105,21 @@ describe('WorkerRegistry — jobTimeoutMs', () => {
     expect(seen?.reason).toBe(err)
   })
 
+  // The deadline must already be running when the handler starts, or work the handler does before
+  // its first await is not counted against it.
+  it('arms the deadline before it invokes the handler', async () => {
+    jest.useFakeTimers()
+    let armedAtStart = -1
+    const processor = registered(() => {
+      armedAtStart = jest.getTimerCount()
+      return Promise.resolve('done')
+    }, 3000)
+
+    await processor(job)
+
+    expect(armedAtStart).toBeGreaterThan(0)
+  })
+
   it('returns the result and holds no timer when the handler settles in time', async () => {
     jest.useFakeTimers()
     const processor = registered(() => Promise.resolve('done'), 3000)

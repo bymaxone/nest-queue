@@ -11,6 +11,7 @@ import type { FlowJob, JobNode } from 'bullmq'
 import { assertPrototypeClean } from '../connection/prototype-guard'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { QueueException } from '../errors/queue-exception'
+import { own } from './bounded-wait'
 import { errorSummary, timeoutException } from './command-timeout'
 
 /** What became of every tree of a batch, as indexes into the batch; the four lists partition it. */
@@ -106,7 +107,13 @@ async function joinWorkers(
   workers: readonly Promise<void>[],
   finish: () => JobNode[],
 ): Promise<JobNode[]> {
-  for (const running of workers) await running
+  // Every worker takes the intrinsic constructor before the first await, so a host that plants one
+  // while a worker settles cannot make a later await read it and call a replaced `then`.
+  for (const running of workers) void own(running)
+  for (const running of workers) {
+    assertPrototypeClean()
+    await running
+  }
   assertPrototypeClean()
   return finish()
 }
@@ -145,7 +152,7 @@ export function runFlowBulk(
       next += 1
       state[index] = 'running'
       try {
-        nodes[index] = await add(flow)
+        nodes[index] = await own(add(flow))
         state[index] = 'landed'
       } catch (error) {
         state[index] = answeredLate(error) ? 'timedOut' : 'failed'

@@ -6,7 +6,8 @@
  */
 
 import { getEventListeners } from 'node:events'
-import { startWait } from './bounded-wait'
+import { NativePromise } from '../connection/prototype-guard'
+import { own, startWait } from './bounded-wait'
 
 afterEach(() => {
   jest.useRealTimers()
@@ -184,5 +185,29 @@ describe('startWait', () => {
 
     expect((spy.mock.results[0]?.value as NodeJS.Timeout).hasRef()).toBe(true)
     spy.mockRestore()
+  })
+})
+
+describe('own', () => {
+  it('gives a native promise the intrinsic constructor and returns the same promise', () => {
+    const promise = Promise.resolve(1)
+
+    expect(own(promise)).toBe(promise)
+    expect(Object.hasOwn(promise, 'constructor')).toBe(true)
+    expect(promise.constructor).toBe(NativePromise)
+  })
+
+  it('returns a foreign thenable untouched', () => {
+    const thenable = { then: (): void => undefined } as unknown as Promise<number>
+
+    expect(own(thenable)).toBe(thenable)
+    expect(Object.hasOwn(thenable, 'constructor')).toBe(false)
+  })
+
+  it('returns a frozen promise as it is, which cannot take the property', () => {
+    const frozen = Object.freeze(Promise.resolve(1))
+
+    expect(own(frozen)).toBe(frozen)
+    expect(Object.hasOwn(frozen, 'constructor')).toBe(false)
   })
 })

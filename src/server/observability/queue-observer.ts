@@ -8,6 +8,7 @@
 
 import { readByName } from '../config/read-by-name'
 import { NativePromise } from '../connection/prototype-guard'
+import { own } from '../utils/bounded-wait'
 import { Injectable, Logger } from '@nestjs/common'
 import { logEvent, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
 
@@ -224,7 +225,7 @@ export class QueueObserverRegistry {
         started = new NativePromise<T>((resolve) => {
           resolve(next())
         })
-        started.catch(() => undefined)
+        own(started).catch(() => undefined)
       }
       return started
     }

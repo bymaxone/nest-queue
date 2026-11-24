@@ -37,6 +37,21 @@ function ownConstructor(promise: Promise<unknown>): void {
   }
 }
 
+/**
+ * Give `promise` the intrinsic `constructor` when it is a native promise, and hand it back, so that
+ * the `await` that follows reads nothing a host can replace. A value that is not a native promise,
+ * such as a foreign thenable, is returned untouched.
+ *
+ * @param promise - The promise about to be awaited.
+ * @returns The same promise.
+ * @example
+ * const value = await own(startTheWork())
+ */
+export function own<T>(promise: Promise<T>): Promise<T> {
+  if (isNativePromise(promise)) ownConstructor(promise)
+  return promise
+}
+
 /** Awaits `work` and says nothing: its only purpose is to be a listener for the rejection. */
 async function hearRejectionOf(work: Promise<unknown>): Promise<void> {
   try {

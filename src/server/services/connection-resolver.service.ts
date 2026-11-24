@@ -22,7 +22,7 @@ import {
 import { withOwnKeys } from '../connection/driver-option-names'
 import { GuardedConnector, guardSentinelConnector } from '../connection/guarded-connector'
 import { assertPrototypeClean, NativePromise } from '../connection/prototype-guard'
-import { startWait } from '../utils/bounded-wait'
+import { own, startWait } from '../utils/bounded-wait'
 import { pingResult, type PingResult } from '../utils/ping-result'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
@@ -105,8 +105,10 @@ export class ConnectionResolver {
     attachClientErrorListener(this.#client, this.#logger, 'owned')
     if (sentinel) this.#client.connect().catch(() => undefined)
     try {
-      await this.waitReady(
-        this.#options.connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS,
+      await own(
+        this.waitReady(
+          this.#options.connectionReadyTimeoutMs ?? DEFAULT_CONNECTION_READY_TIMEOUT_MS,
+        ),
       )
     } catch (cause) {
       // The client keeps reconnecting on its own until it is closed, and nothing else holds a
@@ -285,7 +287,7 @@ export class ConnectionResolver {
   private async waitReady(timeoutMs: number): Promise<void> {
     const client = this.getClient()
     if (client.status === 'ready') return
-    await new NativePromise<void>((resolve, reject) => {
+    const ready = new NativePromise<void>((resolve, reject) => {
       let lastError: unknown
       const cleanup = (): void => {
         clearTimeout(timer)
@@ -325,6 +327,7 @@ export class ConnectionResolver {
       client.on('error', onError)
       client.once('end', onEnd)
     })
+    await own(ready)
   }
 }
 
