@@ -46,5 +46,9 @@
   {
     "file": "src/server/utils/host-read-sites.spec.ts",
     "reason": "Scans the source files for reads by name and checks each sits in a file that names its guard; executes no code under src, so it can kill no mutant."
+  },
+  {
+    "file": "src/server/utils/log-calls.spec.ts",
+    "reason": "Scans the source files for a log method called straight on a logger instead of through writeLog; executes no code under src, so it can kill no mutant."
   }
 ]
