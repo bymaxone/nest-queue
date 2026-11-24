@@ -10,33 +10,54 @@
  * @layer server/utils
  */
 
+import { types } from 'node:util'
+
 import { assertPrototypeClean, NativePromise } from '../connection/prototype-guard'
 
 /** The built-ins the wait runs on, taken when this module loaded. */
 const create = Object.create
-const apply = Reflect.apply
-const nativeThen = Object.getOwnPropertyDescriptor(NativePromise.prototype, 'then')?.value as (
-  this: Promise<unknown>,
-  onFulfilled: () => void,
-  onRejected: () => void,
-) => unknown
+const define = Object.defineProperty
+const isNativePromise = types.isPromise
 
-/** The handler that marks a rejection as heard without acting on it. */
-function ignore(): void {
-  // Nothing: the await that reports the failure is a separate reader of the same promise.
+/**
+ * Give a native promise an own `constructor` that is the intrinsic one, so that an `await` of it
+ * takes the path for a promise of its own kind and reads neither `Promise.prototype.constructor`
+ * nor a species from anywhere a host could have replaced. Left as it is when the promise cannot
+ * take the property (a frozen one): the await then reads the prototype, which the guard checks.
+ */
+function ownConstructor(promise: Promise<unknown>): void {
+  try {
+    void define(promise, 'constructor', {
+      value: NativePromise,
+      configurable: true,
+      writable: true,
+    })
+  } catch {
+    // A promise that cannot take the property keeps reading the one on its prototype.
+  }
+}
+
+/** Awaits `work` and says nothing: its only purpose is to be a listener for the rejection. */
+async function hearRejectionOf(work: Promise<unknown>): Promise<void> {
+  try {
+    await work
+  } catch {
+    // Heard, and nothing to do: `run` is the separate reader that reports it.
+  }
 }
 
 /**
  * Hear the rejection of `work` before anything else can fail, so that a wait that is refused before
- * its await never leaves a rejection behind with no listener. A promise that is not native, which
- * the engine's `then` cannot be applied to, is left to the await that follows.
+ * its await never leaves a rejection behind with no listener. It reads nothing a host can replace:
+ * the brand check is the engine's, and the await of a promise with an own intrinsic `constructor`
+ * attaches its listener directly, where `then` would read the constructor and its species. A value
+ * that is not a native promise is left to the await that follows, so a foreign thenable is not
+ * subscribed twice.
  */
 function hearRejection(work: Promise<unknown>): void {
-  try {
-    void apply(nativeThen, work, [ignore, ignore])
-  } catch {
-    // Not a native promise: the await that follows is its only reader.
-  }
+  if (!isNativePromise(work)) return
+  ownConstructor(work)
+  void hearRejectionOf(work)
 }
 
 /** How a wait ended: the work answered, the work failed, or the bound or the signal ended it first. */
@@ -99,6 +120,7 @@ export function startWait<T>(
   const result = new NativePromise<WaitOutcome<T>>((resolve) => {
     settle = resolve
   })
+  ownConstructor(result)
   const run = async (): Promise<void> => {
     let outcome: WaitOutcome<T>
     try {

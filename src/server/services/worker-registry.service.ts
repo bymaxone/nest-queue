@@ -10,7 +10,7 @@
  */
 
 import { shadowJobOptions } from '../utils/shadow-job-options'
-import { assertPrototypeClean } from '../connection/prototype-guard'
+import { assertPrototypeClean, NativePromise } from '../connection/prototype-guard'
 import { isAbsolute, extname } from 'node:path'
 import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common'
 import { DelayedError, Worker } from 'bullmq'
@@ -495,17 +495,13 @@ function adaptHandler<TData, TResult>(
     }
     if (signal?.aborted === true) relay()
     signal?.addEventListener('abort', relay)
-    // Calling the handler inside a promise turns a throw before it returns one into a rejection,
-    // so the cleanup below runs for it too.
-    return withDeadline(
-      Promise.resolve().then(() => handler(job, own.signal)),
-      timeoutMs,
-      () => {
-        const error = new JobTimeoutError(timeoutMs)
-        own.abort(error)
-        return error
-      },
-    ).finally(() => {
+    // Calling the handler inside an async function turns a throw before it returns one into a
+    // rejection, so the cleanup below runs for it too.
+    return withDeadline((async () => handler(job, own.signal))(), timeoutMs, () => {
+      const error = new JobTimeoutError(timeoutMs)
+      own.abort(error)
+      return error
+    }).finally(() => {
       signal?.removeEventListener('abort', relay)
     })
   }
@@ -611,9 +607,9 @@ function toProcessor<TData, TResult>(
       return deferRefusedJob(job, token)
     }
     return run(job, token, signal).then(
-      (value) => (abandoned() ? new Promise<never>(() => undefined) : value),
+      (value) => (abandoned() ? new NativePromise<never>(() => undefined) : value),
       (error: unknown) => {
-        if (abandoned()) return new Promise<never>(() => undefined)
+        if (abandoned()) return new NativePromise<never>(() => undefined)
         throw error
       },
     )

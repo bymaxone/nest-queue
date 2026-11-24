@@ -21,7 +21,7 @@ import {
 } from '../constants/default-options'
 import { withOwnKeys } from '../connection/driver-option-names'
 import { GuardedConnector, guardSentinelConnector } from '../connection/guarded-connector'
-import { assertPrototypeClean } from '../connection/prototype-guard'
+import { assertPrototypeClean, NativePromise } from '../connection/prototype-guard'
 import { startWait } from '../utils/bounded-wait'
 import { pingResult, type PingResult } from '../utils/ping-result'
 import { QueueException } from '../errors/queue-exception'
@@ -182,8 +182,12 @@ export class ConnectionResolver {
    */
   awaitReady(): Promise<void> {
     const client = this.getClient()
-    if (!WAITING_STATUSES.has(client.status)) return Promise.resolve()
-    this.#pendingReady ??= new Promise<void>((resolve) => {
+    if (!WAITING_STATUSES.has(client.status)) {
+      return new NativePromise<void>((resolve) => {
+        resolve()
+      })
+    }
+    this.#pendingReady ??= new NativePromise<void>((resolve) => {
       // `end` means ioredis will not reconnect: release the waiters so the call itself reports the
       // failure, instead of leaving them to their deadline.
       const release = (): void => {
@@ -281,7 +285,7 @@ export class ConnectionResolver {
   private async waitReady(timeoutMs: number): Promise<void> {
     const client = this.getClient()
     if (client.status === 'ready') return
-    await new Promise<void>((resolve, reject) => {
+    await new NativePromise<void>((resolve, reject) => {
       let lastError: unknown
       const cleanup = (): void => {
         clearTimeout(timer)

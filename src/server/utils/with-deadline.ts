@@ -24,12 +24,16 @@ export async function withDeadline<T>(
   onTimeout: () => Error,
 ): Promise<T> {
   const wait = startWait(work, timeoutMs)
+  let outcome: Awaited<typeof wait.result>
   try {
     assertPrototypeClean()
-    const outcome = await wait.result
-    if (outcome.state === 'done') return outcome.v
-    throw outcome.state === 'failed' ? outcome.v : onTimeout()
+    outcome = await wait.result
   } finally {
     wait.release()
   }
+  // The release above runs replaceable code (a timer clear), and the return below reads the value's
+  // `then`, so the guard runs last, with nothing replaceable between it and the decision.
+  assertPrototypeClean()
+  if (outcome.state === 'done') return outcome.v
+  throw outcome.state === 'failed' ? outcome.v : onTimeout()
 }

@@ -17,6 +17,23 @@ const SRC = join(__dirname, '..', '..')
 const SITE =
   /\bPromise\s*\.\s*(?:race|all|allSettled|any|resolve|reject|try|withResolvers)\b|\bPromise\s*\[|\}\s*=\s*Promise\b|\.\s*(?:then|catch|finally)\s*\(|\bthen\s*\.\s*call\s*\(/g
 
+/**
+ * A promise built with the global `Promise` binding, which a host can replace after load. Every
+ * promise the library builds comes from the intrinsic constructor instead, so a replaced binding
+ * decides nothing. Unlike the statics above, each site is listed on its own, with its reason.
+ */
+const NEW_PROMISE =
+  /\bnew\s+Promise\b|\b(?:globalThis|global)\s*\.\s*Promise\b|(?:=|,|\()\s*Promise\s*(?:[,;)]|$)/
+
+/** A site of `new Promise` that is allowed to stay: the file, the line as written, and why. */
+interface NewPromiseExemption {
+  readonly file: string
+  readonly line: string
+  readonly reason: string
+}
+
+const NEW_PROMISE_EXEMPT: readonly NewPromiseExemption[] = []
+
 /** What a site is allowed to be: a count in a file, and why none of them decides a verdict. */
 interface Exemption {
   readonly file: string
@@ -45,9 +62,9 @@ const EXEMPT: readonly Exemption[] = [
   },
   {
     file: 'server/services/connection-resolver.service.ts',
-    count: 2,
+    count: 1,
     reason:
-      'An already-resolved promise for a connected client, and the absorbed rejection of a sentinel connect; neither feeds a verdict.',
+      'The absorbed rejection of a sentinel connect; nothing reads its value or feeds a verdict from it.',
   },
   {
     file: 'server/services/flow.service.ts',
@@ -74,15 +91,9 @@ const EXEMPT: readonly Exemption[] = [
   },
   {
     file: 'server/services/worker-registry.service.ts',
-    count: 5,
+    count: 3,
     reason:
       'Runs a host job handler inside a promise and relays its result to BullMQ; the handler is the host work, bounded by withDeadline.',
-  },
-  {
-    file: 'server/utils/add-flow-trees.ts',
-    count: 2,
-    reason:
-      'Joins the workers of a bulk add. The landed, failed and not-started sets are read from the closure state each worker writes, not from the join.',
   },
 ]
 
@@ -114,7 +125,40 @@ function counts(): Map<string, number> {
   return found
 }
 
+/** Every line of code that builds a promise with the global binding, as `file: line`. */
+function newPromiseSites(): string[] {
+  return sources(SRC).flatMap((file) =>
+    codeOf(file)
+      .split('\n')
+      .filter((line) => NEW_PROMISE.test(line))
+      .map((line) => `${relative(SRC, file)}: ${line.trim()}`),
+  )
+}
+
 describe('the promise operations of the library', () => {
+  it('build no promise with the global binding, except the sites listed one by one', () => {
+    const listed = NEW_PROMISE_EXEMPT.map((entry) => `${entry.file}: ${entry.line}`)
+
+    expect(newPromiseSites()).toEqual(listed)
+    for (const entry of NEW_PROMISE_EXEMPT) expect(entry.reason.length).toBeGreaterThan(30)
+  })
+
+  it('recognise a promise built with the global binding, however it is spaced', () => {
+    for (const code of [
+      'new Promise(f)',
+      'new  Promise<void>(f)',
+      'await new Promise(f)',
+      'const P = globalThis.Promise',
+      'const P = Promise',
+      'use(Promise)',
+    ]) {
+      expect(NEW_PROMISE.test(code)).toBe(true)
+    }
+    for (const code of ['new NativePromise<void>(f)', 'const p: Promise<void> = q']) {
+      expect(NEW_PROMISE.test(code)).toBe(false)
+    }
+  })
+
   it('are each listed with a reason, and the count of every file is exactly as listed', () => {
     const found = counts()
     const listed = new Map(EXEMPT.map((entry) => [entry.file, entry.count]))

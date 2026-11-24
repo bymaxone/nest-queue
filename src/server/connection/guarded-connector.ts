@@ -17,7 +17,7 @@ import { AbstractConnector, Redis } from 'ioredis'
 import type { RedisOptions } from 'ioredis'
 
 import { withOwnKeys } from './driver-option-names'
-import { assertPrototypeClean } from './prototype-guard'
+import { assertPrototypeClean, NativePromise } from './prototype-guard'
 
 /**
  * Cut the table of listeners of a socket from `Object.prototype`. An emitter looks a listener up with
@@ -80,7 +80,7 @@ export class GuardedConnector extends AbstractConnector {
     }
     Object.assign(target, options.tls)
 
-    return new Promise<Socket>((resolve, reject) => {
+    return new NativePromise<Socket>((resolve, reject) => {
       process.nextTick(() => {
         if (!this.connecting) {
           reject(new Error(CONNECTION_CLOSED_MESSAGE))

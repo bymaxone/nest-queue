@@ -113,6 +113,45 @@ describe('startWait', () => {
     expect(unhandled).not.toHaveBeenCalled()
   })
 
+  it('hears the rejection of work when Promise.prototype.constructor throws on every read', async () => {
+    const unhandled = jest.fn()
+    process.on('unhandledRejection', unhandled)
+    const original = Object.getOwnPropertyDescriptor(Promise.prototype, 'constructor')
+    if (original === undefined) throw new Error('Promise.prototype has no constructor')
+    const work = Promise.reject(new Error('lib-own-rejection'))
+    // The getter is only in place while `startWait` runs, which is all of it that is synchronous:
+    // the test runner reads the constructor of its own promises between awaits.
+    void Object.defineProperty(Promise.prototype, 'constructor', {
+      configurable: true,
+      get() {
+        throw new Error('hostile read')
+      },
+    })
+    let wait: ReturnType<typeof startWait<never>>
+    try {
+      wait = startWait(work, 1000)
+    } finally {
+      void Object.defineProperty(Promise.prototype, 'constructor', original)
+    }
+    const outcome = await wait.result
+    wait.release()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    process.off('unhandledRejection', unhandled)
+
+    expect(outcome.state).toBe('failed')
+    expect(unhandled).not.toHaveBeenCalled()
+  })
+
+  it('settles with the work of a frozen promise, which cannot take an own constructor', async () => {
+    const work = Object.freeze(Promise.resolve('frozen'))
+    const wait = startWait(work, 1000)
+
+    const outcome = await wait.result
+    wait.release()
+
+    expect(outcome).toEqual({ state: 'done', v: 'frozen' })
+  })
+
   it('release clears the timer and the abort listener, and may be called twice', async () => {
     jest.useFakeTimers()
     const controller = new AbortController()

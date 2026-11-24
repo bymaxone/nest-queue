@@ -7,6 +7,7 @@
  */
 
 import { readByName } from '../config/read-by-name'
+import { NativePromise } from '../connection/prototype-guard'
 import { Injectable, Logger } from '@nestjs/common'
 import { logEvent, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
 
@@ -220,7 +221,7 @@ export class QueueObserverRegistry {
     // here, so `started` is set once the operation has been called, however it fails.
     const once = (): Promise<T> => {
       if (started === undefined) {
-        started = new Promise<T>((resolve) => {
+        started = new NativePromise<T>((resolve) => {
           resolve(next())
         })
         started.catch(() => undefined)

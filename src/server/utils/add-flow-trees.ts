@@ -8,6 +8,7 @@
 
 import { HttpStatus } from '@nestjs/common'
 import type { FlowJob, JobNode } from 'bullmq'
+import { assertPrototypeClean } from '../connection/prototype-guard'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { QueueException } from '../errors/queue-exception'
 import { errorSummary, timeoutException } from './command-timeout'
@@ -96,6 +97,21 @@ function outcomeOf(state: readonly TreeState[]): FlowBulkOutcome {
 }
 
 /**
+ * Join the workers of a bulk add by awaiting each in turn, not through `Promise.all`: a replaced
+ * static would settle the join at once and report a batch that had not run. A worker never rejects,
+ * since it records its failure in the closure state; the guard runs after the last await, and
+ * `finish` reads that state.
+ */
+async function joinWorkers(
+  workers: readonly Promise<void>[],
+  finish: () => JobNode[],
+): Promise<JobNode[]> {
+  for (const running of workers) await running
+  assertPrototypeClean()
+  return finish()
+}
+
+/**
  * Add `flows` with `add`, at most `limit` at a time. After the first failure no further tree is
  * started; the ones in flight settle, and the batch then rejects.
  *
@@ -138,14 +154,12 @@ export function runFlowBulk(
     }
   }
 
-  const done = Promise.all(Array.from({ length: Math.min(limit, flows.length) }, worker)).then(
-    () => {
-      if (firstFailure !== undefined) {
-        throw batchFailure(operation, firstFailure.error, outcome())
-      }
-      return nodes
-    },
-  )
+  const done = joinWorkers(Array.from({ length: Math.min(limit, flows.length) }, worker), () => {
+    if (firstFailure !== undefined) {
+      throw batchFailure(operation, firstFailure.error, outcome())
+    }
+    return nodes
+  })
 
   return {
     done,
