@@ -30,6 +30,9 @@ describe('outcomeOf with a frozen promise and a constructor planted before the a
           reject(failure)
         }, 40),
       )
+      // The guard refuses before the await, so nothing else listens to this rejection; the captured
+      // `then` is used because the one on the prototype is about to be replaced.
+      void Reflect.apply(thenOf, work, [undefined, () => undefined])
       void Object.freeze(work)
       void Object.defineProperty(proto, 'then', {
         configurable: true,
