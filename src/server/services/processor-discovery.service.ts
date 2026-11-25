@@ -81,6 +81,7 @@ export class ProcessorDiscoveryService implements OnModuleInit {
    */
   onModuleInit(): void {
     const providers = this.discovery.getProviders()
+    const wired = new Set<unknown>()
 
     for (const wrapper of providers) {
       const instance: unknown = wrapper.instance
@@ -94,6 +95,11 @@ export class ProcessorDiscoveryService implements OnModuleInit {
       const processorMeta = Reflect.getOwnMetadata(PROCESSOR_METADATA_KEY, ctor) as
         ProcessorMetadata | undefined
       if (!processorMeta) continue
+
+      // Nest keeps one wrapper per token, so a `useExisting` alias lists the same instance again: one
+      // object is one processor however many tokens name it. Two instances of one queue still refuse.
+      if (wired.has(instance)) continue
+      wired.add(instance)
 
       this.wireProcessor(instance as Record<string | symbol, unknown>, processorMeta)
     }
