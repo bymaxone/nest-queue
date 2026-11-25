@@ -204,6 +204,18 @@ describe('validateOptions', () => {
     ).toBe('shutdown.drainTimeoutMs must be > 0')
   })
 
+  it.each([-1, -1000])('refuses shutdown.drainTimeoutMs %p, and says it must be > 0', (value) => {
+    const opts = {
+      connection: { url: 'redis://x' },
+      shutdown: { drainTimeoutMs: value },
+    } as unknown as BymaxQueueModuleOptions
+    expect(
+      reasonOf(() => {
+        validateOptions(opts)
+      }),
+    ).toBe('shutdown.drainTimeoutMs must be > 0')
+  })
+
   it('throws when metrics.cacheTtlMs is negative', () => {
     // A negative TTL is meaningless.
     const opts: BymaxQueueModuleOptions = {

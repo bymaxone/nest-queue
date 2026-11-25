@@ -193,6 +193,18 @@ describe('the connector, run by hand', () => {
     connector.disconnect()
   })
 
+  it('hands Node the family the options hold', async () => {
+    const port = await listenOnPort(net.createServer(answer))
+    const spy = jest.spyOn(net, 'createConnection')
+    const connector = new GuardedConnector({ host: '127.0.0.1', port, family: 4 })
+
+    const { stream } = await settle(connector)
+    await opened(stream)
+
+    expect(Object.keys(firstArg(spy)).sort()).toEqual(['family', 'host', 'port'])
+    connector.disconnect()
+  })
+
   it('hands Node no port when the options hold none', async () => {
     const spy = jest.spyOn(net, 'createConnection')
     const connector = new GuardedConnector({ host: '127.0.0.1' })

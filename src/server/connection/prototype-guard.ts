@@ -39,6 +39,7 @@ const isEnumerable: (this: object, key: PropertyKey) => boolean =
     : () => true
 const isProxy = types.isProxy
 const objectPrototype = Object.prototype
+const min = Math.min
 const nativeToString = Object.getOwnPropertyDescriptor(Function.prototype, 'toString')?.value as (
   this: unknown,
 ) => string
@@ -433,8 +434,7 @@ const REFUSALS: readonly QueueException[] = ((): readonly QueueException[] => {
 
 /** The frozen refusal that reports `count` defects. */
 function refusalFor(count: number): QueueException {
-  // Stryker disable next-line EqualityOperator: equivalent — at exactly MOST_COUNTED both `>` and `>=` pick the last refusal
-  return at(REFUSALS, (count > MOST_COUNTED ? MOST_COUNTED : count) - 1)
+  return at(REFUSALS, min(count, MOST_COUNTED) - 1)
 }
 
 if (!constructsNativePromises(NativePromise)) throw refusalFor(1)

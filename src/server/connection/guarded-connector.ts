@@ -72,11 +72,8 @@ export class GuardedConnector extends AbstractConnector {
     if (options.path) {
       target.path = options.path
     } else {
-      // Stryker disable next-line ConditionalExpression: Node reads an own `undefined` port as an absent one (measured), so setting it always connects the same
       if (options.port != null) target.port = options.port
-      // Stryker disable next-line ConditionalExpression: Node reads an own `undefined` or `null` host as an absent one (measured), so setting it always connects the same
       if (options.host != null) target.host = options.host
-      // Stryker disable next-line ConditionalExpression: Node reads an own `undefined` or `null` family as an absent one (measured), so setting it always connects the same
       if (options.family != null) target.family = options.family
     }
     Object.assign(target, options.tls)

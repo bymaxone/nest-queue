@@ -27,11 +27,11 @@ export const RESERVED_JOB_IDS: ReadonlySet<string> = new Set(
 /**
  * Whether a job id collides with a key BullMQ keeps for the queue itself.
  *
- * @param jobId - The id a caller chose for a job.
- * @returns `true` when the id is one of the queue's own key names.
+ * @param jobId - The id a caller chose for a job, or `undefined` when there is none.
+ * @returns `true` when the id is one of the queue's own key names; `false` for an absent id.
  */
-export function isReservedJobId(jobId: string): boolean {
-  return RESERVED_JOB_IDS.has(jobId)
+export function isReservedJobId(jobId: string | undefined): boolean {
+  return (RESERVED_JOB_IDS as ReadonlySet<string | undefined>).has(jobId)
 }
 
 /**
@@ -43,8 +43,7 @@ export function isReservedJobId(jobId: string): boolean {
  * @throws {QueueException} `INVALID_JOB_ID` (400) with `{ field }` for a reserved id.
  */
 export function assertJobIdAllowed(jobId: string | undefined, field = 'jobId'): void {
-  // Stryker disable next-line ConditionalExpression: equivalent — `Set.has(undefined)` is false, so dropping the presence check changes nothing observable; it states that an absent id passes and narrows the type
-  if (jobId !== undefined && isReservedJobId(jobId)) {
+  if (isReservedJobId(jobId)) {
     throw new QueueException(QUEUE_ERROR_CODES.INVALID_JOB_ID, HttpStatus.BAD_REQUEST, { field })
   }
 }

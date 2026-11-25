@@ -37,8 +37,7 @@ function checkCacheTtl(cacheTtlMs: number | undefined): void {
   if (cacheTtlMs !== undefined && !Number.isInteger(cacheTtlMs)) {
     invalid('metrics.cacheTtlMs must be a whole number')
   }
-  // Stryker disable next-line ConditionalExpression: equivalent — dropping the presence check leaves `undefined < 0`, which is false; same reasoning as the drain timeout above
-  if (cacheTtlMs !== undefined && cacheTtlMs < 0) {
+  if ((cacheTtlMs ?? 0) < 0) {
     invalid('metrics.cacheTtlMs must be >= 0')
   }
 }
@@ -131,8 +130,8 @@ export function validateOptions(given: BymaxQueueModuleOptions): void {
   checkFlags(opts)
 
   const drainTimeoutMs = opts.shutdown?.drainTimeoutMs
-  // Stryker disable next-line ConditionalExpression: equivalent — dropping the presence check leaves `undefined <= 0`, which is false, so an absent value is still accepted and a present one still refused; the check states the intent
-  if (drainTimeoutMs !== undefined && drainTimeoutMs <= 0) {
+  // `Number` reads an absent value as NaN, which is not `<= 0`, so an absent timeout is accepted.
+  if (Number(drainTimeoutMs) <= 0) {
     invalid('shutdown.drainTimeoutMs must be > 0')
   }
   checkTimerDelay('shutdown.drainTimeoutMs', drainTimeoutMs)
