@@ -161,6 +161,56 @@ describe('ProcessorDiscoveryService.onModuleInit', () => {
     }
   })
 
+  /**
+   * Scenario: Nest lists the same provider instance twice, as it does for a `useExisting` alias.
+   * Expectation: it is one processor: one worker, and the boot does not refuse it as a duplicate.
+   */
+  it('registers one worker for an instance that two tokens name', () => {
+    @Processor('email', { concurrency: 2 })
+    class AliasedProcessor {
+      @Process()
+      handle(_job: Job): Promise<void> {
+        return Promise.resolve()
+      }
+    }
+    const instance = new AliasedProcessor()
+    const workers = mockRegistry({ on: jest.fn() })
+    const svc = new ProcessorDiscoveryService(
+      mockDiscovery([makeWrapper(instance), makeWrapper(instance)]),
+      workers,
+      mockEventsRegistry({ on: jest.fn() }),
+    )
+
+    svc.onModuleInit()
+
+    expect(workers.register).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * Scenario: two different instances of one `@Processor` class, so one queue name.
+   * Expectation: still refused: only one object is exempt, never one class or one name.
+   */
+  it('refuses two instances of one processor class', () => {
+    @Processor('email', { concurrency: 2 })
+    class TwiceProcessor {
+      @Process()
+      handle(_job: Job): Promise<void> {
+        return Promise.resolve()
+      }
+    }
+    const workers = mockRegistry({ on: jest.fn() })
+    const svc = new ProcessorDiscoveryService(
+      mockDiscovery([makeWrapper(new TwiceProcessor()), makeWrapper(new TwiceProcessor())]),
+      workers,
+      mockEventsRegistry({ on: jest.fn() }),
+    )
+
+    expect(() => {
+      svc.onModuleInit()
+    }).toThrow(QueueException)
+    expect(workers.register).toHaveBeenCalledTimes(1)
+  })
+
   it('logs a warn when @Processor omits concurrency (_warnedNoConcurrency)', () => {
     // The warning must name the queue and the fallback value; it must NOT fire for explicit concurrency.
     @Processor('email')

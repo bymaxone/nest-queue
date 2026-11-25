@@ -342,6 +342,8 @@ Marks a class as a worker bound to `queueName`. The class must be an `@Injectabl
 
 Known limit: discovery finds a processor by the `constructor` of each provider instance, so a `useValue` provider whose value has an own `constructor` property naming a `@Processor` class is registered as that processor, as an instance of the class would be.
 
+Known limit: the same instance reached through several tokens, such as a `useExisting` alias, is one processor. A provider whose factory returns a wrapper object whose `constructor` is not the `@Processor` class is not registered, and nothing is logged, because no other signal on the wrapper says which class it stands for; provide the class itself, or register the worker with `WorkerRegistry.register()`.
+
 ### `@Process(jobName?)`
 
 Method decorator for the handler. If `jobName` is omitted, the method handles all jobs on the queue. If provided, only jobs with that `name` are dispatched here.
