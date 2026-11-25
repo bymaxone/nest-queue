@@ -178,8 +178,8 @@ export class QueueService {
     let expired = false
     const attempt = async (): Promise<T> => {
       await own(this.afterReady(queueName))
-      // Stryker disable next-line StringLiteral: equivalent — the deadline already rejected the caller, so this error is absorbed and never read
-      if (expired) throw new Error('the call had already timed out')
+      // The deadline already rejected the caller; this rejection is absorbed and nothing reads it.
+      if (expired) throw new Error()
       // Once more, in the turn that makes the call: the awaits before it (the wait for the client,
       // the observer hooks) leave room for a key to be planted after the guard at the entry.
       assertPrototypeClean()

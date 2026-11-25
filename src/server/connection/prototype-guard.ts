@@ -113,7 +113,7 @@ function descriptorNow(position: number): DescriptorFields | undefined {
 
 /** The descriptors of the standard keys as they were when this module loaded. */
 const SNAPSHOT: readonly (DescriptorFields | undefined)[] = (() => {
-  // Stryker disable next-line ArrayDeclaration: every index from zero is assigned below before the list is read, so a seed element is overwritten
+  // Stryker disable next-line ArrayDeclaration: the only mutant on this line seeds the list with one element, and every index from zero is assigned below before the list is read, so the seed is overwritten
   const taken: (DescriptorFields | undefined)[] = []
   let position = 0
   while (position < STANDARD_NAMES.length) {
@@ -128,7 +128,6 @@ function isNative(value: unknown): boolean {
   return (
     typeof value === 'function' &&
     !isProxy(value) &&
-    // Stryker disable next-line ArrayDeclaration: `Function.prototype.toString` ignores its arguments
     regExpTest.call(NATIVE_CODE, apply<unknown, [], string>(nativeToString, value, []))
   )
 }
@@ -149,7 +148,7 @@ function hasExpectedKind(name: string, descriptor: DescriptorFields | undefined)
 
 /** Whether the standard key at each position was not what the language gives it when this module loaded. */
 const BASELINE_DEFECT: readonly boolean[] = (() => {
-  // Stryker disable next-line ArrayDeclaration: every index from zero is assigned below before the list is read, so a seed element is overwritten
+  // Stryker disable next-line ArrayDeclaration: the only mutant on this line seeds the list with one element, and every index from zero is assigned below before the list is read, so the seed is overwritten
   const flags: boolean[] = []
   let position = 0
   while (position < STANDARD_NAMES.length) {
@@ -320,11 +319,9 @@ const BASELINE: readonly BaselineEntry[] = (() => {
   // The prototypes of the iterators that for-of and spread create, and the one above them: their
   // `next` is what a loop calls.
   const samples: object[] = [
-    // Stryker disable next-line ArrayDeclaration: an array iterator has the same prototype whatever the array holds
     [][Symbol.iterator](),
     new Set()[Symbol.iterator](),
     new Map()[Symbol.iterator](),
-    // Stryker disable next-line StringLiteral: a string iterator has the same prototype whatever the string holds
     ''[Symbol.iterator](),
   ]
   position = 0
@@ -339,7 +336,7 @@ const BASELINE: readonly BaselineEntry[] = (() => {
 
 /** The globals that name the built-ins above, as they were at load. */
 const GLOBAL_BINDINGS: readonly unknown[] = (() => {
-  // Stryker disable next-line ArrayDeclaration: every index from zero is assigned below before the list is read, so a seed element is overwritten
+  // Stryker disable next-line ArrayDeclaration: the only mutant on this line seeds the list with one element, and every index from zero is assigned below before the list is read, so the seed is overwritten
   const bound: unknown[] = []
   let position = 0
   while (position < BASELINE_GLOBALS.length) {

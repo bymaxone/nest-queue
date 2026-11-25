@@ -156,7 +156,7 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
                 ),
           )
           // Bounded: a close that never settles must not hold the rest of the teardown.
-          // Stryker disable next-line ArrowFunction: equivalent — the deadline error is swallowed by the catch below, so no caller can observe its value
+          // Stryker disable next-line ArrowFunction: the only mutant on this line makes the builder answer `undefined`, and equivalent — the value it builds is swallowed by the catch below, so nothing observes it
           const deadlineError = (): DrainTimeoutError => new DrainTimeoutError()
           await withDeadline(worker.close(true), FORCE_CLOSE_GRACE_MS, deadlineError).catch(
             () => undefined,

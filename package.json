@@ -85,7 +85,7 @@
     "prepare": "husky",
     "prepublishOnly": "pnpm clean && pnpm typecheck && pnpm test:types && pnpm lint && pnpm check:mutants && pnpm test:cov:all && pnpm build && pnpm check:published",
     "release": "npm publish --provenance --access public",
-    "size": "node scripts/check-dist-fresh.mjs && node scripts/check-size.mjs",
+    "size": "node scripts/check-dist-fresh.mjs --also tsup.config.ts --also package.json --also tsconfig.build.json --also tsconfig.json && node scripts/check-size.mjs",
     "smoke": "node scripts/dogfood-smoke-test.mjs",
     "test": "jest",
     "test:all": "pnpm test && pnpm test:e2e",

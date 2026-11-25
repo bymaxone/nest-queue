@@ -207,7 +207,7 @@ export class FlowService {
    */
   async close(): Promise<void> {
     try {
-      // Stryker disable next-line OptionalChaining: equivalent — with no producer, `this.producer.close()` throws a TypeError into the catch below, which swallows it
+      // Stryker disable next-line OptionalChaining: the only mutant on this line drops the `?.`, and equivalent — with no producer, `this.producer.close()` throws a TypeError into the catch below, which swallows it
       await own(this.producer?.close())
     } catch {
       // A producer that fails to close is gone either way.

@@ -491,7 +491,7 @@ function adaptHandler<TData, TResult>(
   return (job, _token, signal) => {
     const own = new AbortController()
     const relay = (): void => {
-      // Stryker disable next-line OptionalChaining: equivalent — `relay` runs only when the signal exists, by the check and the listener below
+      // Stryker disable next-line OptionalChaining: the only mutant on this line drops the `?.`, and equivalent — `relay` runs only when the signal exists, by the check and the listener below
       own.abort(signal?.reason)
     }
     if (signal?.aborted === true) relay()

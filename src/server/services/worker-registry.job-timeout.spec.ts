@@ -169,6 +169,27 @@ describe('WorkerRegistry — jobTimeoutMs', () => {
     finish('ok')
     await running
   })
+
+  it.each([
+    ['mid-job', false],
+    ['before the call', true],
+  ])("hands the handler the reason BullMQ's signal aborted %s", async (_when, early) => {
+    let seen: AbortSignal | undefined
+    const reason = new Error('shutdown')
+    const outer = new AbortController()
+    if (early) outer.abort(reason)
+    const processor = registered((_job, signal) => {
+      seen = signal
+      return Promise.resolve('ok')
+    }, 3000)
+
+    const running = processor(job, 'token', outer.signal)
+    await Promise.resolve()
+    if (!early) outer.abort(reason)
+    await running
+
+    expect(seen?.reason).toBe(reason)
+  })
 })
 
 describe('WorkerRegistry — the signal BullMQ passes to the processor', () => {
