@@ -13,9 +13,19 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ## [Unreleased]
 
+---
+
+## [1.2.29] — 2026-11-25
+
+Against 1.2.28 the declarations are unchanged; the runtime of the main entry changes.
+
 ### Fixed
 
 - **A `@Processor` provided again under a `useExisting` alias no longer refuses the boot.** Discovery listed the one instance once per token and the second visit threw `queue.duplicate_processor`. An instance is now one processor however many tokens name it; two different instances that claim one queue still refuse. A provider whose factory returns a wrapper object whose `constructor` is not the `@Processor` class is still not registered, and nothing is logged.
+
+### Changed
+
+- **The main entry bundle changes by 52 bytes.** Beside the fix above it carries three rewrites that change nothing a caller can observe: the `connection` accessor is defined without an explicit `configurable: false`, which `Object.defineProperty` already applies to a property that does not exist yet; an internal rejection that nothing reads is raised with an empty message instead of a sentence; and one expression sits on a single line. `dist/server/index.mjs` goes from 22 255 to 22 257 B brotli and no size budget moves. Every other file under `dist`, the declarations included, is byte-identical to 1.2.28.
 
 ---
 
@@ -1328,7 +1338,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.28...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.29...HEAD
+[1.2.29]: https://github.com/bymaxone/nest-queue/compare/v1.2.28...v1.2.29
 [1.2.28]: https://github.com/bymaxone/nest-queue/compare/v1.2.27...v1.2.28
 [1.2.27]: https://github.com/bymaxone/nest-queue/compare/v1.2.26...v1.2.27
 [1.2.26]: https://github.com/bymaxone/nest-queue/compare/v1.2.25...v1.2.26
