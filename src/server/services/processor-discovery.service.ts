@@ -84,8 +84,7 @@ export class ProcessorDiscoveryService implements OnModuleInit {
 
     for (const wrapper of providers) {
       const instance: unknown = wrapper.instance
-      // Stryker disable next-line ConditionalExpression: equivalent — a truthy non-object provider is a function, whose `constructor` is `Function` and carries none of the processor metadata read below, so it is skipped either way
-      if (!instance || typeof instance !== 'object') continue
+      if (!instance) continue
 
       const ctor = (instance as WithConstructor).constructor
       // An object with no prototype, such as the snapshot of the module options, has no constructor

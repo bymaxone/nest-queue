@@ -36,6 +36,10 @@ describe('isReservedJobId', () => {
     expect(isReservedJobId(id)).toBe(true)
   })
 
+  it('lets an absent id through', () => {
+    expect(isReservedJobId(undefined)).toBe(false)
+  })
+
   it.each(['job-1', 'dlq-x', 'ACTIVE', 'active ', 'metrics', 'idx', ''])(
     'lets %j through',
     (id) => {
