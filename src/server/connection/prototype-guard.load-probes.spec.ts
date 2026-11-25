@@ -6,7 +6,7 @@
  * @layer server/connection
  */
 
-import type * as Guard from './prototype-guard'
+import * as Guard from './prototype-guard'
 
 /** The error the guard refuses with, as far as these rows read it. */
 interface Refusal {
@@ -54,6 +54,17 @@ function defects(guard: typeof Guard): number {
 }
 
 describe('the probes the guard takes at load', () => {
+  /**
+   * Scenario: the guard is loaded through `loadGuard` and through an ordinary import.
+   * Expectation: they are two copies. The rows below read what the copy loaded under a replaced
+   * built-in recorded, which only says something about the module registry they isolate. The
+   * ordinary import is also what keeps this file among the tests that Stryker runs for the guard:
+   * its runner selects tests by the modules they import, and a type-only import selects none.
+   */
+  it('loads a copy of the guard that is not the one an import returns', () => {
+    expect(loadGuard().assertPrototypeClean).not.toBe(Guard.assertPrototypeClean)
+  })
+
   /**
    * Scenario: the iterator factory of `owner` answers a distinct iterator for an empty subject and the
    * real one for any other, and the guard is loaded while it does. The distinct iterator's prototype
