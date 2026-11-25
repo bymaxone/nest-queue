@@ -13,6 +13,12 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ## [Unreleased]
 
+### Fixed
+
+- **A second copy of `reflect-metadata` loaded after the library is no longer refused.** The prototype guard compared every own key of `Reflect`, and `reflect-metadata` 0.2 defines its ten functions on `Reflect` again when a second copy loads, so a host with two copies was refused at module boot with `INVALID_OPTIONS`. For `Reflect` only the functions the language defines (`apply`, `construct`, `defineProperty`, `deleteProperty`, `get`, `getOwnPropertyDescriptor`, `getPrototypeOf`, `has`, `isExtensible`, `ownKeys`, `preventExtensions`, `set`, `setPrototypeOf`) and `Symbol.toStringTag` are compared; replacing any of them is still refused, and every other built-in is compared on all its keys as before.
+- **A `get` or a `set` planted on `Object.prototype` is refused with the library's own error, not a raw `TypeError`.** `Object.defineProperty` reads those names off a descriptor through the prototype chain, so the property definitions of the options snapshot, the resolved options and the host-error `cause` threw while one was planted. Their descriptors now have no prototype.
+- **The declared type of `BymaxQueueModule` carries its documentation again.** Its JSDoc block, with the two registration examples, was dropped from the declarations in 1.2.27.
+
 ---
 
 ## [1.2.27] — 2026-11-20
