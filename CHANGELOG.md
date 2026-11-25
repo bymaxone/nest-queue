@@ -19,6 +19,10 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 - **A `get` or a `set` planted on `Object.prototype` no longer makes `forRoot` throw a raw `TypeError`; the boot refuses it with `INVALID_OPTIONS`.** `Object.defineProperty` reads those names off a descriptor through the prototype chain, so the property definitions of the options snapshot, the resolved options and the host-error `cause` threw `Invalid property descriptor` while one was planted. Their descriptors now have no prototype: `forRoot` returns the module, and the module's boot is refused with the library's own `queue.invalid_options` like any other planted key.
 - **The declared type of `BymaxQueueModule` carries its documentation again.** Its JSDoc block, with the two registration examples, was dropped from the declarations in 1.2.27.
 
+### Changed
+
+- **The main entry bundle is larger by 91 B.** The one builder of the descriptors the library defines with no prototype and the list of the functions the language defines on `Reflect` are new runtime code: `dist/server/index.mjs` is 22,237 B brotli (22,146 B before), and the budget in `scripts/check-size.mjs` was raised to 22,267 B to fit it. The observability and shared budgets are unchanged. The declarations change only in comments (the `BymaxQueueModule` JSDoc), not in a type, an export or a signature.
+
 ---
 
 ## [1.2.27] — 2026-11-20
