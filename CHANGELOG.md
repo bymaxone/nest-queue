@@ -21,7 +21,7 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ### Changed
 
-- **The main entry bundle is larger by 91 B.** The one builder of the descriptors the library defines with no prototype and the list of the functions the language defines on `Reflect` are new runtime code: `dist/server/index.mjs` is 22,237 B brotli (22,146 B before), and the budget in `scripts/check-size.mjs` was raised to 22,267 B to fit it. The observability and shared budgets are unchanged. The declarations change only in comments (the `BymaxQueueModule` JSDoc), not in a type, an export or a signature.
+- **The main entry bundle is larger.** The builder of the descriptors with no prototype and the `Reflect` baseline are new runtime code, so the size budget of the main entry was raised to fit it. The declarations change only in comments (the `BymaxQueueModule` JSDoc), not in a type, an export or a signature.
 
 ---
 
