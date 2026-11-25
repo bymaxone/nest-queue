@@ -25,7 +25,7 @@ Against 1.2.28 the declarations are unchanged; the runtime of the main entry cha
 
 ### Changed
 
-- **The main entry bundle changes by 52 bytes.** Beside the fix above it carries three rewrites that change nothing a caller can observe: the `connection` accessor is defined without an explicit `configurable: false`, which `Object.defineProperty` already applies to a property that does not exist yet; an internal rejection that nothing reads is raised with an empty message instead of a sentence; and one expression sits on a single line. `dist/server/index.mjs` goes from 22 255 to 22 257 B brotli and no size budget moves. Every other file under `dist`, the declarations included, is byte-identical to 1.2.28.
+- **The main entry bundle changes.** Beside the fix above it carries rewrites that change nothing a caller can observe, and no size budget moves. Every other file under `dist`, the declarations included, is byte-identical to 1.2.28.
 
 ---
 
