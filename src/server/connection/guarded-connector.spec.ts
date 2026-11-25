@@ -202,6 +202,7 @@ describe('the connector, run by hand', () => {
     await opened(stream)
 
     expect(Object.keys(firstArg(spy)).sort()).toEqual(['family', 'host', 'port'])
+    expect(firstArg(spy)).toMatchObject({ family: 4 })
     connector.disconnect()
   })
 
