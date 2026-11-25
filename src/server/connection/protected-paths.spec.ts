@@ -340,6 +340,12 @@ function argumentsOf(code: string, open: number): string[] {
  * accessor, while either name is planted on `Object.prototype`; a parenthesized literal, a call that
  * returns one and a spread are all that. Only a name, or `descriptorOf`, which builds the descriptor
  * with no prototype, is exempt.
+ *
+ * The scan reads calls named `defineProperty` or `define`, so it does not see a function held under
+ * another name (`const set = Object.defineProperty`), `Object.defineProperties`, or
+ * `Object.create(proto, { … })`, which read the same descriptor fields through the same chain. No
+ * shipped source uses any of the three today, counted by a search of every non-spec source; a source
+ * that adds one needs its own check.
  */
 function descriptorLiterals(source: string): number {
   const code = strip(source)

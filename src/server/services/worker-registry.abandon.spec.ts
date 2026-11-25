@@ -70,7 +70,7 @@ function registered(
   return { worker, processor }
 }
 
-/** Whether `promise` is still pending after the microtasks and a short timer have run. */
+/** Whether `promise` is still pending after the microtasks and 20 ms of the fake clock have run. */
 async function stillPending(promise: Promise<unknown>): Promise<boolean> {
   let settled = false
   promise.then(
@@ -81,12 +81,20 @@ async function stillPending(promise: Promise<unknown>): Promise<boolean> {
       settled = true
     },
   )
-  await new Promise((resolve) => setTimeout(resolve, 20))
+  await jest.advanceTimersByTimeAsync(20)
   return !settled
 }
 
+// A handler with a `jobTimeoutMs` leaves the deadline timer of an abandoned run pending by design;
+// on the fake clock it ends with the case and holds nothing open.
 beforeEach(() => {
   processors.length = 0
+  jest.useFakeTimers()
+})
+
+afterEach(() => {
+  jest.clearAllTimers()
+  jest.useRealTimers()
 })
 
 describe('a worker stopped without draining', () => {

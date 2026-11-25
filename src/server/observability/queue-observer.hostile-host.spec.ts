@@ -1,9 +1,12 @@
 /**
  * @fileoverview Unit tests that a host cannot decide what the registry reports by touching a promise
- * it can reach: a constructor planted while the hook runs, a replaced `Promise.prototype.then`, and a
- * promise of the operation that the host gives a constructor and a `then` of its own. The operation
- * rejects in every case, and the caller must be told it failed. Each case runs on callbacks and
- * timers only, because the test runner reads the constructor of the promises it awaits.
+ * it can reach, on the attempt path and on the enqueue path: a constructor planted while the hook
+ * runs, a replaced `Promise.prototype.then`, a promise of the operation that the host gives a
+ * constructor and a `then` of its own, a `then` planted on `Object.prototype` that erases itself, and
+ * a `Promise[Symbol.species]` that throws. The operation rejects in every case, and the caller must
+ * be told it failed; the host still receives that rejection through the promise it was handed. Each
+ * case reports through a `done` callback and a timer, because the test runner reads the constructor
+ * of the promises a test returns. The few cases that await inside a test say why beside the await.
  * @layer server/observability
  */
 
