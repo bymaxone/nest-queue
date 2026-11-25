@@ -306,12 +306,6 @@ function listedOfKind(kind: ExclusionKind): string[] {
 }
 
 describe('mutation scope', () => {
-  /** The closure check only asks for containment and a floor, so a dropped include passes it. */
-  it('names every package entry, and keeps the floor of the closure', () => {
-    expect([...EXPECTED.includes].sort()).toEqual(entries().sort())
-    expect(EXPECTED.minShipped).toBe(30)
-  })
-
   /** An empty closure would make every other check pass vacuously. */
   it('finds the shipped source from the package entries', () => {
     expect(entries()).toHaveLength(EXPECTED.entries)

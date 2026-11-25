@@ -40,6 +40,10 @@
     "reason": "Runs the bundle comment-stripping script on fixture directories; executes no code under src."
   },
   {
+    "file": "src/stryker-scope.data.spec.ts",
+    "reason": "Compares the data of the scope check with a literal copy; it reaches no mutated source, so it can kill no mutant."
+  },
+  {
     "file": "src/stryker-scope.spec.ts",
     "reason": "Reads stryker.config.json, tsup.config.ts and the source text to pin the mutation scope; it executes no code under src, so it can kill no mutant."
   },
