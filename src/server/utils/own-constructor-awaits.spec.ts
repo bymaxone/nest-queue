@@ -224,7 +224,12 @@ describe('awaits that decide a result do not read a constructor planted meanwhil
         60,
         host,
         () => {
-          expect(seen).toBe('pending')
+          try {
+            expect(seen).toBe('pending')
+          } finally {
+            // Readiness ends the wait, and the wait clears its own timer.
+            client.emit('ready')
+          }
         },
         done,
       )

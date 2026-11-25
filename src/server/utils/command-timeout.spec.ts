@@ -4,6 +4,7 @@
  */
 
 import { createServer } from 'node:net'
+import type { Socket } from 'node:net'
 import { Redis } from 'ioredis'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
@@ -44,7 +45,12 @@ describe('the installed ioredis', () => {
   // The match is on the message, so a release that rewords it must fail here and not silently
   // stop the translation.
   it('rejects a command that gets no reply with exactly the text this library matches', async () => {
-    const server = createServer((socket) => socket.on('error', () => undefined))
+    // The server never replies, so every socket it accepts is destroyed here and not left to the client.
+    const accepted: Socket[] = []
+    const server = createServer((socket) => {
+      accepted.push(socket)
+      socket.on('error', () => undefined)
+    })
     const port = await new Promise<number>((resolve) => {
       server.listen(0, '127.0.0.1', () => {
         resolve((server.address() as { port: number }).port)
@@ -60,12 +66,16 @@ describe('the installed ioredis', () => {
       retryStrategy: () => null,
     })
 
-    const err = await client.get('key').catch((e: unknown) => e)
+    try {
+      const err = await client.get('key').catch((e: unknown) => e)
 
-    expect((err as Error).message).toBe('Command timed out')
-    expect(isCommandTimeout(err)).toBe(true)
-    client.disconnect()
-    server.close()
+      expect((err as Error).message).toBe('Command timed out')
+      expect(isCommandTimeout(err)).toBe(true)
+    } finally {
+      client.disconnect()
+      for (const socket of accepted) socket.destroy()
+      server.close()
+    }
   })
 })
 

@@ -22,6 +22,15 @@ function hasHiddenModifier(declaration: ts.Declaration): boolean {
   return (modifiers & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected)) !== 0
 }
 
+/**
+ * Whether `text` names the identifier `name`: it appears with no identifier character, a letter,
+ * a digit, `_` or `$`, directly before or after it, so `enqueue` is not named by `enqueueBulk`.
+ */
+function names(text: string, name: string): boolean {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?<![\\w$])${escaped}(?![\\w$])`).test(text)
+}
+
 /** `Class.member` for every public member of every class an entry file exports, from the sources. */
 function publicMembers(entries: string[]): string[] {
   const program = ts.createProgram(
@@ -63,9 +72,30 @@ describe('README member coverage', () => {
   it('names every one of them', () => {
     const missing = members.filter((member) => {
       const name = member.split('.')[1] ?? ''
-      return !new RegExp(`\\b${name}\\b`).test(readme)
+      return !names(readme, name)
     })
 
     expect(missing).toEqual([])
+  })
+})
+
+describe('naming an identifier in text', () => {
+  it('accepts the name as a word, in code or in prose', () => {
+    expect(names('call `queue.enqueue(job)` first', 'enqueue')).toBe(true)
+    expect(names('enqueue', 'enqueue')).toBe(true)
+  })
+
+  it('does not accept the name inside a longer identifier', () => {
+    expect(names('call enqueueBulk', 'enqueue')).toBe(false)
+    expect(names('call reenqueue', 'enqueue')).toBe(false)
+    expect(names('call enqueue_all', 'enqueue')).toBe(false)
+    expect(names('call enqueue2', 'enqueue')).toBe(false)
+    expect(names('call $enqueue', 'enqueue')).toBe(false)
+    expect(names('call enqueue$', 'enqueue')).toBe(false)
+  })
+
+  it('reads a name with a dollar sign as the literal it is', () => {
+    expect(names('read `$state` here', '$state')).toBe(true)
+    expect(names('read a state here', '$state')).toBe(false)
   })
 })
