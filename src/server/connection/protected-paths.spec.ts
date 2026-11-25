@@ -8,7 +8,7 @@
  * @layer server/connection
  */
 
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { assertPrototypeClean } from './prototype-guard'
 
@@ -344,9 +344,11 @@ function argumentsOf(code: string, open: number): string[] {
 function descriptorLiterals(source: string): number {
   const code = strip(source)
   let count = 0
-  for (const match of code.matchAll(/defineProperty\s*\(/g)) {
+  for (const match of code.matchAll(/(?<![\w$])(?:defineProperty|define)\s*\(/g)) {
     const descriptor = argumentsOf(code, match.index + match[0].length - 1)[2] ?? ''
-    if (!/^[A-Za-z_$][\w$]*$/.test(descriptor) && !/^descriptorOf\s*\(/.test(descriptor)) count += 1
+    const inert =
+      /^descriptorOf\s*\(/.test(descriptor) || /^\{\s*__proto__\s*:\s*null\s*,/.test(descriptor)
+    if (!/^[A-Za-z_$][\w$]*$/.test(descriptor) && !inert) count += 1
   }
   return count
 }
@@ -359,6 +361,18 @@ describe('descriptors in the protected paths', () => {
     const found = descriptorLiterals(readFileSync(join(ROOT, path), 'utf8'))
 
     expect(found).toBe(EXEMPT_DESCRIPTORS[path]?.count ?? 0)
+  })
+
+  it('finds no descriptor literal in any source the library ships, whether or not it is a protected path', () => {
+    const sources = readdirSync(ROOT, { recursive: true, encoding: 'utf8' }).filter(
+      (file) => file.endsWith('.ts') && !file.endsWith('.spec.ts') && !file.endsWith('.d.ts'),
+    )
+    const literals = sources.filter(
+      (file) => descriptorLiterals(readFileSync(join(ROOT, file), 'utf8')) > 0,
+    )
+
+    expect(sources.length).toBeGreaterThan(20)
+    expect(literals).toEqual([])
   })
 
   it('has a reason for every excused descriptor', () => {
@@ -378,8 +392,20 @@ describe('descriptors in the protected paths', () => {
     expect(descriptorLiterals('defineProperty(options, key, make(key))')).toBe(1)
     expect(descriptorLiterals('defineProperty(options, key, descriptorOf({ value: 1 }))')).toBe(0)
     expect(descriptorLiterals('defineProperty(options, key, descriptorOf\n({ get }))')).toBe(0)
-    expect(descriptorLiterals('defineProperty(options, key, notDescriptorOf({ value: 1 }))')).toBe(1)
-    expect(descriptorLiterals('defineProperty(options, key, { ...descriptorOf({}), value: 1 })')).toBe(1)
+    expect(descriptorLiterals('defineProperty(options, key, notDescriptorOf({ value: 1 }))')).toBe(
+      1,
+    )
+    expect(
+      descriptorLiterals('defineProperty(options, key, { ...descriptorOf({}), value: 1 })'),
+    ).toBe(1)
+    expect(descriptorLiterals("define(promise, 'constructor', { value: 1 })")).toBe(1)
+    expect(
+      descriptorLiterals("define(promise, 'constructor', { __proto__: null, value: 1 })"),
+    ).toBe(0)
+    expect(
+      descriptorLiterals("define(promise, 'constructor', { value: 1, __proto__: null })"),
+    ).toBe(1)
+    expect(descriptorLiterals("redefine(promise, 'constructor', { value: 1 })")).toBe(0)
   })
 })
 

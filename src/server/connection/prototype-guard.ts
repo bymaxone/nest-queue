@@ -287,10 +287,11 @@ function describeOwners(owners: readonly object[]): BaselineEntry[] {
     let keyPosition = 0
     while (keyPosition < keys.length) {
       const key = at(keys, keyPosition)
-      entries[entries.length] = {
-        owner,
-        key,
-        was: copyFields(getOwnPropertyDescriptor(owner, key) as unknown as PropertyDescriptor),
+      const descriptor = getOwnPropertyDescriptor(owner, key)
+      // A function the language defines on `Reflect` that a host removed before this module loaded has
+      // nothing to compare against, as an own key that was never there never did.
+      if (descriptor !== undefined) {
+        entries[entries.length] = { owner, key, was: copyFields(descriptor) }
       }
       keyPosition += 1
     }

@@ -6,6 +6,7 @@
  */
 
 import { assertPrototypeClean } from './prototype-guard'
+import type * as Guard from './prototype-guard'
 
 /** The functions the language defines on `Reflect`. */
 const LANGUAGE_FUNCTIONS = [
@@ -107,4 +108,20 @@ describe('a function the language defines on Reflect is still baselined', () => 
 
     expect(refusalCode()).toBe('queue.invalid_options')
   })
+})
+
+describe('a language function a host removed from Reflect before the guard loaded', () => {
+  it.each(['has', 'getPrototypeOf', 'isExtensible'] as const)(
+    'does not stop the module from loading when %s is missing',
+    (name) => {
+      void remove(Reflect, name)
+
+      let loaded: typeof Guard | undefined
+      jest.isolateModules(() => {
+        loaded = jest.requireActual<typeof Guard>('./prototype-guard')
+      })
+
+      expect(typeof loaded?.assertPrototypeClean).toBe('function')
+    },
+  )
 })
