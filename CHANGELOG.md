@@ -15,7 +15,7 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ### Fixed
 
-- **A `@Processor` provided again under a `useExisting` alias no longer refuses the boot.** Discovery listed the one instance once per token and the second visit threw `queue.duplicate_processor`. An instance is now one processor however many tokens name it; two different instances that claim one queue still refuse. A provider whose factory returns a wrapper object instead of an instance of the class is still not registered, and nothing is logged.
+- **A `@Processor` provided again under a `useExisting` alias no longer refuses the boot.** Discovery listed the one instance once per token and the second visit threw `queue.duplicate_processor`. An instance is now one processor however many tokens name it; two different instances that claim one queue still refuse. A provider whose factory returns a wrapper object whose `constructor` is not the `@Processor` class is still not registered, and nothing is logged.
 
 ---
 
