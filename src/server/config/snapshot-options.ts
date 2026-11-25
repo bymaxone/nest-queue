@@ -11,7 +11,7 @@
 import type { JobsOptions } from 'bullmq'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
 import { guarded } from './guarded-read'
-import { copyFields, readByName } from './read-by-name'
+import { copyFields, defineOwn, readByName } from './read-by-name'
 
 /**
  * Every option BullMQ's `JobsOptions` has, and the compiler holds the table to that type: a key it
@@ -84,11 +84,6 @@ function emptyCopy(): Record<string, unknown> {
   return Object.create(null) as Record<string, unknown>
 }
 
-/** Put `value` at `key` as an own data property, which `__proto__` too becomes, not a prototype. */
-function defineValue(copy: Record<string, unknown>, key: string, value: unknown): void {
-  Object.defineProperty(copy, key, { value, enumerable: true, writable: true, configurable: true })
-}
-
 /**
  * Copy the set values of a group: every own enumerable key and every `known` key, each read once by
  * property access. A value that is not an object is returned as it is, for validation to judge. A
@@ -107,7 +102,7 @@ function setValuesOf<T>(
   for (const key of new Set(guarded(path, () => [...Object.keys(source), ...known]))) {
     const value = guarded(`${path}.${key}`, () => readByName(source, key))
     if (value === undefined || (value === null && flags?.includes(key) !== true)) continue
-    defineValue(copy, key, value)
+    defineOwn(copy, key, value)
   }
   return copy as T
 }
@@ -138,11 +133,11 @@ export function readKeysOf<T>(group: T, known: readonly string[]): T {
   if (typeof group !== 'object' || group === null || Array.isArray(group)) return group
   const source = group as Record<string, unknown>
   const copy = emptyCopy()
-  for (const key of Object.keys(source)) defineValue(copy, key, source[key])
+  for (const key of Object.keys(source)) defineOwn(copy, key, source[key])
   for (const key of known) {
     if (Object.hasOwn(copy, key)) continue
     const value = readByName(source, key)
-    if (value !== undefined) defineValue(copy, key, value)
+    if (value !== undefined) defineOwn(copy, key, value)
   }
   return copy as T
 }
@@ -180,7 +175,7 @@ function snapshotConnection(connection: unknown): unknown {
       const value = readByName(host, key)
       // A key the host set to `undefined` stays, so validation can name it; one it never set is not read.
       if (value === undefined && !Object.hasOwn(host, key)) continue
-      defineValue(copy, key, key === 'options' ? copyFields(value) : value)
+      defineOwn(copy, key, key === 'options' ? copyFields(value) : value)
     }
     return copy
   })
