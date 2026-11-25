@@ -328,6 +328,28 @@ describe('ProcessorDiscoveryService.onModuleInit', () => {
     svc.onModuleInit()
     expect(workers.register).toHaveBeenCalledWith(expect.objectContaining({ queueName: 'empty' }))
   })
+
+  it('hands the worker a dispatcher with no handler when the class has no @Process method', async () => {
+    // A member literally named `undefined` is what an entry that is not a handler would resolve to,
+    // so it is the one the dispatcher must never call when the list is empty.
+    @Processor('bare', { concurrency: 1 })
+    class BareProcessor {
+      ['undefined'](): Promise<string> {
+        return Promise.resolve('ran')
+      }
+    }
+
+    const workers = mockRegistry({ on: jest.fn() })
+    const svc = new ProcessorDiscoveryService(
+      mockDiscovery([makeWrapper(new BareProcessor())]),
+      workers,
+      mockEventsRegistry({ on: jest.fn() }),
+    )
+    svc.onModuleInit()
+    const { handler } = jest.mocked(workers.register).mock.calls[0]![0]
+
+    await expect(handler({ name: 'any' } as Job)).rejects.toThrow('No handler registered')
+  })
 })
 
 describe('ProcessorDiscoveryService.buildDispatcher', () => {

@@ -253,3 +253,36 @@ describe('QueueService.upsertJobScheduler — the schedule is the host’s', () 
     expect(sent).toStrictEqual({ name: 'tick', data: {} })
   })
 })
+
+describe('the schedule options that are getters on a class prototype', () => {
+  /** A schedule with no own field but `own`, whose `name` is a getter on its class prototype. */
+  function scheduleWith(name: string, value: unknown, own: object): JobSchedulerRepeatOptions {
+    class Schedule {
+      constructor() {
+        Object.assign(this, own)
+      }
+    }
+    Object.defineProperty(Schedule.prototype, name, { get: () => value, configurable: true })
+    return new Schedule() as unknown as JobSchedulerRepeatOptions
+  }
+
+  it.each([
+    ['every', 1000, {}],
+    ['pattern', '* * * * *', {}],
+    ['endDate', new Date('2099-01-01T00:00:00Z'), { every: 1000 }],
+    ['startDate', new Date('2098-01-01T00:00:00Z'), { every: 1000 }],
+    ['limit', 5, { every: 1000 }],
+    ['immediately', true, { every: 1000 }],
+    ['tz', 'UTC', { pattern: '* * * * *' }],
+    ['key', 'k', { every: 1000 }],
+    ['count', 2, { every: 1000 }],
+    ['offset', 10, { every: 1000 }],
+    ['prevMillis', 5, { every: 1000 }],
+    ['jobId', 'j', { every: 1000 }],
+  ])('sends %s as the getter answers it', async (name, value, own) => {
+    await makeService().upsertJobScheduler('q', 'tick', scheduleWith(name, value, own))
+
+    const sent = (queues[0]?.upsertJobScheduler.mock.calls as unknown[][])[0]?.[1]
+    expect(sent).toHaveProperty([name], value)
+  })
+})
