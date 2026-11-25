@@ -13,6 +13,10 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ## [Unreleased]
 
+---
+
+## [1.2.28] — 2026-11-25
+
 ### Fixed
 
 - **A second copy of `reflect-metadata` loaded after the library is no longer refused.** The prototype guard compared every own key of `Reflect`, and `reflect-metadata` 0.2 defines its ten functions on `Reflect` again when a second copy loads, so a host with two copies was refused at module boot with `INVALID_OPTIONS`. For `Reflect` only the functions the language defines (`apply`, `construct`, `defineProperty`, `deleteProperty`, `get`, `getOwnPropertyDescriptor`, `getPrototypeOf`, `has`, `isExtensible`, `ownKeys`, `preventExtensions`, `set`, `setPrototypeOf`) and `Symbol.toStringTag` are compared; replacing any of them is still refused, and every other built-in is compared on all its keys as before.
@@ -1321,7 +1325,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.27...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.28...HEAD
+[1.2.28]: https://github.com/bymaxone/nest-queue/compare/v1.2.27...v1.2.28
 [1.2.27]: https://github.com/bymaxone/nest-queue/compare/v1.2.26...v1.2.27
 [1.2.26]: https://github.com/bymaxone/nest-queue/compare/v1.2.25...v1.2.26
 [1.2.25]: https://github.com/bymaxone/nest-queue/compare/v1.2.24...v1.2.25
