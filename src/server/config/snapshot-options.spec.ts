@@ -9,7 +9,7 @@
 import type { JobsOptions } from 'bullmq'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
 import { applyDefaults } from './resolved-options'
-import { snapshotJobOptions, snapshotOptions } from './snapshot-options'
+import { JOB_OPTION_KEYS, snapshotJobOptions, snapshotOptions } from './snapshot-options'
 import { validateOptions } from './validate-options'
 
 const connection = { url: 'redis://localhost:6379' }
@@ -192,15 +192,37 @@ describe('the options are read once', () => {
 })
 
 describe('a job option the host defined as a getter or a hidden field is not dropped', () => {
-  /** Every key BullMQ's `JobsOptions` has, which the copy must be able to read by name. */
+  /**
+   * Every key BullMQ's `JobsOptions` has, written out here and not read back from the table under
+   * test, so a key dropped from that table fails its own rows instead of shrinking the loop.
+   */
   const hidden: [string, unknown][] = [
-    ['deduplication', { id: 'once' }],
+    ['timestamp', 1_700_000_000_000],
+    ['priority', 3],
+    ['delay', 250],
+    ['attempts', 4],
+    ['backoff', { type: 'fixed', delay: 500 }],
     ['lifo', true],
+    ['removeOnComplete', { age: 60, count: 10 }],
+    ['removeOnFail', { age: 120, count: 20 }],
     ['keepLogs', 5],
     ['stackTraceLimit', 3],
+    ['sizeLimit', 1024],
+    ['repeatJobKey', 'repeat:key'],
+    ['jobId', 'job-1'],
+    ['parent', { id: 'parent-1', queue: 'bull:parent' }],
+    ['prevMillis', 1_700_000_000_500],
+    ['deduplication', { id: 'once' }],
     ['failParentOnFailure', true],
+    ['continueParentOnFailure', true],
+    ['ignoreDependencyOnFailure', true],
+    ['removeDependencyOnFailure', true],
     ['telemetry', { metadata: 'm' }],
   ]
+
+  it('names every key of the job option table', () => {
+    expect(hidden.map(([key]) => key).sort()).toEqual([...JOB_OPTION_KEYS].sort())
+  })
 
   it.each(hidden)('keeps %s defined as a getter on a class prototype', (key, value) => {
     class Options {
