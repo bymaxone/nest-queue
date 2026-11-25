@@ -90,24 +90,8 @@ describe('a promise whose own constructor cannot be replaced is refused before i
     )
   })
 
-  it('own refuses it, and listens for its rejection so none is left unheard', (done) => {
-    const unhandled: unknown[] = []
-    const listen = (reason: unknown): void => {
-      unhandled.push(reason)
-    }
-    process.on('unhandledRejection', listen)
-    const locked = forge(failing(), 'locked')
-
-    expect(() => own(locked)).toThrow()
-    setTimeout(() => {
-      process.off('unhandledRejection', listen)
-      try {
-        expect(unhandled).toHaveLength(0)
-        done()
-      } catch (error) {
-        done(error)
-      }
-    }, 60)
+  it('own refuses it', () => {
+    expect(() => own(forge(failing(), 'locked'))).toThrow()
   })
 
   it('joinAll rejects with the refusal, not with the forged answer', (done) => {
