@@ -6,6 +6,7 @@
 import type { JobsOptions, QueueOptions, Telemetry } from 'bullmq'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
 import type { QueueConnectionConfig } from '../interfaces/queue-connection.interface'
+import { descriptorOf } from './read-by-name'
 import { snapshotOptions } from './snapshot-options'
 import {
   DEFAULT_JOB_OPTIONS,
@@ -84,12 +85,16 @@ export function applyDefaults(given: BymaxQueueModuleOptions): Readonly<Resolved
   // as a non-enumerable accessor withholds it from `JSON.stringify`, object
   // spread and `util.inspect` — including `showHidden`, which still prints a
   // hidden data property. Reads are unchanged.
-  Object.defineProperty(base, 'connection', {
-    get: (): QueueConnectionConfig => connection,
-    enumerable: false,
-    // Stryker disable next-line BooleanLiteral: equivalent HERE — this object is `Object.freeze`d on the way out, and freezing makes every property non-configurable regardless. The flag stays because it states the guarantee at the point the accessor is defined, and because the sibling packages that withhold secrets the same way are NOT frozen, where it is load-bearing
-    configurable: false,
-  })
+  Object.defineProperty(
+    base,
+    'connection',
+    descriptorOf({
+      get: (): QueueConnectionConfig => connection,
+      enumerable: false,
+      // Stryker disable next-line BooleanLiteral: equivalent HERE — this object is `Object.freeze`d on the way out, and freezing makes every property non-configurable regardless. The flag stays because it states the guarantee at the point the accessor is defined, and because the sibling packages that withhold secrets the same way are NOT frozen, where it is load-bearing
+      configurable: false,
+    }),
+  )
 
   return Object.freeze(base) as Readonly<ResolvedQueueOptions>
 }

@@ -15,6 +15,20 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
+## [1.2.28] — 2026-11-25
+
+### Fixed
+
+- **A second copy of `reflect-metadata` loaded after the library is no longer refused.** The prototype guard compared every own key of `Reflect`, and `reflect-metadata` 0.2 defines its own functions on `Reflect` again when a second copy loads, so a host with two copies was refused at module boot with `INVALID_OPTIONS`. For `Reflect` only the keys the language defines are compared; replacing any of them is still refused, and every other built-in is compared on all its keys as before.
+- **A `get` or a `set` planted on `Object.prototype` no longer makes `forRoot` throw a raw `TypeError`; the boot refuses it with `INVALID_OPTIONS`.** `Object.defineProperty` reads those names off a descriptor through the prototype chain, so the property definitions of the options snapshot, the resolved options and the host-error `cause` threw `Invalid property descriptor` while one was planted. Their descriptors now have no prototype: `forRoot` returns the module, and the module's boot is refused with the library's own `queue.invalid_options` like any other planted key. The promise the bounded wait awaits takes its own `constructor` through a descriptor with no prototype as well, so a `get` or `set` planted on `Object.prototype` is not read into that definition.
+- **The declared type of `BymaxQueueModule` carries its documentation again.** Its JSDoc block, with the two registration examples, was dropped from the declarations in 1.2.27.
+
+### Changed
+
+- **The main entry bundle is larger.** The builder of the descriptors with no prototype and the `Reflect` baseline are new runtime code, so the size budget of the main entry was raised to fit it. The declarations change only in comments (the `BymaxQueueModule` JSDoc), not in a type, an export or a signature.
+
+---
+
 ## [1.2.27] — 2026-11-20
 
 Against 1.2.26 the declared types gain `ConnectionResolver.ping`, whose return type is not exported by name (see the note below); the runtime of the main entry changes.
@@ -1310,7 +1324,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.27...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.28...HEAD
+[1.2.28]: https://github.com/bymaxone/nest-queue/compare/v1.2.27...v1.2.28
 [1.2.27]: https://github.com/bymaxone/nest-queue/compare/v1.2.26...v1.2.27
 [1.2.26]: https://github.com/bymaxone/nest-queue/compare/v1.2.25...v1.2.26
 [1.2.25]: https://github.com/bymaxone/nest-queue/compare/v1.2.24...v1.2.25

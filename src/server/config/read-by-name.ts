@@ -8,6 +8,18 @@
  */
 
 /**
+ * A property descriptor that has no prototype. `Object.defineProperty` reads `get`, `set`, `value` and
+ * the flags off its descriptor through the whole chain, so a literal throws a raw `TypeError` while a
+ * `get` or a `set` is planted on `Object.prototype`; one with no prototype never meets them.
+ *
+ * @param fields - The fields of the descriptor.
+ * @returns The same fields on an object with no prototype.
+ */
+export function descriptorOf(fields: PropertyDescriptor): PropertyDescriptor {
+  return Object.assign(Object.create(null) as PropertyDescriptor, fields)
+}
+
+/**
  * Whether `level` ends the chain of `source` without being `source`: a prototype of no prototype is
  * taken for the realm's root, and none of its properties is read to confirm it, because the root's
  * `constructor` is exactly what a polluted root can answer for. A host-built ancestor with no
@@ -52,12 +64,7 @@ export function copyFields<T>(source: T): T {
   for (let level: object | null = source; level !== null && !isChainEnd(level, source);) {
     for (const key of Reflect.ownKeys(level)) {
       if (key === 'constructor' || Object.hasOwn(copy, key)) continue
-      Object.defineProperty(copy, key, {
-        value: Reflect.get(source, key),
-        enumerable: true,
-        writable: true,
-        configurable: true,
-      })
+      defineOwn(copy, key, Reflect.get(source, key))
     }
     level = Reflect.getPrototypeOf(level)
   }
@@ -73,12 +80,11 @@ export function copyFields<T>(source: T): T {
  * @param value - The value.
  */
 export function defineOwn(target: object, name: PropertyKey, value: unknown): void {
-  Object.defineProperty(target, name, {
-    value,
-    enumerable: true,
-    writable: true,
-    configurable: true,
-  })
+  Object.defineProperty(
+    target,
+    name,
+    descriptorOf({ value, enumerable: true, writable: true, configurable: true }),
+  )
 }
 
 /**

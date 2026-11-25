@@ -32,16 +32,18 @@ const thenOf = Object.getOwnPropertyDescriptor(NativePromise.prototype, 'then')?
  * Give a native promise an own `constructor` that is the intrinsic one, so that an `await` of it
  * takes the path for a promise of its own kind and reads neither `Promise.prototype.constructor`
  * nor a species from anywhere a host could have replaced. The property is neither writable nor
- * configurable, so a host that holds the promise cannot swap it back. Left as it is when the promise
+ * configurable, so a host that holds the promise cannot swap it back. The descriptor has no prototype, so
+ * a `get` or a `set` planted on `Object.prototype` is not read off it. Left as it is when the promise
  * cannot take the property (a frozen one): the await then reads the prototype, which the guard checks.
  */
 function ownConstructor(promise: Promise<unknown>): void {
   try {
     void define(promise, 'constructor', {
+      __proto__: null,
       value: NativePromise,
       configurable: false,
       writable: false,
-    })
+    } as PropertyDescriptor)
   } catch {
     // A promise that cannot take the property keeps reading the one on its prototype.
   }

@@ -9,6 +9,7 @@
 import { HttpStatus } from '@nestjs/common'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { QueueException } from '../errors/queue-exception'
+import { descriptorOf } from './read-by-name'
 
 /** A refusal of a module option. */
 export function invalidOptions(what: string): QueueException {
@@ -49,7 +50,11 @@ export function guarded<T>(
     return read()
   } catch (cause) {
     const refusal = refuse(what)
-    Object.defineProperty(refusal, 'cause', { value: cause, configurable: true, writable: true })
+    Object.defineProperty(
+      refusal,
+      'cause',
+      descriptorOf({ value: cause, configurable: true, writable: true }),
+    )
     throw refusal
   }
 }

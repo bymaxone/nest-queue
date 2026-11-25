@@ -109,6 +109,18 @@ function asyncOptionsProvider(): Provider {
   }
 }
 
+/**
+ * Root module for the queue library. Use `forRoot` for synchronous registration
+ * or `forRootAsync` when the options depend on other modules.
+ *
+ * @example Synchronous
+ * BymaxQueueModule.forRoot({ connection: { url: 'redis://localhost:6379' } })
+ * @example Asynchronous (Mode A — bring your own client)
+ * BymaxQueueModule.forRootAsync({
+ *   inject: [REDIS_CLIENT],
+ *   useFactory: (client: Redis) => ({ connection: { client } }),
+ * })
+ */
 @Module({})
 export class BymaxQueueModule extends ConfigurableModuleClass {
   /**

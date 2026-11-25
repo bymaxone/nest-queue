@@ -247,20 +247,51 @@ function addOwner(owners: object[], owner: object): void {
   owners[owners.length] = owner
 }
 
-/** Every own property of each owner, with the descriptor it has now. */
+/** `Reflect` as it was when this module loaded: the one built-in whose own keys are not all the language's. */
+const languageReflect = Reflect
+
+/**
+ * What the language puts on `Reflect`. A `reflect-metadata` copy loaded later defines its own functions on
+ * `Reflect` again, which is a legitimate host setup and not a replaced built-in, so only these keys are
+ * baselined for it.
+ */
+const REFLECT_KEYS: readonly PropertyKey[] = [
+  'apply',
+  'construct',
+  'defineProperty',
+  'deleteProperty',
+  'get',
+  'getOwnPropertyDescriptor',
+  'getPrototypeOf',
+  'has',
+  'isExtensible',
+  'ownKeys',
+  'preventExtensions',
+  'set',
+  'setPrototypeOf',
+  Symbol.toStringTag,
+]
+
+/** The keys of `owner` the baseline covers: every own key, except on `Reflect`, where only the language's. */
+function baselinedKeys(owner: object): readonly PropertyKey[] {
+  return owner === languageReflect ? REFLECT_KEYS : ownKeys(owner)
+}
+
+/** Every baselined property of each owner, with the descriptor it has now. */
 function describeOwners(owners: readonly object[]): BaselineEntry[] {
   const entries: BaselineEntry[] = []
   let position = 0
   while (position < owners.length) {
     const owner = at(owners, position)
-    const keys = ownKeys(owner)
+    const keys = baselinedKeys(owner)
     let keyPosition = 0
     while (keyPosition < keys.length) {
       const key = at(keys, keyPosition)
-      entries[entries.length] = {
-        owner,
-        key,
-        was: copyFields(getOwnPropertyDescriptor(owner, key) as unknown as PropertyDescriptor),
+      const descriptor = getOwnPropertyDescriptor(owner, key)
+      // A function the language defines on `Reflect` that a host removed before this module loaded has
+      // nothing to compare against, as an own key that was never there never did.
+      if (descriptor !== undefined) {
+        entries[entries.length] = { owner, key, was: copyFields(descriptor) }
       }
       keyPosition += 1
     }

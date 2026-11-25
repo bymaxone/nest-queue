@@ -8,7 +8,7 @@
  * @layer server/connection
  */
 
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { assertPrototypeClean } from './prototype-guard'
 
@@ -338,42 +338,41 @@ function argumentsOf(code: string, open: number): string[] {
  * How many times a source hands `defineProperty` a descriptor that is not a bare name. The built-in
  * reads `get` and `set` off a descriptor through its prototype chain, so a literal throws, or defines an
  * accessor, while either name is planted on `Object.prototype`; a parenthesized literal, a call that
- * returns one and a spread are all that, and only a name can be built with no prototype.
+ * returns one and a spread are all that. Only a name, or `descriptorOf`, which builds the descriptor
+ * with no prototype, is exempt.
  */
 function descriptorLiterals(source: string): number {
   const code = strip(source)
   let count = 0
-  for (const match of code.matchAll(/defineProperty\s*\(/g)) {
+  for (const match of code.matchAll(/(?<![\w$])(?:defineProperty|define)\s*\(/g)) {
     const descriptor = argumentsOf(code, match.index + match[0].length - 1)[2] ?? ''
-    if (!/^[A-Za-z_$][\w$]*$/.test(descriptor)) count += 1
+    const inert =
+      /^descriptorOf\s*\(/.test(descriptor) || /^\{\s*__proto__\s*:\s*null\s*,/.test(descriptor)
+    if (!/^[A-Za-z_$][\w$]*$/.test(descriptor) && !inert) count += 1
   }
   return count
 }
 
-/**
- * The descriptor literals each protected source may keep, with why. Every one runs while the guard has
- * passed, or on a host's own object; where it does not, the descriptor has no prototype.
- */
-const EXEMPT_DESCRIPTORS: Record<string, { count: number; reason: string }> = {
-  'config/read-by-name.ts': {
-    count: 2,
-    reason: 'copies host options at setup, after the guard has passed; a planted get fails closed',
-  },
-  'config/snapshot-options.ts': {
-    count: 1,
-    reason: 'copies host options at setup, after the guard has passed; a planted get fails closed',
-  },
-  'config/guarded-read.ts': {
-    count: 1,
-    reason: 'attaches the cause to a refusal that is thrown anyway; a planted get replaces it',
-  },
-}
+/** The descriptor literals each protected source may keep, with why: none, every one goes through `descriptorOf`. */
+const EXEMPT_DESCRIPTORS: Record<string, { count: number; reason: string }> = {}
 
 describe('descriptors in the protected paths', () => {
   it.each(PATHS)('%s writes no descriptor literal it has not excused', (path) => {
     const found = descriptorLiterals(readFileSync(join(ROOT, path), 'utf8'))
 
     expect(found).toBe(EXEMPT_DESCRIPTORS[path]?.count ?? 0)
+  })
+
+  it('finds no descriptor literal in any source the library ships, whether or not it is a protected path', () => {
+    const sources = readdirSync(ROOT, { recursive: true, encoding: 'utf8' }).filter(
+      (file) => file.endsWith('.ts') && !file.endsWith('.spec.ts') && !file.endsWith('.d.ts'),
+    )
+    const literals = sources.filter(
+      (file) => descriptorLiterals(readFileSync(join(ROOT, file), 'utf8')) > 0,
+    )
+
+    expect(sources.length).toBeGreaterThan(20)
+    expect(literals).toEqual([])
   })
 
   it('has a reason for every excused descriptor', () => {
@@ -391,6 +390,22 @@ describe('descriptors in the protected paths', () => {
     expect(descriptorLiterals('defineProperty(options, pick(key, 1), { value: 1 })')).toBe(1)
     expect(descriptorLiterals('defineProperty(options, key, { ...base, value: 1 })')).toBe(1)
     expect(descriptorLiterals('defineProperty(options, key, make(key))')).toBe(1)
+    expect(descriptorLiterals('defineProperty(options, key, descriptorOf({ value: 1 }))')).toBe(0)
+    expect(descriptorLiterals('defineProperty(options, key, descriptorOf\n({ get }))')).toBe(0)
+    expect(descriptorLiterals('defineProperty(options, key, notDescriptorOf({ value: 1 }))')).toBe(
+      1,
+    )
+    expect(
+      descriptorLiterals('defineProperty(options, key, { ...descriptorOf({}), value: 1 })'),
+    ).toBe(1)
+    expect(descriptorLiterals("define(promise, 'constructor', { value: 1 })")).toBe(1)
+    expect(
+      descriptorLiterals("define(promise, 'constructor', { __proto__: null, value: 1 })"),
+    ).toBe(0)
+    expect(
+      descriptorLiterals("define(promise, 'constructor', { value: 1, __proto__: null })"),
+    ).toBe(1)
+    expect(descriptorLiterals("redefine(promise, 'constructor', { value: 1 })")).toBe(0)
   })
 })
 

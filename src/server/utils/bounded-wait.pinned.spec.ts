@@ -176,6 +176,25 @@ describe('the constructor an owned promise takes is the intrinsic one and cannot
     expect(Object.getOwnPropertyDescriptor(promise, 'constructor')).toEqual(locked)
   })
 
+  it.each(['get', 'set'] as const)(
+    'own takes the intrinsic constructor while %s is planted on the root prototype',
+    (name) => {
+      const promise = NativePromise.resolve('x')
+      Object.defineProperty(Object.prototype, name, {
+        value: () => 'planted',
+        configurable: true,
+        writable: true,
+      })
+      try {
+        void own(promise)
+      } finally {
+        Reflect.deleteProperty(Object.prototype, name)
+      }
+
+      expect(Object.getOwnPropertyDescriptor(promise, 'constructor')).toEqual(locked)
+    },
+  )
+
   it('startWait locks the constructor of the verdict it hands back', (done) => {
     const wait = startWait(NativePromise.resolve('x'), 1000)
 
