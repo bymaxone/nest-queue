@@ -1,6 +1,6 @@
 /**
- * @fileoverview Discovery registers a `@Processor` only for an instance of the class, whatever a
- * provider value says its `constructor` is.
+ * @fileoverview Discovery registers a `@Processor` only for a value with the class's prototype in
+ * its chain, whatever the value says its `constructor` is.
  * @layer server/services
  */
 

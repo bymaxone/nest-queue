@@ -94,7 +94,7 @@ export class ProcessorDiscoveryService implements OnModuleInit {
 
       const processorMeta = Reflect.getOwnMetadata(PROCESSOR_METADATA_KEY, ctor) as
         ProcessorMetadata | undefined
-      // A value can carry a `constructor` of its own naming a processor class it is no instance of.
+      // A value can carry a `constructor` of its own naming a class whose prototype it lacks.
       // The chain is asked, not `instanceof`, which the class can answer through `Symbol.hasInstance`.
       // Asked only once the metadata is found: an arrow function has no prototype to ask.
       if (!processorMeta || !Object.prototype.isPrototypeOf.call(ctor.prototype, instance)) continue

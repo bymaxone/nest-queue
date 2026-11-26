@@ -21,7 +21,7 @@ Against 1.2.29 the declarations are unchanged; the runtime of the main entry cha
 
 ### Fixed
 
-- A provider value that is not an instance of a `@Processor` class is no longer registered as that processor because its `constructor` property names the class. Beside a real instance of the class, such a value failed the bootstrap with `DUPLICATE_PROCESSOR`.
+- A provider value without a `@Processor` class's prototype in its chain is no longer registered as that processor because its `constructor` property names the class. Beside a real instance of the class, such a value failed the bootstrap with `DUPLICATE_PROCESSOR`.
 
 ### Changed
 
@@ -30,7 +30,7 @@ Against 1.2.29 the declarations are unchanged; the runtime of the main entry cha
 
 #### Apply to a derived backend
 
-- A host that registered a processor through a value that is not an instance of the class, such as a hand-built `{ constructor: EmailProcessor, ... }` in a `useValue` provider, gets no worker for it now, and nothing is logged. Provide the class or an instance of it, or register the worker with `WorkerRegistry.register()`.
+- A host that registered a processor through a value without the class's prototype in its chain, such as a hand-built `{ constructor: EmailProcessor, ... }` in a `useValue` provider, gets no worker for it now, and nothing is logged. Provide the class or an instance of it, or register the worker with `WorkerRegistry.register()`.
 
 ---
 

@@ -342,7 +342,7 @@ Marks a class as a worker bound to `queueName`. The class must be an `@Injectabl
 
 Discovery finds a processor by the `constructor` of each provider instance and registers it only when the class's prototype is in the provider's prototype chain: a `useValue` value without it is ignored, even when its `constructor` property names a `@Processor` class.
 
-Known limit: the same instance reached through several tokens, such as a `useExisting` alias, is one processor. A provider whose factory returns a wrapper object without the `@Processor` class's prototype in its chain is not registered, and nothing is logged, because only its prototype chain says which class it stands for; provide the class itself, or register the worker with `WorkerRegistry.register()`.
+Known limit: the same instance reached through several tokens, such as a `useExisting` alias, is one processor. A provider whose factory returns a wrapper object without the `@Processor` class's prototype in its chain is not registered, and nothing is logged, because its `constructor` property alone does not say which class it stands for; provide the class itself, or register the worker with `WorkerRegistry.register()`.
 
 ### `@Process(jobName?)`
 
