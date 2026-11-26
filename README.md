@@ -601,8 +601,7 @@ measured with a 3 s lock.
 
 Known limit: a sandboxed processor still loading its file when the drain budget ends keeps the
 host process alive, because BullMQ does not signal that child or thread. Use a drain budget longer
-than the processor takes to load, and keep the process manager's own stop timeout. Measured with
-this release, not with 1.2.29.
+than the processor takes to load, and keep the process manager's own stop timeout.
 
 **Handlers must be idempotent.** Use `jobId`, `deduplication`, or application-level
 idempotency keys to guard against reprocessing a job that was partially handled before

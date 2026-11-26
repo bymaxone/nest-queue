@@ -26,7 +26,7 @@ Against 1.2.29 the declarations gain one optional worker option; the runtime of 
 ### Fixed
 
 - A provider value without a `@Processor` class's prototype in its chain is no longer registered as that processor because its `constructor` property names the class. Beside a real instance of the class, such a value failed the bootstrap with `DUPLICATE_PROCESSOR`.
-- A sandboxed (file-based) job that is still running when the shutdown stops its worker has its outcome dropped, and the job is left to stall and be run again. Measured before the fix with `redis:7` and BullMQ 6.3.4: a job that succeeded afterwards kept the host process alive, and a job in a worker thread was recorded as failed. The README's shutdown section states what BullMQ does with the child process.
+- A sandboxed (file-based) job that is still running when the shutdown stops its worker has its outcome dropped, and the job is left to stall and be run again. Measured before the fix with `redis:7` and BullMQ 6.3.4: a job that succeeded afterwards kept the host process alive, and a job in a worker thread was recorded as failed. The README's shutdown section states what BullMQ does with the child process. A processor still loading its file when the drain budget ends keeps the host process alive; that was measured with this release and not with 1.2.29.
 
 ### Changed
 
