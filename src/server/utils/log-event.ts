@@ -163,11 +163,11 @@ export function deferredJobReport(
   now: () => number = monotonic,
 ): () => void {
   let deferred = 0
-  let reportedAt: number | undefined
+  let reportedAt = -Infinity
   return () => {
     deferred += 1
     const at = now()
-    if (reportedAt !== undefined && at - reportedAt < REPORT_INTERVAL_MS) return
+    if (at - reportedAt < REPORT_INTERVAL_MS) return
     writeLog(
       logger,
       'warn',
