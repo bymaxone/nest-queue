@@ -86,15 +86,21 @@ describe('reportFailedMove', () => {
     expect(reported).toEqual(['failed'])
   })
 
-  it('reports failed when the move throws before it answers a promise', async () => {
-    const unknown = new Error('Unknown backoff strategy mine')
-    const { run, reported } = hooked(() => {
-      throw unknown
+  it('hands back the promise of the move itself, so BullMQ waits for the move and nothing else', () => {
+    const moving = Promise.resolve(undefined)
+    const { run } = hooked(() => moving)
+
+    expect(run()).toBe(moving)
+  })
+
+  it('leaves no rejection unheard when the report throws', async () => {
+    const job = { moveToFailed: requeue } as unknown as Job
+    reportFailedMove(job, () => {
+      throw new Error('the report failed')
     })
 
-    await expect(run()).rejects.toBe(unknown)
-
-    expect(reported).toEqual(['failed'])
+    await expect(job.moveToFailed(new Error('boom'), 'token')).resolves.toBeUndefined()
+    await new Promise((resolve) => setImmediate(resolve))
   })
 
   it.each([

@@ -194,4 +194,37 @@ describe('WorkerRegistry — observed attempts', () => {
 
     expect(finished).toMatchObject([{ queue: 'email', outcome: 'failed' }])
   })
+
+  it('leaves the move to BullMQ and says retried when a planted key is still there as the job moves', async () => {
+    const observers = new QueueObserverRegistry()
+    const finished: JobFinishedEvent[] = []
+    observers.register({ jobFinished: (event) => finished.push(event) })
+    const processor = registered(() => {
+      ;(Object.prototype as Record<string, unknown>).zzPlantedAcrossTheMove = 1
+      return Promise.reject(new Error('the handler failed'))
+    }, observers)
+    const next = ['the next job']
+    let moved = false
+    const job = Object.assign(jobWith(undefined, 0, 2), {
+      moveToFailed: async (): Promise<unknown> => {
+        await new Promise<void>((resolve) => setTimeout(resolve, 10))
+        moved = true
+        return next
+      },
+    }) as unknown as Job
+    let result: unknown
+    let movedWhenAnswered: boolean | undefined
+
+    try {
+      await expect(processor(job)).rejects.toBeInstanceOf(QueueException)
+      result = await job.moveToFailed(new Error('x'), 'token')
+      movedWhenAnswered = moved
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'zzPlantedAcrossTheMove')
+    }
+
+    expect(movedWhenAnswered).toBe(true)
+    expect(result).toBe(next)
+    expect(finished).toMatchObject([{ queue: 'email', outcome: 'retried' }])
+  })
 })

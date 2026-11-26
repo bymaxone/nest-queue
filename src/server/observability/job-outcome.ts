@@ -10,7 +10,7 @@
 
 import type { Job, JobsOptions } from 'bullmq'
 import { memberOf } from '../../shared/hand-back'
-import { own, outcomeOf } from '../utils/bounded-wait'
+import { hear, outcomeOf } from '../utils/bounded-wait'
 import type { JobOutcome } from './queue-observer'
 
 /**
@@ -38,8 +38,28 @@ function isConnectionError(error: unknown): boolean {
 }
 
 /**
+ * Wait for a move BullMQ already started, and say how it went. The library's prototype guard does not
+ * run here: the move is running, so a refusal could only report an outcome it has not had yet. The
+ * promise was given the intrinsic `constructor`, so awaiting it reads nothing a host can replace.
+ */
+async function readMove(
+  moving: Promise<unknown>,
+  job: Job,
+  report: (outcome: JobOutcome) => void,
+): Promise<void> {
+  try {
+    await moving
+  } catch (error) {
+    if (!isConnectionError(error)) report('failed')
+    return
+  }
+  report(job.finishedOn === undefined ? 'retried' : 'failed')
+}
+
+/**
  * Report how BullMQ moves a job whose attempt threw. Call it before the error reaches BullMQ: it
- * gives this job object its own `moveToFailed`, which runs BullMQ's and reads what it did.
+ * gives this job object its own `moveToFailed`, which hands back the promise of BullMQ's move as it
+ * is and reads what that move did.
  *
  * @param job - The job, as the processor received it, which BullMQ then moves.
  * @param report - Called at most once: `retried` when the move leaves the job unfinished, to be run
@@ -54,13 +74,11 @@ export function reportFailedMove(job: Job, report: (outcome: JobOutcome) => void
     reported = true
     report(outcome)
   }
-  job.moveToFailed = async (...args) => {
-    const moved = await own(outcomeOf(() => Reflect.apply(move, job, args)))
-    if (moved.state === 'failed') {
-      if (!isConnectionError(moved.v)) once('failed')
-      throw moved.v
-    }
-    once(job.finishedOn === undefined ? 'retried' : 'failed')
-    return moved.v
+  job.moveToFailed = (...args) => {
+    const moving = Reflect.apply(move, job, args)
+    // Listened to before BullMQ is, so the observers hear the outcome before BullMQ acts on it.
+    hear(moving)
+    void outcomeOf(() => readMove(moving, job, once))
+    return moving
   }
 }
