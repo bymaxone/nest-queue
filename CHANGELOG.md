@@ -34,7 +34,7 @@ Against 1.2.29 the declarations gain one optional worker option; the runtime of 
 
 #### Apply to a derived backend
 
-- The declarations add the optional `WorkerOptions.maxStalledCount`; nothing existing has to change. Plain JavaScript that already passed a `maxStalledCount` in the worker `options` had it ignored; it now reaches BullMQ, and a value that is not a whole number of `0` or more refuses the registration with `WORKER_REGISTRATION_FAILED`.
+- The declarations add the optional `WorkerOptions.maxStalledCount`; nothing existing has to change. A host that already passed a `maxStalledCount` in the worker `options` had it ignored; it now reaches BullMQ, and a value that is not a whole number of `0` or more refuses the registration with `WORKER_REGISTRATION_FAILED`.
 - A host that registered a processor through a value without the class's prototype in its chain, such as a hand-built `{ constructor: EmailProcessor, ... }` in a `useValue` provider, gets no worker for it now, and nothing is logged. Provide the class or an instance of it, or register the worker with `WorkerRegistry.register()`.
 
 ---
