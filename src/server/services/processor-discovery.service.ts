@@ -94,7 +94,9 @@ export class ProcessorDiscoveryService implements OnModuleInit {
 
       const processorMeta = Reflect.getOwnMetadata(PROCESSOR_METADATA_KEY, ctor) as
         ProcessorMetadata | undefined
-      if (!processorMeta) continue
+      // A value can carry a `constructor` of its own naming a processor class it is no instance of.
+      // Tested only once the metadata is found: `instanceof` throws for a function with no prototype.
+      if (!processorMeta || !(instance instanceof ctor)) continue
 
       // Nest keeps one wrapper per token, so a `useExisting` alias lists the same instance again: one
       // object is one processor however many tokens name it. Two instances of one queue still refuse.

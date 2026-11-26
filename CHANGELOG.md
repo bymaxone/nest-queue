@@ -19,9 +19,18 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 Against 1.2.29 the declarations are unchanged; the runtime of the main entry changes.
 
+### Fixed
+
+- A provider value that is not an instance of a `@Processor` class is no longer registered as that processor because its `constructor` property names the class. Beside a real instance of the class, such a value failed the bootstrap with `DUPLICATE_PROCESSOR`.
+
 ### Changed
 
-- **The main entry bundle changes**, with nothing a caller can observe: one internal function takes its extra option names as separate arguments. The declarations are unchanged and no size budget moves.
+- One internal function takes its extra option names as separate arguments, with nothing a caller can observe.
+- The declarations are unchanged and no size budget moves.
+
+#### Apply to a derived backend
+
+- A host that registered a processor through a value that is not an instance of the class, such as a hand-built `{ constructor: EmailProcessor, ... }` in a `useValue` provider, gets no worker for it now, and nothing is logged. Provide the class or an instance of it, or register the worker with `WorkerRegistry.register()`.
 
 ---
 
