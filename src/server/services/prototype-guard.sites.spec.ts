@@ -6,6 +6,7 @@
  * @layer server/services
  */
 
+import { Logger } from '@nestjs/common'
 import { DelayedError } from 'bullmq'
 import { EventEmitter } from 'node:events'
 import type { FlowJob, Job } from 'bullmq'
@@ -337,6 +338,25 @@ describe('the processor the worker registry gives BullMQ', () => {
       fieldsToUpdate: undefined,
     })
     expect(handler).not.toHaveBeenCalled()
+  })
+
+  // A refused job is neither failed nor measured, so without this line a worker under a polluted
+  // prototype moves its jobs back for as long as it lasts and nothing says so.
+  it('logs a deferred job with its queue, and nothing of the job', async () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+    const processor = registered(jest.fn())
+
+    await planted(() =>
+      processor(jobWith(jest.fn().mockResolvedValue(undefined)), 'token').catch((e: unknown) => e),
+    )
+
+    expect(warn).toHaveBeenCalledWith({
+      event: 'QUEUE_JOB_DEFERRED_GUARD_REFUSED',
+      message: 'The prototype guard refused before a job ran; it went back to the delayed set',
+      queue: 'q',
+      deferred: 1,
+    })
+    warn.mockRestore()
   })
 
   it('has shadowed the options of a refused job, repeat and removeOnFail included, when it is moved', async () => {

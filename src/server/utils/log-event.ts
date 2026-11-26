@@ -39,6 +39,8 @@ export const QUEUE_LOG_EVENTS = {
   UNBOUNDED_RETRIES: 'QUEUE_UNBOUNDED_RETRIES',
   /** The prototype guard refused where the library could not throw, so it failed closed. */
   GUARD_REFUSED: 'QUEUE_GUARD_REFUSED',
+  /** The guard refused before a job ran, so the job went back to the delayed set. */
+  JOB_DEFERRED_GUARD_REFUSED: 'QUEUE_JOB_DEFERRED_GUARD_REFUSED',
 } as const
 
 /** A code of {@link QUEUE_LOG_EVENTS}. */
@@ -132,4 +134,50 @@ export function reportRefusal(logger: EventLogger, err: unknown, site: string): 
       site,
     }),
   )
+}
+
+/** How long after a line the next one of the same worker waits. */
+const REPORT_INTERVAL_MS = 60_000
+
+// Taken when the module is loaded: the report runs while the guard is refusing. The clock is
+// monotonic, so a change of the wall clock does not silence the line.
+const monotonic = performance.now.bind(performance)
+
+/**
+ * Build the report of one worker's deferred jobs. The first deferred job is logged at once; the ones
+ * deferred in the minute after a line are counted and carried by the line of the first job deferred
+ * after that minute. No timer is armed, so the count of a last burst that nothing follows is not
+ * written.
+ *
+ * @param logger - Where the line is written.
+ * @param queue - The queue of the worker.
+ * @param now - The clock, in milliseconds.
+ * @returns Call it once for each job moved to the delayed set.
+ * @example
+ * const deferred = deferredJobReport(logger, 'email')
+ * deferred()
+ */
+export function deferredJobReport(
+  logger: Pick<Logger, 'log' | 'warn' | 'error'>,
+  queue: string,
+  now: () => number = monotonic,
+): () => void {
+  let deferred = 0
+  let reportedAt: number | undefined
+  return () => {
+    deferred += 1
+    const at = now()
+    if (reportedAt !== undefined && at - reportedAt < REPORT_INTERVAL_MS) return
+    writeLog(
+      logger,
+      'warn',
+      logEvent(
+        QUEUE_LOG_EVENTS.JOB_DEFERRED_GUARD_REFUSED,
+        'The prototype guard refused before a job ran; it went back to the delayed set',
+        { queue, deferred },
+      ),
+    )
+    reportedAt = at
+    deferred = 0
+  }
 }

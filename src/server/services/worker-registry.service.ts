@@ -28,7 +28,7 @@ import { workerOptionProblem } from '../utils/worker-option-problem'
 import { readWorkerConfig, snapshotWorkerOptions } from '../utils/snapshot-worker-options'
 import { isAbandoned } from '../utils/abandoned-workers'
 import { dropSandboxOutcomeOnceAbandoned } from '../utils/drop-sandbox-outcome'
-import { logEvent, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
+import { logEvent, QUEUE_LOG_EVENTS, writeLog, deferredJobReport } from '../utils/log-event'
 import type { WorkerOptions } from '../interfaces/worker-options.interface'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
@@ -166,6 +166,7 @@ export class WorkerRegistry {
           handler,
           options?.jobTimeoutMs,
           () => isAbandoned(worker),
+          deferredJobReport(this.logger, queueName),
           this.observers === undefined ? undefined : { registry: this.observers, queue: queueName },
         ),
         bullOpts,
@@ -569,6 +570,7 @@ const REFUSED_JOB_DELAY_MS = 5000
 async function deferRefusedJob<TData, TResult>(
   job: Job<TData, TResult>,
   token: string | undefined,
+  report: () => void,
 ): Promise<never> {
   // BullMQ's own `Job.moveToDelayed` hands the backend an options literal that inherits from
   // `Object.prototype`, where a planted `fetchNext` would pull another job to active and a planted
@@ -581,6 +583,7 @@ async function deferRefusedJob<TData, TResult>(
   options.fieldsToUpdate = undefined
   const backend = (job as unknown as { backend: DelayBackend }).backend
   await ownPromise(backend.moveToDelayed(job.id, now, REFUSED_JOB_DELAY_MS, token, options))
+  report()
   throw new DelayedError()
 }
 
@@ -606,6 +609,7 @@ function toProcessor<TData, TResult>(
   handler: (job: Job<TData, TResult>, signal?: AbortSignal) => Promise<TResult>,
   timeoutMs: number | undefined,
   abandoned: () => boolean,
+  deferred: () => void,
   observe?: { registry: QueueObserverRegistry; queue: string },
 ): (job: Job<TData, TResult>, token?: string, signal?: AbortSignal) => Promise<TResult> {
   const adapted = adaptHandler(handler, timeoutMs)
@@ -629,7 +633,7 @@ function toProcessor<TData, TResult>(
     try {
       assertPrototypeClean()
     } catch {
-      return ownPromise(deferRefusedJob(job, token))
+      return ownPromise(deferRefusedJob(job, token, deferred))
     }
     return ownPromise(relayOutcome(() => run(job, token, signal), assertPrototypeClean, abandoned))
   }
