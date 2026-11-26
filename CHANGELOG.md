@@ -25,7 +25,7 @@ Against 1.2.29 the declarations are unchanged; the runtime of the main entry cha
 
 ### Changed
 
-- One internal function takes its extra option names as separate arguments, with nothing a caller can observe.
+- An internal function takes its extra option names as separate arguments, with nothing a caller can observe.
 - The declarations are unchanged and no size budget moves.
 
 #### Apply to a derived backend

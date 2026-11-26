@@ -95,15 +95,16 @@ export class ProcessorDiscoveryService implements OnModuleInit {
       const processorMeta = Reflect.getOwnMetadata(PROCESSOR_METADATA_KEY, ctor) as
         ProcessorMetadata | undefined
       // A value can carry a `constructor` of its own naming a processor class it is no instance of.
-      // Tested only once the metadata is found: `instanceof` throws for a function with no prototype.
-      if (!processorMeta || !(instance instanceof ctor)) continue
+      // The chain is asked, not `instanceof`, which the class can answer through `Symbol.hasInstance`.
+      // Asked only once the metadata is found: an arrow function has no prototype to ask.
+      if (!processorMeta || !Object.prototype.isPrototypeOf.call(ctor.prototype, instance)) continue
 
       // Nest keeps one wrapper per token, so a `useExisting` alias lists the same instance again: one
       // object is one processor however many tokens name it. Two instances of one queue still refuse.
       if (wired.has(instance)) continue
       wired.add(instance)
 
-      this.wireProcessor(instance as Record<string | symbol, unknown>, processorMeta)
+      this.wireProcessor(instance as Record<string | symbol, unknown>, ctor, processorMeta)
     }
   }
 
@@ -153,14 +154,15 @@ export class ProcessorDiscoveryService implements OnModuleInit {
    * Worker, bind worker-local and queue-global event listeners.
    *
    * @param instance - The resolved provider instance.
+   * @param ctor - The class the instance was found to be.
    * @param processorMeta - Metadata written by `@Processor`.
    */
   private wireProcessor(
     instance: Record<string | symbol, unknown>,
+    ctor: object,
     processorMeta: ProcessorMetadata,
   ): void {
     const { queueName, workerOptions } = processorMeta
-    const ctor = (instance as WithConstructor).constructor
     this.claimQueue(processorMeta)
 
     const handlers = (Reflect.getOwnMetadata(PROCESS_HANDLERS_METADATA_KEY, ctor) ??

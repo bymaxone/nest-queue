@@ -5,11 +5,12 @@
  */
 
 import 'reflect-metadata'
-import type { DiscoveryService } from '@nestjs/core'
+import { DiscoveryModule, type DiscoveryService } from '@nestjs/core'
+import { Test } from '@nestjs/testing'
 import type { Job } from 'bullmq'
 import { ProcessorDiscoveryService } from './processor-discovery.service'
-import type { WorkerRegistry } from './worker-registry.service'
-import type { QueueEventsRegistry } from './queue-events-registry.service'
+import { WorkerRegistry } from './worker-registry.service'
+import { QueueEventsRegistry } from './queue-events-registry.service'
 import { Processor } from '../decorators/processor.decorator'
 import { Process } from '../decorators/process.decorator'
 
@@ -49,8 +50,44 @@ describe('ProcessorDiscoveryService — a value naming a @Processor class as its
     expect(discover(built)).toHaveBeenCalledTimes(1)
   })
 
+  it('is not claimed by a class whose Symbol.hasInstance answers true', () => {
+    @Processor('claims', { concurrency: 1 })
+    class Claims {
+      static [Symbol.hasInstance](): boolean {
+        return true
+      }
+    }
+    expect(discover({ constructor: Claims })).not.toHaveBeenCalled()
+  })
+
+  it('keeps a real instance of a class whose Symbol.hasInstance answers false', () => {
+    @Processor('denies', { concurrency: 1 })
+    class Denies {
+      static [Symbol.hasInstance](): boolean {
+        return false
+      }
+    }
+    expect(discover(new Denies())).toHaveBeenCalledTimes(1)
+  })
+
+  it('registers what a useFactory builds on the class prototype', async () => {
+    const register = jest.fn().mockReturnValue({ on: jest.fn() })
+    const moduleRef = await Test.createTestingModule({
+      imports: [DiscoveryModule],
+      providers: [
+        ProcessorDiscoveryService,
+        { provide: WorkerRegistry, useValue: { register } },
+        { provide: QueueEventsRegistry, useValue: {} },
+        { provide: 'BUILT', useFactory: () => Object.create(NamedProcessor.prototype) as object },
+      ],
+    }).compile()
+    await moduleRef.init()
+    expect(register).toHaveBeenCalledTimes(1)
+    await moduleRef.close()
+  })
+
   it('ignores a constructor property that is a function with no prototype', () => {
-    // `instanceof` throws on such a function, so only a class carrying @Processor may be tested.
+    // Such a function has no prototype to ask, so only a class carrying @Processor may be tested.
     expect(discover({ constructor: (): void => undefined })).not.toHaveBeenCalled()
   })
 })
