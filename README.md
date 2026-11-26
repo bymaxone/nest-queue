@@ -589,8 +589,8 @@ the worker thread; BullMQ ends it. In measured runs:
   room for it.
 - A worker thread (`useWorkerThreads: true`) was terminated at the close, and the host exited.
 
-Known limit: a child process lives until BullMQ's own `SIGKILL`, and its job's code keeps running,
-side effects included, although its outcome is dropped.
+Known limit: until the child process ends, its job's code keeps running, side effects included,
+although its outcome is dropped.
 
 Known limit: a host process that is itself killed with `SIGKILL` leaves its forked child running;
 in a measured run the child finished a 20 s job after the host was gone.
