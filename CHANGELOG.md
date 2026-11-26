@@ -34,7 +34,7 @@ Against 1.2.32 the signatures are unchanged; the runtime of the main entry chang
 - A `backoff` object with no `type`, such as `{ delay: 1000 }`, is refused too, whatever the `attempts`. Say `{ type: 'fixed', delay: 1000 }` or the number `1000`.
 - The options of an `upsertJobScheduler` template are not checked for this.
 - Jobs added through `getCachedQueues()` or `FlowService.getProducer()` are not checked for `backoff`.
-- A failed attempt that BullMQ never moves is not counted.
+- A failure BullMQ never tries to move is not counted.
 - A test that calls a registered processor itself hears no `failed` or `retried` unless it also calls the job's `moveToFailed`, as BullMQ does.
 
 ---
