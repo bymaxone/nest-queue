@@ -146,7 +146,7 @@ const monotonic = performance.now.bind(performance)
 /**
  * Build the report of one worker's deferred jobs. The first deferred job is logged at once; the ones
  * deferred in the minute after a line are counted and carried by the line of the first job deferred
- * after that minute. No timer is armed, so the count of a last burst that nothing follows is not
+ * after that minute. No timer is armed, so the count of a last burst is not
  * written.
  *
  * @param logger - Where the line is written.

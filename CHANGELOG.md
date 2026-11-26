@@ -21,7 +21,7 @@ Against 1.2.30 the declarations are unchanged; the runtime of the main entry cha
 
 ### Added
 
-- The log event `QUEUE_JOB_DEFERRED_GUARD_REFUSED` (warn), with `queue` and `deferred`. An in-process worker writes it when the prototype guard refuses before a job runs and the job goes back to the delayed set. Before, such a job was moved with nothing logged and no job metric. At most one line a minute for each worker: the first deferred job is logged at once, and the next line, written by the first job deferred a minute or more later, carries the number deferred since the previous one. No timer is armed, so the count of a last burst that no later job follows is not written.
+- The log event `QUEUE_JOB_DEFERRED_GUARD_REFUSED` (warn), with `queue` and `deferred`. An in-process worker writes it when the prototype guard refuses before a job runs and the job goes back to the delayed set. Before, such a job was moved with nothing logged and no job metric. At most one line a minute for each worker: the first deferred job is logged at once, and the next line, written by the first job deferred a minute or more later, carries the number deferred since the previous one. No timer is armed, so the count of a last burst is not written.
 
 ### Changed
 
