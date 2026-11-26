@@ -7,9 +7,16 @@
 
 import { DelayedError, RateLimitError, WaitingChildrenError, WaitingError } from 'bullmq'
 import type { Job } from 'bullmq'
+import { optionsOf } from './job-outcome'
 import { observeAttempt } from './observe-attempt'
 import { QueueObserverRegistry } from './queue-observer'
 import type { JobFinishedEvent } from './queue-observer'
+
+/** The part of BullMQ's move this reads: it finishes the job when no attempt is left. */
+function moveToFailed(this: Job): Promise<void> {
+  if (this.attemptsMade + 1 >= (optionsOf(this)?.attempts ?? 1)) this.finishedOn = 1
+  return Promise.resolve()
+}
 
 /** A job as the worker receives it, with the given metadata and attempts. */
 function jobWith(metadata: string | undefined, attemptsMade = 0, attempts = 1): Job {
@@ -17,6 +24,7 @@ function jobWith(metadata: string | undefined, attemptsMade = 0, attempts = 1): 
     name: 'send',
     attemptsMade,
     opts: { attempts, ...(metadata === undefined ? {} : { telemetry: { metadata } }) },
+    moveToFailed,
   } as unknown as Job
 }
 
@@ -84,22 +92,44 @@ describe('observeAttempt', () => {
   it('rethrows the error as it is and reports retried while attempts remain', async () => {
     const { registry, finished } = recording()
     const error = new Error('boom')
+    const job = jobWith(undefined, 0, 3)
 
-    await expect(
-      observeAttempt(registry, 'email', jobWith(undefined, 0, 3), () => Promise.reject(error)),
-    ).rejects.toBe(error)
+    await expect(observeAttempt(registry, 'email', job, () => Promise.reject(error))).rejects.toBe(
+      error,
+    )
+    await job.moveToFailed(error, 'token')
 
     expect(finished).toMatchObject([{ queue: 'email', outcome: 'retried' }])
   })
 
   it('reports failed on the last attempt', async () => {
     const { registry, finished } = recording()
+    const job = jobWith(undefined, 2, 3)
+    const error = new Error('boom')
 
-    await observeAttempt(registry, 'email', jobWith(undefined, 2, 3), () =>
-      Promise.reject(new Error('boom')),
-    ).catch(() => undefined)
+    await observeAttempt(registry, 'email', job, () => Promise.reject(error)).catch(() => undefined)
+    await job.moveToFailed(error, 'token')
 
     expect(finished).toMatchObject([{ outcome: 'failed' }])
+  })
+
+  it('reports a failed attempt once BullMQ has moved the job, not when the processor threw', async () => {
+    const { registry, finished } = recording()
+    const clock = jest.spyOn(performance, 'now').mockReturnValueOnce(1000).mockReturnValueOnce(3500)
+    const job = jobWith(undefined, 0, 3)
+    const error = new Error('boom')
+
+    try {
+      await observeAttempt(registry, 'email', job, () => Promise.reject(error)).catch(
+        () => undefined,
+      )
+      expect(finished).toEqual([])
+      await job.moveToFailed(error, 'token')
+    } finally {
+      clock.mockRestore()
+    }
+
+    expect(finished).toMatchObject([{ outcome: 'retried', durationSeconds: 2.5 }])
   })
 
   it('reports nothing for an error that hands the job back to BullMQ', async () => {
@@ -130,7 +160,7 @@ describe('observeAttempt', () => {
 
   it('observes a job built by hand with no options, as a host does to call a handler in its own test', async () => {
     const { registry, finished, seen } = recording()
-    const bare = { name: 'send', attemptsMade: 0 } as unknown as Job
+    const bare = { name: 'send', attemptsMade: 0, moveToFailed } as unknown as Job
 
     await expect(
       observeAttempt(registry, 'email', bare, () => Promise.resolve('ok')),
@@ -138,6 +168,7 @@ describe('observeAttempt', () => {
     await expect(
       observeAttempt(registry, 'email', bare, () => Promise.reject(new Error('boom'))),
     ).rejects.toThrow('boom')
+    await bare.moveToFailed(new Error('boom'), 'token')
 
     expect(seen).toMatchObject([{ carrier: {} }, { carrier: {} }])
     expect(finished).toMatchObject([{ outcome: 'completed' }, { outcome: 'failed' }])

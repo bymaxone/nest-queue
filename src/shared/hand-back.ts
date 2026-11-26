@@ -41,10 +41,10 @@ export function handBackOf(error: unknown): HandBack | undefined {
 }
 
 /**
- * A member of what a processor threw. Reading it can itself throw (a getter), and that must never
+ * A member of an error: what a processor threw, or what a move of its job rejected with. Reading it can itself throw (a getter), and that must never
  * replace the processor's own error, so an unreadable member reads as absent.
  */
-export function memberOf(error: unknown, key: 'name' | 'message'): unknown {
+export function memberOf(error: unknown, key: 'name' | 'message' | 'code'): unknown {
   try {
     return (error as Record<string, unknown>)[key]
   } catch {

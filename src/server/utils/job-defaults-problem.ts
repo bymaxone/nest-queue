@@ -59,20 +59,30 @@ function retentionProblem(path: string, value: unknown): string | undefined {
   return wholeNumberProblem(`${path}.age`, age) ?? wholeNumberProblem(`${path}.count`, count)
 }
 
+/**
+ * The reason a backoff `type` has no strategy behind it. BullMQ builds in `fixed` and `exponential`;
+ * any other needs a `backoffStrategy` on the worker, which `WorkerRegistry` does not pass on, and
+ * without one BullMQ cannot move the failed job and leaves it active.
+ */
+function backoffTypeProblem(path: string, type: unknown): string | undefined {
+  if (type === 'fixed' || type === 'exponential') return undefined
+  const given = type === undefined ? 'none' : received(type)
+  return `${path} must be 'fixed' or 'exponential', received ${given}`
+}
+
 /** The reason a `backoff` is wrong: a delay in milliseconds, or `{ type, delay?, jitter? }`. */
 function backoffProblem(path: string, value: unknown): string | undefined {
   if (Array.isArray(value)) return `${path} must be a number or an object, received an array`
-  if (typeof value !== 'object' || value === null) {
-    return wholeNumberProblem(path, value)
-  }
-  const { delay, jitter } = value as { delay?: unknown; jitter?: unknown }
+  if (typeof value !== 'object' || value === null) return wholeNumberProblem(path, value)
+  const { type, delay, jitter } = value as { type?: unknown; delay?: unknown; jitter?: unknown }
   const jitterIsValid =
     jitter === undefined || (typeof jitter === 'number' && jitter >= 0 && jitter <= 1)
   return (
     wholeNumberProblem(`${path}.delay`, delay) ??
     (jitterIsValid
       ? undefined
-      : `${path}.jitter must be a number from 0 to 1, received ${received(jitter)}`)
+      : `${path}.jitter must be a number from 0 to 1, received ${received(jitter)}`) ??
+    backoffTypeProblem(`${path}.type`, type)
   )
 }
 

@@ -1,6 +1,6 @@
 /**
- * @fileoverview Unit tests for how an attempt that threw is classified: failed for good, to be
- * retried, or no failure of the work at all when the processor handed the job back to BullMQ.
+ * @fileoverview Unit tests for how a failed attempt is counted, from the move BullMQ makes after the
+ * processor threw, and for the reader that says whether a rejection hands the job back to BullMQ.
  * @layer server/observability
  */
 
@@ -12,63 +12,171 @@ import {
   WaitingError,
 } from 'bullmq'
 import type { Job } from 'bullmq'
-import { runInNewContext } from 'node:vm'
 import { handBackOf } from '../../shared/hand-back'
-import { failureOutcome } from './job-outcome'
+import { optionsOf, reportFailedMove } from './job-outcome'
+import type { JobOutcome } from './queue-observer'
 
-/** The part of a job the classification reads. */
-function jobWith(attemptsMade: number, attempts?: number): Job {
-  return { attemptsMade, opts: attempts === undefined ? {} : { attempts } } as unknown as Job
+/** BullMQ's own test for an error after which it makes the move again. */
+const { isNotConnectionError } = jest.requireActual<{
+  isNotConnectionError: (error: Error) => boolean
+}>('../../../node_modules/bullmq/dist/cjs/utils')
+
+/** What the move of one job did, call by call, and what was reported of it. */
+function hooked(move: (this: Job, ...args: unknown[]) => Promise<unknown>): {
+  job: Job
+  reported: JobOutcome[]
+  run: () => Promise<unknown>
+} {
+  const job = { moveToFailed: move } as unknown as Job
+  const reported: JobOutcome[] = []
+  reportFailedMove(job, (outcome) => reported.push(outcome))
+  return { job, reported, run: () => job.moveToFailed(new Error('boom'), 'token', true) }
 }
 
-describe('failureOutcome', () => {
-  it('says retried while attempts remain, and failed on the last one', () => {
-    expect(failureOutcome(jobWith(0, 3), new Error('x'))).toBe('retried')
-    expect(failureOutcome(jobWith(1, 3), new Error('x'))).toBe('retried')
-    expect(failureOutcome(jobWith(2, 3), new Error('x'))).toBe('failed')
+/** A move that leaves the job unfinished, as one to a delayed or waiting state does. */
+const requeue = (): Promise<unknown> => Promise.resolve(undefined)
+
+/** A move that finishes the job, as one to the failed set does. */
+function finish(this: Job): Promise<unknown> {
+  this.finishedOn = 1
+  return Promise.resolve(undefined)
+}
+
+describe('reportFailedMove', () => {
+  it('reports nothing until the job is moved', () => {
+    expect(hooked(requeue).reported).toEqual([])
   })
 
-  it('counts a job with no attempts option as one attempt', () => {
-    expect(failureOutcome(jobWith(0), new Error('x'))).toBe('failed')
+  it('reports retried for a move that leaves the job unfinished', async () => {
+    const { run, reported } = hooked(requeue)
+
+    await run()
+
+    expect(reported).toEqual(['retried'])
   })
 
-  it('says failed for an unrecoverable error whatever attempts remain', () => {
-    const error = Object.assign(new Error('x'), { name: 'UnrecoverableError' })
+  it('reports failed for a move that finishes the job', async () => {
+    const { run, reported } = hooked(finish)
 
-    expect(failureOutcome(jobWith(0, 5), error)).toBe('failed')
+    await run()
+
+    expect(reported).toEqual(['failed'])
   })
 
-  it('says failed for an unrecoverable error built in another realm, which BullMQ reads by name', () => {
-    // `instanceof Error` is false for an error from a vm context or a second copy of the package.
-    const foreign: unknown = runInNewContext(
-      "const e = new Error('x'); e.name = 'UnrecoverableError'; e",
-    )
+  it('runs the move on the job, with the arguments given, and answers what it answers', async () => {
+    const next = ['data', 'id', 0, 0]
+    const calls: unknown[] = []
+    const { job } = hooked(function (this: Job, ...args) {
+      calls.push([this, ...args])
+      return Promise.resolve(next)
+    })
+    const error = new Error('boom')
 
-    expect(foreign instanceof Error).toBe(false)
-    expect(failureOutcome(jobWith(0, 5), foreign)).toBe('failed')
-    expect(failureOutcome(jobWith(0, 5), { name: 'UnrecoverableError' })).toBe('failed')
+    await expect(job.moveToFailed(error, 'token', true)).resolves.toBe(next)
+
+    expect(calls).toEqual([[job, error, 'token', true]])
   })
 
-  it.each(['DelayedError', 'WaitingError', 'WaitingChildrenError'])(
-    'reports nothing for an error named %s, which BullMQ reads as moving the job',
-    (name) => {
-      expect(failureOutcome(jobWith(0, 3), Object.assign(new Error('x'), { name }))).toBeUndefined()
-    },
-  )
+  it('reports failed when BullMQ gives up on the move, and rethrows its error', async () => {
+    const lost = new Error('Missing lock for job 1. moveToFailed')
+    const { run, reported } = hooked(() => Promise.reject(lost))
+
+    await expect(run()).rejects.toBe(lost)
+
+    expect(reported).toEqual(['failed'])
+  })
+
+  it('reports failed when the move throws before it answers a promise', async () => {
+    const unknown = new Error('Unknown backoff strategy mine')
+    const { run, reported } = hooked(() => {
+      throw unknown
+    })
+
+    await expect(run()).rejects.toBe(unknown)
+
+    expect(reported).toEqual(['failed'])
+  })
 
   it.each([
-    ['DelayedError', new DelayedError()],
-    ['WaitingError', new WaitingError()],
-    ['WaitingChildrenError', new WaitingChildrenError()],
-    ['RateLimitError', new RateLimitError()],
-  ])('reports nothing for the real %s of BullMQ', (_name, error) => {
-    expect(failureOutcome(jobWith(0, 3), error)).toBeUndefined()
-    expect(failureOutcome(jobWith(2, 3), error)).toBeUndefined()
+    ['the message of a closed connection', new Error('Connection is closed.')],
+    [
+      'the name of a closed connection',
+      Object.assign(new Error('x'), { name: 'ConnectionClosedError' }),
+    ],
+    ['a refused connection in the message', new Error('connect ECONNREFUSED 127.0.0.1:6379')],
+    ['a refused connection in the code', Object.assign(new Error('x'), { code: 'ECONNREFUSED' })],
+  ])('waits for the next move after %s, which BullMQ retries', async (_label, lost) => {
+    let calls = 0
+    const { run, reported } = hooked(() => {
+      calls += 1
+      return calls === 1 ? Promise.reject(lost) : Promise.resolve(undefined)
+    })
+
+    await expect(run()).rejects.toBe(lost)
+    expect(reported).toEqual([])
+    await run()
+
+    expect(reported).toEqual(['retried'])
   })
 
-  it('reads a control-flow error the way BullMQ does: a rate limit by its message, the others by name', () => {
-    // BullMQ's worker does not fail a job whose error carries the name, so neither does the count.
-    expect(failureOutcome(jobWith(0, 3), new Error(RATE_LIMIT_ERROR))).toBeUndefined()
+  it.each([
+    new Error('Connection is closed.'),
+    new Error('connect ECONNREFUSED 127.0.0.1:6379'),
+    Object.assign(new Error('x'), { code: 'ECONNREFUSED' }),
+  ])('reads %s as BullMQ does', (error) => {
+    expect(isNotConnectionError(error)).toBe(false)
+  })
+
+  it('reports one outcome for a job moved twice', async () => {
+    const { run, reported } = hooked(requeue)
+
+    await run()
+    await run()
+
+    expect(reported).toEqual(['retried'])
+  })
+})
+
+describe('optionsOf', () => {
+  it('reads the options of a job, absent on one built by hand', () => {
+    const opts = { attempts: 2 }
+
+    expect(optionsOf({ opts } as unknown as Job)).toBe(opts)
+    expect(optionsOf({} as Job)).toBeUndefined()
+  })
+})
+
+describe('handBackOf — pinned to BullMQ', () => {
+  it('matches what BullMQ itself throws and reads, so a rename there fails here', () => {
+    expect(RATE_LIMIT_ERROR).toBe('bullmq:rateLimitExceeded')
+    expect(handBackOf(new DelayedError())).toBe('delayed')
+    expect(handBackOf(new WaitingChildrenError())).toBe('waiting_children')
+    expect(handBackOf(new WaitingError())).toBe('waiting')
+    expect(handBackOf(new RateLimitError())).toBe('rate_limited')
+  })
+})
+
+describe('handBackOf — a member that throws does not hide the other', () => {
+  const throwing = (member: 'name' | 'message', rest: object): Error =>
+    Object.defineProperty(Object.assign(new Error('x'), rest), member, {
+      get: () => {
+        throw new Error('getter failed')
+      },
+    })
+
+  it('reads the rate-limit message when the name throws, as BullMQ does', () => {
+    const error = throwing('name', { message: RATE_LIMIT_ERROR })
+
+    expect(handBackOf(error)).toBe('rate_limited')
+  })
+
+  it('reads a hand-back name when the message throws', () => {
+    expect(handBackOf(throwing('message', { name: 'DelayedError' }))).toBe('delayed')
+  })
+})
+
+describe('handBackOf — how it reads a rejection', () => {
+  it('reads a rate limit by its message and the others by name, as BullMQ does', () => {
     expect(handBackOf(new Error(RATE_LIMIT_ERROR))).toBe('rate_limited')
     expect(handBackOf(Object.assign(new Error('x'), { name: 'WaitingChildrenError' }))).toBe(
       'waiting_children',
@@ -88,128 +196,22 @@ describe('failureOutcome', () => {
     ['a name that only prints as one', { name: ['DelayedError'] }],
     ['a name that is the constructor', Object.assign(new Error('x'), { name: 'constructor' })],
     ['an object with no name', {}],
-  ])('counts %s as a failure of the work', (_label, error) => {
+    ['null', null],
+    ['undefined', undefined],
+  ])('reads %s as a failure of the work', (_label, error) => {
     expect(handBackOf(error)).toBeUndefined()
-    expect(failureOutcome(jobWith(2, 3), error)).toBe('failed')
   })
-
-  it('classifies a thrown string by the attempts', () => {
-    // `null` and `undefined` are not here: BullMQ cannot read them, see "an error BullMQ cannot read".
-    expect(failureOutcome(jobWith(0, 2), 'text')).toBe('retried')
-    expect(failureOutcome(jobWith(1, 2), 'text')).toBe('failed')
-  })
-})
-
-describe('handBackOf — pinned to BullMQ', () => {
-  it('matches what BullMQ itself throws and reads, so a rename there fails here', () => {
-    expect(RATE_LIMIT_ERROR).toBe('bullmq:rateLimitExceeded')
-    expect(handBackOf(new DelayedError())).toBe('delayed')
-    expect(handBackOf(new WaitingChildrenError())).toBe('waiting_children')
-    expect(handBackOf(new WaitingError())).toBe('waiting')
-    expect(handBackOf(new RateLimitError())).toBe('rate_limited')
-  })
-})
-
-describe('failureOutcome — an error whose members throw when read', () => {
-  const hostile = (member: 'name' | 'message'): Error =>
-    Object.defineProperty(new Error('x'), member, {
-      get: () => {
-        throw new Error('getter failed')
-      },
-    })
 
   it.each(['name', 'message'] as const)(
-    'reads an error whose %s getter throws as no hand-back and no outcome, and never throws',
+    'reads an error whose %s getter throws as a failure',
     (member) => {
-      const error = hostile(member)
+      const error = Object.defineProperty(new Error('x'), member, {
+        get: () => {
+          throw new Error('getter failed')
+        },
+      })
 
-      // BullMQ reads both members of the error unguarded, so such an error leaves the job active (measured):
-      // neither `failed` nor `retried` is true of the attempt.
       expect(handBackOf(error)).toBeUndefined()
-      expect(failureOutcome(jobWith(2, 3), error)).toBeUndefined()
-      expect(failureOutcome(jobWith(0, 3), error)).toBeUndefined()
     },
   )
-})
-
-describe('handBackOf — a member that throws does not hide the other', () => {
-  const throwing = (member: 'name' | 'message', rest: object): Error =>
-    Object.defineProperty(Object.assign(new Error('x'), rest), member, {
-      get: () => {
-        throw new Error('getter failed')
-      },
-    })
-
-  it('reads the rate-limit message when the name throws, as BullMQ does', () => {
-    const error = throwing('name', { message: RATE_LIMIT_ERROR })
-
-    expect(handBackOf(error)).toBe('rate_limited')
-    expect(failureOutcome(jobWith(0, 3), error)).toBeUndefined()
-  })
-
-  it('reads a hand-back name when the message throws', () => {
-    expect(handBackOf(throwing('message', { name: 'DelayedError' }))).toBe('delayed')
-  })
-
-  it('does not take an Error whose prototype chain throws on instanceof for an unrecoverable one', () => {
-    const hostile = new Proxy(new Error('x'), {
-      getPrototypeOf: () => {
-        throw new Error('trap failed')
-      },
-    })
-
-    // BullMQ runs `instanceof` on the error before it moves the job, so this one leaves the job
-    // active and unclassified, measured against a real Redis: nothing is retried and nothing fails.
-    expect(failureOutcome(jobWith(0, 3), hostile)).toBeUndefined()
-  })
-})
-
-describe('failureOutcome — an error BullMQ cannot read', () => {
-  // Measured against a real Redis with attempts: 3. For each of these BullMQ throws inside its own
-  // failure handling, emits `error` twice, leaves the job active with `attemptsMade` 0 and schedules
-  // no retry, so neither `retried` nor `failed` is true of the attempt; a plain error is retried
-  // twice and fails on the third, and a thrown string does the same.
-  const unreadable: [string, () => unknown][] = [
-    ['null', () => null],
-    ['undefined', () => undefined],
-    [
-      'an error whose message getter throws',
-      () =>
-        Object.defineProperty(new Error('x'), 'message', {
-          get: () => {
-            throw new Error('getter')
-          },
-        }),
-    ],
-    [
-      'an error whose name getter throws',
-      () =>
-        Object.defineProperty(new Error('x'), 'name', {
-          get: () => {
-            throw new Error('getter')
-          },
-        }),
-    ],
-    [
-      'an error whose prototype lookup throws',
-      () =>
-        new Proxy(new Error('x'), {
-          getPrototypeOf: () => {
-            throw new Error('trap')
-          },
-        }),
-    ],
-  ]
-
-  it.each(unreadable)('reports no outcome for %s while attempts remain', (_label, make) => {
-    expect(failureOutcome(jobWith(0, 3), make())).toBeUndefined()
-  })
-
-  it.each(unreadable)('reports no outcome for %s on the last attempt', (_label, make) => {
-    expect(failureOutcome(jobWith(2, 3), make())).toBeUndefined()
-  })
-
-  it('still says retried for a thrown string, which BullMQ retries', () => {
-    expect(failureOutcome(jobWith(0, 3), 'plain string')).toBe('retried')
-  })
 })
