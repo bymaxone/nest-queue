@@ -204,6 +204,7 @@ describe('README log events', () => {
       QUEUE_CONCURRENCY_DEFAULTED: 'warn',
       QUEUE_UNBOUNDED_RETRIES: 'warn',
       QUEUE_GUARD_REFUSED: 'error',
+      QUEUE_JOB_DEFERRED_GUARD_REFUSED: 'warn',
     })
   })
 })

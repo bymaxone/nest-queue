@@ -15,6 +15,21 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
+## [1.2.31] — 2026-11-26
+
+Against 1.2.30 the declarations are unchanged; the runtime of the main entry changes.
+
+### Added
+
+- The log event `QUEUE_JOB_DEFERRED_GUARD_REFUSED` (warn), with `queue` and `deferred`. An in-process worker writes it when the prototype guard refuses before a job runs and the job goes back to the delayed set. Before, such a job was moved with nothing logged and no job metric. At most one line a minute for each worker: the first deferred job is logged at once, and the next line, written by the first job deferred a minute or more later, carries the number deferred since the previous one. No timer is armed, so the count of a last burst is not written.
+
+### Changed
+
+- The README states that `bymax_queue_jobs_total` has no `dead_lettered` outcome as a known limit.
+- **The main entry bundle is larger.** The brotli budgets of `dist/server/index.mjs` and `dist/server/index.cjs` were raised to 22,734 B and 22,820 B.
+
+---
+
 ## [1.2.30] — 2026-11-26
 
 Against 1.2.29 the declarations gain one optional worker option; the runtime of the main entry changes.
@@ -1364,7 +1379,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.30...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.31...HEAD
+[1.2.31]: https://github.com/bymaxone/nest-queue/compare/v1.2.30...v1.2.31
 [1.2.30]: https://github.com/bymaxone/nest-queue/compare/v1.2.29...v1.2.30
 [1.2.29]: https://github.com/bymaxone/nest-queue/compare/v1.2.28...v1.2.29
 [1.2.28]: https://github.com/bymaxone/nest-queue/compare/v1.2.27...v1.2.28
