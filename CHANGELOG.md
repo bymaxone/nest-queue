@@ -33,6 +33,8 @@ Against 1.2.32 the signatures are unchanged; the runtime of the main entry chang
 - A custom `backoff` type is now refused by `enqueue`, `enqueueBulk`, `FlowService.add` and `FlowService.addBulk`, and in `defaultJobOptions`, where `forRoot` throws. This also reaches a host that only produced jobs for a BullMQ worker of its own with a `backoffStrategy`, and one that set `settings` on a registered worker: add those jobs through the BullMQ `Queue` or `FlowProducer`.
 - A `backoff` object with no `type`, such as `{ delay: 1000 }`, is refused too, whatever the `attempts`. Say `{ type: 'fixed', delay: 1000 }` or the number `1000`.
 - The options of an `upsertJobScheduler` template are not checked for this.
+- Jobs added through `getCachedQueues()` or `FlowService.getProducer()` are not checked for `backoff`.
+- A failed attempt that BullMQ never moves is not counted.
 - A test that calls a registered processor itself hears no `failed` or `retried` unless it also calls the job's `moveToFailed`, as BullMQ does.
 
 ---
