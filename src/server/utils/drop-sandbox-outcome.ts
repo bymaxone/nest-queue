@@ -21,17 +21,18 @@ interface SandboxRunner {
  * job's lock to expire, so the job stalls and is run again.
  *
  * BullMQ assigns `processFn` in the `Worker` constructor and reads it again for every job, so it is
- * replaced right after construction. A `Worker` without that member is left as it is.
+ * replaced right after construction.
  *
  * @param worker - The sandboxed BullMQ `Worker`, just constructed.
+ * @returns `false` when the `Worker` has no such member and was left as it is.
  * @example
  * const worker = new Worker(queueName, processorFile, options)
- * dropSandboxOutcomeOnceAbandoned(worker)
+ * const wrapped = dropSandboxOutcomeOnceAbandoned(worker)
  */
-export function dropSandboxOutcomeOnceAbandoned(worker: object): void {
+export function dropSandboxOutcomeOnceAbandoned(worker: object): boolean {
   const runner = worker as SandboxRunner
   const sandbox = runner.processFn
-  if (sandbox === undefined) return
+  if (sandbox === undefined) return false
   const relay = async (args: unknown[]): Promise<unknown> => {
     try {
       return await own(sandbox(...args))
@@ -40,4 +41,5 @@ export function dropSandboxOutcomeOnceAbandoned(worker: object): void {
     }
   }
   runner.processFn = (...args) => own(relay(args))
+  return true
 }

@@ -66,12 +66,16 @@ describe('dropSandboxOutcomeOnceAbandoned', () => {
   })
 
   // A mocked or renamed member must not turn into a processor that was never there.
-  it('adds nothing to a worker without the member', () => {
+  it('adds nothing to a worker without the member, and says it wrapped nothing', () => {
     const worker = {}
 
-    dropSandboxOutcomeOnceAbandoned(worker)
-
+    expect(dropSandboxOutcomeOnceAbandoned(worker)).toBe(false)
     expect(worker).toEqual({})
+  })
+
+  // The caller reports a worker it could not wrap, so a wrapped one must not read as one.
+  it('says it wrapped a worker that has the member', () => {
+    expect(dropSandboxOutcomeOnceAbandoned({ processFn: () => Promise.resolve() })).toBe(true)
   })
 })
 

@@ -6,6 +6,7 @@
  * @layer server/services
  */
 
+import { Logger } from '@nestjs/common'
 import type { Job } from 'bullmq'
 import { EventEmitter } from 'node:events'
 import type { Redis } from 'ioredis'
@@ -23,10 +24,11 @@ jest.mock('bullmq', () => ({
     const worker = Object.assign(new EventEmitter(), {
       close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
     })
-    // For a file, BullMQ builds the processor itself and keeps it on the worker.
-    if (typeof processor === 'string')
+    // For a file, BullMQ builds the processor itself and keeps it on the worker. The path with
+    // `no-member` stands for a BullMQ that keeps it somewhere else.
+    if (typeof processor === 'string' && !processor.includes('no-member'))
       return Object.assign(worker, { processFn: () => Promise.resolve('from-the-file') })
-    processors.push(processor)
+    if (typeof processor === 'function') processors.push(processor)
     return worker
   }),
 }))
@@ -185,5 +187,25 @@ describe('a sandboxed worker stopped without draining', () => {
     })
     await jest.advanceTimersByTimeAsync(20)
     expect(settled).toBe(false)
+  })
+
+  // Without the member the outcome cannot be dropped, and nothing else would say so.
+  it('warns once, with the queue alone, for each worker it could not wrap', () => {
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+    const registry = new WorkerRegistry(fakeConnection(), options)
+
+    registry.registerSandboxed({ queueName: 'wrapped', processorFile: '/processors/job.js' })
+    registry.registerSandboxed({ queueName: 'bare', processorFile: '/processors/no-member.js' })
+
+    expect(warn.mock.calls).toEqual([
+      [
+        {
+          event: 'QUEUE_SANDBOX_SHUTDOWN_UNGUARDED',
+          message: expect.stringContaining('is not dropped') as string,
+          queue: 'bare',
+        },
+      ],
+    ])
+    warn.mockRestore()
   })
 })

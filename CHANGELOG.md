@@ -26,12 +26,12 @@ Against 1.2.29 the declarations gain one optional worker option; the runtime of 
 ### Fixed
 
 - A provider value without a `@Processor` class's prototype in its chain is no longer registered as that processor because its `constructor` property names the class. Beside a real instance of the class, such a value failed the bootstrap with `DUPLICATE_PROCESSOR`.
-- A sandboxed (file-based) job that is still running when the shutdown stops its worker has its outcome dropped, and the job is left to stall and be run again. Measured before the fix with `redis:7` and BullMQ 6.3.4: a job that succeeded afterwards kept the host process alive, and a job in a worker thread was recorded as failed. The README's shutdown section states what BullMQ does with the child process. A processor still loading its file when the drain budget ends keeps the host process alive; that was measured with this release and not with 1.2.29.
+- A sandboxed (file-based) job that is still running when the shutdown stops its worker has its outcome dropped, and the job is left to stall and be run again. Measured before the fix with `redis:7` and BullMQ 6.3.4: a job that succeeded afterwards kept the host process alive, and a job in a worker thread was recorded as failed. The README's shutdown section states what BullMQ does with the child process. A processor still loading its file when the drain budget ends keeps the host process alive; that was measured with this release and not with 1.2.29. On a BullMQ whose `Worker` has no sandbox function to wrap, nothing is dropped and the registration logs `QUEUE_SANDBOX_SHUTDOWN_UNGUARDED`.
 
 ### Changed
 
 - An internal function takes its extra option names as separate arguments, with nothing a caller can observe.
-- **The main entry bundle is larger.** The brotli budgets of `dist/server/index.mjs` and `dist/server/index.cjs` were raised to 22,450 B and 22,528 B.
+- **The main entry bundle is larger.** The brotli budgets of `dist/server/index.mjs` and `dist/server/index.cjs` were raised to 22,547 B and 22,628 B.
 
 #### Apply to a derived backend
 

@@ -28,6 +28,7 @@ import { workerOptionProblem } from '../utils/worker-option-problem'
 import { readWorkerConfig, snapshotWorkerOptions } from '../utils/snapshot-worker-options'
 import { isAbandoned } from '../utils/abandoned-workers'
 import { dropSandboxOutcomeOnceAbandoned } from '../utils/drop-sandbox-outcome'
+import { logEvent, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
 import type { WorkerOptions } from '../interfaces/worker-options.interface'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
@@ -230,7 +231,7 @@ export class WorkerRegistry {
     let worker: Worker
     try {
       worker = new Worker(queueName, processorFile, bullOpts)
-      dropSandboxOutcomeOnceAbandoned(worker)
+      if (!dropSandboxOutcomeOnceAbandoned(worker)) this.warnSandboxUnguarded(queueName)
     } catch (cause) {
       // Disconnect the duplicated connection to prevent a Redis resource leak.
       disconnectUnlessEnded(conn)
@@ -302,6 +303,19 @@ export class WorkerRegistry {
   getConnections(): ReadonlyMap<string, Redis> {
     return new Map(
       Array.from(this.#entries, ([name, entry]): [string, Redis] => [name, entry.connection]),
+    )
+  }
+
+  /** Report a sandboxed worker whose outcomes cannot be dropped after the shutdown stops it. */
+  private warnSandboxUnguarded(queueName: string): void {
+    writeLog(
+      this.logger,
+      'warn',
+      logEvent(
+        QUEUE_LOG_EVENTS.SANDBOX_SHUTDOWN_UNGUARDED,
+        'This BullMQ Worker has no sandbox function to wrap: what a sandboxed job produces after the shutdown is not dropped',
+        { queue: queueName },
+      ),
     )
   }
 

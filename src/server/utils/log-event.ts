@@ -21,6 +21,8 @@ export const QUEUE_LOG_EVENTS = {
   WORKER_DRAIN_TIMEOUT: 'QUEUE_WORKER_DRAIN_TIMEOUT',
   /** A worker failed to close and was stopped. */
   WORKER_CLOSE_FAILED: 'QUEUE_WORKER_CLOSE_FAILED',
+  /** What a sandboxed job of this worker produces after the shutdown is not dropped. */
+  SANDBOX_SHUTDOWN_UNGUARDED: 'QUEUE_SANDBOX_SHUTDOWN_UNGUARDED',
   /** A queue could not be drained on shutdown. */
   QUEUE_DRAIN_FAILED: 'QUEUE_DRAIN_FAILED',
   /** A Redis connection the module uses emitted an error. */
