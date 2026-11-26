@@ -92,6 +92,19 @@ describe('runFlowBulk', () => {
     expect(add).not.toHaveBeenCalled()
   })
 
+  it('resolves a stopped batch with one slot per tree, the unstarted ones empty', async () => {
+    const gate = deferred<JobNode>()
+    const run = runFlowBulk(flows(3), () => gate.promise, 'addFlowBulk', 1)
+
+    run.stop()
+    gate.resolve(nodeOf({ name: 'f0', queueName: 'q' }))
+    const nodes = await run.done
+
+    expect(nodes).toHaveLength(3)
+    expect(Object.keys(nodes)).toEqual(['0'])
+    expect(run.outcome().notStarted).toEqual([1, 2])
+  })
+
   it('starts no new tree after the first failure, and reports every index exactly once', async () => {
     const started: number[] = []
     const run = runFlowBulk(

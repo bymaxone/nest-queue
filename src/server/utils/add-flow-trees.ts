@@ -128,7 +128,6 @@ export function runFlowBulk(
   limit: number,
 ): FlowBulkRun {
   const state: TreeState[] = flows.map(() => 'pending')
-  // Stryker disable next-line ArrayDeclaration: the only mutant on this line drops the length argument, and equivalent — the length is only a size hint; every index is assigned before the array is returned
   const nodes = new Array<JobNode>(flows.length)
   let next = 0
   let stopped = false

@@ -13,6 +13,10 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ## [Unreleased]
 
+### Changed
+
+- **The main entry bundle changes**, with nothing a caller can observe: one internal function takes its extra option names as separate arguments. The declarations are unchanged and no size budget moves.
+
 ---
 
 ## [1.2.29] — 2026-11-25
