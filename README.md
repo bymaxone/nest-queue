@@ -581,7 +581,7 @@ It implements a **bounded drain protocol** with at-least-once semantics:
    enqueue a job after step 4; those resources stay open until the server is down.
 
 **Sandboxed jobs still running at the deadline.** The library does not kill the child process or
-the worker thread; BullMQ ends it. In measured runs:
+the worker thread; that is left to BullMQ. In measured runs with the processor file already loaded:
 
 - A child process was sent a stop signal and allowed to finish its job: the host process exited
   when the child did, or when BullMQ killed the child about 30 s after the close, whichever came
@@ -598,6 +598,11 @@ in a measured run the child finished a 20 s job after the host was gone.
 Known limit: once the stopped worker no longer renews the lock, a `lockDuration` shorter than what
 is left of the child's job lets another instance start the same job while the old child still runs;
 measured with a 3 s lock.
+
+Known limit: a sandboxed processor still loading its file when the drain budget ends keeps the
+host process alive, because BullMQ does not signal that child or thread. Use a drain budget longer
+than the processor takes to load, and keep the process manager's own stop timeout. Measured with
+this release, not with 1.2.29.
 
 **Handlers must be idempotent.** Use `jobId`, `deduplication`, or application-level
 idempotency keys to guard against reprocessing a job that was partially handled before
