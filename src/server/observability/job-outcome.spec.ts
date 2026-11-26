@@ -93,6 +93,14 @@ describe('reportFailedMove', () => {
     expect(run()).toBe(moving)
   })
 
+  it('gives the move the intrinsic constructor, so no await of it reads the prototype', () => {
+    const moving = Promise.resolve(undefined)
+    const { run } = hooked(() => moving)
+    void run()
+
+    expect(Object.getOwnPropertyDescriptor(moving, 'constructor')?.value).toBe(Promise)
+  })
+
   it('leaves no rejection unheard when the report throws', async () => {
     const job = { moveToFailed: requeue } as unknown as Job
     reportFailedMove(job, () => {

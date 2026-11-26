@@ -76,7 +76,8 @@ export function reportFailedMove(job: Job, report: (outcome: JobOutcome) => void
   }
   job.moveToFailed = (...args) => {
     const moving = Reflect.apply(move, job, args)
-    // Listened to before BullMQ is, so the observers hear the outcome before BullMQ acts on it.
+    // Gives the move the intrinsic constructor before `readMove` awaits it. That await comes before
+    // BullMQ's own, so the observers hear the outcome before BullMQ acts on it.
     hear(moving)
     void outcomeOf(() => readMove(moving, job, once))
     return moving
