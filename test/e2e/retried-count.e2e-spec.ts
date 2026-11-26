@@ -9,7 +9,7 @@ import 'reflect-metadata'
 import { NestFactory } from '@nestjs/core'
 import { Module } from '@nestjs/common'
 import type { INestApplicationContext } from '@nestjs/common'
-import { DelayedError } from 'bullmq'
+import { DelayedError, UnrecoverableError } from 'bullmq'
 import type { Job, JobsOptions, Worker } from 'bullmq'
 import {
   BymaxQueueModule,
@@ -135,6 +135,33 @@ describe('E2E — the retried count follows what BullMQ scheduled', () => {
 
     expect(ran()).toBe(2)
     expect(countedFor('scheduled')).toEqual(['retried', 'failed'])
+  })
+
+  it.each([
+    ['an UnrecoverableError', () => new UnrecoverableError('final')],
+    [
+      'an error that only has its name',
+      () => Object.assign(new Error('final'), { name: 'UnrecoverableError' }),
+    ],
+  ])('counts failed for %s, whatever attempts remain', async (label, thrown) => {
+    const queue = `final-${label.replaceAll(' ', '-')}`
+    const { ran } = failingWorker(queue, () => Promise.resolve(thrown()))
+
+    await queues.enqueue(queue, 'job', {}, { attempts: 3 })
+    await waitFor(() => countedFor(queue).length === 1)
+    await settle()
+
+    expect(ran()).toBe(1)
+    expect(countedFor(queue)).toEqual(['failed'])
+  })
+
+  it('counts a thrown string as BullMQ treats it, retried while attempts remain', async () => {
+    failingWorker('thrown-string', () => Promise.resolve('boom'))
+
+    await queues.enqueue('thrown-string', 'job', {}, { attempts: 2, backoff: 0 })
+    await waitFor(() => countedFor('thrown-string').length === 2)
+
+    expect(countedFor('thrown-string')).toEqual(['retried', 'failed'])
   })
 
   it('counts an immediate retry, with no backoff, as retried', async () => {
