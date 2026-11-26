@@ -27,6 +27,7 @@ import { isTimerDelayMs } from '../utils/timer-delay'
 import { workerOptionProblem } from '../utils/worker-option-problem'
 import { readWorkerConfig, snapshotWorkerOptions } from '../utils/snapshot-worker-options'
 import { isAbandoned } from '../utils/abandoned-workers'
+import { dropSandboxOutcomeOnceAbandoned } from '../utils/drop-sandbox-outcome'
 import type { WorkerOptions } from '../interfaces/worker-options.interface'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
@@ -229,6 +230,7 @@ export class WorkerRegistry {
     let worker: Worker
     try {
       worker = new Worker(queueName, processorFile, bullOpts)
+      dropSandboxOutcomeOnceAbandoned(worker)
     } catch (cause) {
       // Disconnect the duplicated connection to prevent a Redis resource leak.
       disconnectUnlessEnded(conn)

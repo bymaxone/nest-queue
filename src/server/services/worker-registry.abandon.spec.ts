@@ -19,11 +19,15 @@ type Processor = (job: Job, token?: string, signal?: AbortSignal) => Promise<unk
 const processors: Processor[] = []
 
 jest.mock('bullmq', () => ({
-  Worker: jest.fn().mockImplementation((_name: string, processor: Processor) => {
-    processors.push(processor)
-    return Object.assign(new EventEmitter(), {
+  Worker: jest.fn().mockImplementation((_name: string, processor: Processor | string) => {
+    const worker = Object.assign(new EventEmitter(), {
       close: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
     })
+    // For a file, BullMQ builds the processor itself and keeps it on the worker.
+    if (typeof processor === 'string')
+      return Object.assign(worker, { processFn: () => Promise.resolve('from-the-file') })
+    processors.push(processor)
+    return worker
   }),
 }))
 
@@ -160,5 +164,26 @@ describe('a worker stopped without draining', () => {
   // BullMQ creates the per-job signal only for a processor that declares three parameters.
   it('still declares three parameters', () => {
     expect(registered(() => Promise.resolve()).processor.length).toBe(3)
+  })
+})
+
+describe('a sandboxed worker stopped without draining', () => {
+  // The registry cannot wrap a file, so it wraps what BullMQ built from it, right after construction.
+  it('drops the result its processor produces after the stop, and not before', async () => {
+    const registry = new WorkerRegistry(fakeConnection(), options)
+    const worker = registry.registerSandboxed({
+      queueName: 'q',
+      processorFile: '/processors/job.js',
+    }) as unknown as { processFn: () => Promise<unknown> }
+
+    await expect(worker.processFn()).resolves.toBe('from-the-file')
+
+    abandonWorker(worker)
+    let settled = false
+    void worker.processFn().then(() => {
+      settled = true
+    })
+    await jest.advanceTimersByTimeAsync(20)
+    expect(settled).toBe(false)
   })
 })

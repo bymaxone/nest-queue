@@ -564,9 +564,8 @@ It implements a **bounded drain protocol** with at-least-once semantics:
    wait for the job and its lock renewal ends; the lock expires and the job stalls and is retried
    by the next instance. What the abandoned handler produces afterwards, a result or a failure, is
    dropped, so the stopped worker cannot restart its connection. The handler's own promise keeps
-   running, because user code cannot be cancelled. A sandboxed (file-based) worker is the
-   exception: its job runs in a child process the registry cannot wrap, and in a measured run the
-   host process did not exit by itself after the budget ended with such a job still running.
+   running, because user code cannot be cancelled. The same holds for a sandboxed (file-based)
+   worker: what its job produces after the stop is dropped, and the job is left to stall.
 4. Queue-events and the connections the library opened for workers and queue-events are closed,
    each within what is left of the budget; a connection that has not quit by then is disconnected.
 5. Once NestJS has stopped the HTTP server (`onApplicationShutdown`), the flow producer, the
@@ -580,6 +579,25 @@ It implements a **bounded drain protocol** with at-least-once semantics:
    client if you want the same exit time. NestJS runs
    `onModuleDestroy` before it stops the HTTP server, so a request that is still being served can
    enqueue a job after step 4; those resources stay open until the server is down.
+
+**Sandboxed jobs still running at the deadline.** The library does not kill the child process or
+the worker thread; BullMQ ends it. In measured runs:
+
+- A child process was sent a stop signal and allowed to finish its job: the host process exited
+  when the child did, or when BullMQ killed the child about 30 s after the close, whichever came
+  first. `drainTimeoutMs` does not bound that wait, so give the process manager's kill timeout
+  room for it.
+- A worker thread (`useWorkerThreads: true`) was terminated at the close, and the host exited.
+
+Known limit: a child process lives until BullMQ's own `SIGKILL`, and its job's code keeps running,
+side effects included, although its outcome is dropped.
+
+Known limit: a host process that is itself killed with `SIGKILL` leaves its forked child running;
+in a measured run the child finished a 20 s job after the host was gone.
+
+Known limit: once the stopped worker no longer renews the lock, a `lockDuration` shorter than what
+is left of the child's job lets another instance start the same job while the old child still runs;
+measured with a 3 s lock.
 
 **Handlers must be idempotent.** Use `jobId`, `deduplication`, or application-level
 idempotency keys to guard against reprocessing a job that was partially handled before
