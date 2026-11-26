@@ -31,7 +31,7 @@ describe('the options of a worker that are getters on a class prototype', () => 
   it('reads a name given beyond the base options', () => {
     const copy: Record<string, unknown> = snapshotWorkerOptions(
       hostWith('useWorkerThreads', true),
-      ['useWorkerThreads'],
+      'useWorkerThreads',
     )
 
     expect(copy.useWorkerThreads).toBe(true)

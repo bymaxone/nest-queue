@@ -15,6 +15,16 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
+## [1.2.30] — 2026-11-25
+
+Against 1.2.29 the declarations are unchanged; the runtime of the main entry changes.
+
+### Changed
+
+- **The main entry bundle changes**, with nothing a caller can observe: one internal function takes its extra option names as separate arguments. The declarations are unchanged and no size budget moves.
+
+---
+
 ## [1.2.29] — 2026-11-25
 
 Against 1.2.28 the declarations are unchanged; the runtime of the main entry changes.
@@ -1338,7 +1348,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.29...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.30...HEAD
+[1.2.30]: https://github.com/bymaxone/nest-queue/compare/v1.2.29...v1.2.30
 [1.2.29]: https://github.com/bymaxone/nest-queue/compare/v1.2.28...v1.2.29
 [1.2.28]: https://github.com/bymaxone/nest-queue/compare/v1.2.27...v1.2.28
 [1.2.27]: https://github.com/bymaxone/nest-queue/compare/v1.2.26...v1.2.27
