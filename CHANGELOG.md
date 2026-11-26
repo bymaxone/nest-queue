@@ -15,6 +15,30 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
+## [1.2.33] — 2026-11-26
+
+Against 1.2.32 the signatures are unchanged; the runtime of the main entry changes.
+
+### Fixed
+
+- A `backoff` object whose `type` is neither `'fixed'` nor `'exponential'` is refused with `INVALID_OPTIONS`. BullMQ needs a `backoffStrategy` for any other type, which `WorkerRegistry` does not pass to its workers; without one the failed job could not be moved and stayed `active`.
+- `jobFinished`, and with it `bymax_queue_jobs_total`, reports `retried` only when BullMQ moved the job to be run again. It read the job's options before, and said `retried` for a job BullMQ did not schedule: a backoff type with no strategy, or a backoff strategy or delay answering `-1`.
+
+### Changed
+
+- A failed attempt is reported once BullMQ has moved its job, not when the processor threw. A failure BullMQ does not try to move, such as one a shutdown stopped waiting for, is reported to no observer. The duration is still the time the processor ran.
+
+#### Apply to a derived backend
+
+- A custom `backoff` type is now refused by `enqueue`, `enqueueBulk`, `FlowService.add` and `FlowService.addBulk`, and in `defaultJobOptions`, where `forRoot` throws. This also reaches a host that only produced jobs for a BullMQ worker of its own with a `backoffStrategy`, and one that set `settings` on a registered worker: add those jobs through the BullMQ `Queue` or `FlowProducer`.
+- A `backoff` object with no `type`, such as `{ delay: 1000 }`, is refused too, whatever the `attempts`. Say `{ type: 'fixed', delay: 1000 }` or the number `1000`.
+- The options of an `upsertJobScheduler` template are not checked for this.
+- Jobs added through `getCachedQueues()` or `FlowService.getProducer()` are not checked for `backoff`.
+- A failure BullMQ never tries to move is not counted.
+- A test that calls a registered processor itself hears no `failed` or `retried` unless it also calls the job's `moveToFailed`, as BullMQ does.
+
+---
+
 ## [1.2.32] — 2026-11-26
 
 Documentation only. Against 1.2.31 the built `dist/` is unchanged.
@@ -1389,7 +1413,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.32...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.33...HEAD
+[1.2.33]: https://github.com/bymaxone/nest-queue/compare/v1.2.32...v1.2.33
 [1.2.32]: https://github.com/bymaxone/nest-queue/compare/v1.2.31...v1.2.32
 [1.2.31]: https://github.com/bymaxone/nest-queue/compare/v1.2.30...v1.2.31
 [1.2.30]: https://github.com/bymaxone/nest-queue/compare/v1.2.29...v1.2.30

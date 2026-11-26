@@ -12,7 +12,7 @@ import { hear, outcomeOf, own, type Ended } from '../utils/bounded-wait'
 import { Injectable, Logger } from '@nestjs/common'
 import { logEvent, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
 
-/** How one attempt of a job ended. `retried` means BullMQ will run the job again. */
+/** How one attempt of a job ended. `retried` means BullMQ moved the job to be run again. */
 export type JobOutcome = 'completed' | 'failed' | 'retried'
 
 /** The headers of a W3C trace context, as a propagator writes them (`traceparent`, `tracestate`). */
@@ -69,7 +69,8 @@ export interface QueueObserver {
     run: () => Promise<T>,
   ): Promise<T>
   /**
-   * Hear how an attempt ended. The event is a frozen copy made for this observer. A promise the hook
+   * Hear how an attempt ended. A failed attempt is heard once BullMQ has moved the job, and not at
+   * all when BullMQ does not try to move it. The event is a frozen copy made for this observer. A promise the hook
    * returns is not awaited: its rejection is logged, and nothing waits for it to settle.
    */
   jobFinished?(event: JobFinishedEvent): void

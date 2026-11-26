@@ -56,6 +56,22 @@ const options: ResolvedQueueOptions = {
   enqueueTimeoutMs: 10000,
 }
 
+/** The part of BullMQ's move this reads: it finishes the job when no attempt is left. */
+function moveToFailed(this: Job): Promise<void> {
+  if (this.attemptsMade + 1 >= (this.opts.attempts ?? 1)) this.finishedOn = 1
+  return Promise.resolve()
+}
+
+/** Run one attempt and, when it throws, move the job as BullMQ does before it rethrows. */
+async function attempt(processor: Processor, job: Job): Promise<unknown> {
+  try {
+    return await processor(job)
+  } catch (error) {
+    await job.moveToFailed(error as Error, 'token')
+    throw error
+  }
+}
+
 /** A job as the worker receives it. */
 function jobWith(metadata: string | undefined, attemptsMade = 0, attempts = 2): Job {
   return {
@@ -64,6 +80,7 @@ function jobWith(metadata: string | undefined, attemptsMade = 0, attempts = 2): 
     data: {},
     attemptsMade,
     opts: { attempts, ...(metadata === undefined ? {} : { telemetry: { metadata } }) },
+    moveToFailed,
   } as unknown as Job
 }
 
@@ -116,7 +133,7 @@ describe('WorkerRegistry — observed attempts', () => {
     const error = new Error('boom')
     const processor = registered(() => Promise.reject(error), observers)
 
-    await expect(processor(jobWith(undefined, 0, 2))).rejects.toBe(error)
+    await expect(attempt(processor, jobWith(undefined, 0, 2))).rejects.toBe(error)
 
     expect(finished).toMatchObject([{ queue: 'email', outcome: 'retried' }])
   })
@@ -127,7 +144,7 @@ describe('WorkerRegistry — observed attempts', () => {
     observers.register({ jobFinished: (event) => finished.push(event) })
     const processor = registered(() => Promise.reject(new Error('boom')), observers)
 
-    await processor(jobWith(undefined, 1, 2)).catch(() => undefined)
+    await attempt(processor, jobWith(undefined, 1, 2)).catch(() => undefined)
 
     expect(finished).toMatchObject([{ outcome: 'failed' }])
   })
@@ -148,7 +165,9 @@ describe('WorkerRegistry — observed attempts', () => {
     }, observers)
 
     try {
-      await expect(processor(jobWith(undefined, 0, 1))).rejects.toBeInstanceOf(QueueException)
+      await expect(attempt(processor, jobWith(undefined, 0, 1))).rejects.toBeInstanceOf(
+        QueueException,
+      )
     } finally {
       Reflect.deleteProperty(Object.prototype, 'zzPlantedInTheHandler')
     }
@@ -166,11 +185,46 @@ describe('WorkerRegistry — observed attempts', () => {
     }, observers)
 
     try {
-      await expect(processor(jobWith(undefined, 0, 1))).rejects.toBeInstanceOf(QueueException)
+      await expect(attempt(processor, jobWith(undefined, 0, 1))).rejects.toBeInstanceOf(
+        QueueException,
+      )
     } finally {
       Reflect.deleteProperty(Object.prototype, 'zzPlantedBeforeRejecting')
     }
 
     expect(finished).toMatchObject([{ queue: 'email', outcome: 'failed' }])
+  })
+
+  it('leaves the move to BullMQ and says retried when a planted key is still there as the job moves', async () => {
+    const observers = new QueueObserverRegistry()
+    const finished: JobFinishedEvent[] = []
+    observers.register({ jobFinished: (event) => finished.push(event) })
+    const processor = registered(() => {
+      ;(Object.prototype as Record<string, unknown>).zzPlantedAcrossTheMove = 1
+      return Promise.reject(new Error('the handler failed'))
+    }, observers)
+    const next = ['the next job']
+    let moved = false
+    const job = Object.assign(jobWith(undefined, 0, 2), {
+      moveToFailed: async (): Promise<unknown> => {
+        await new Promise<void>((resolve) => setTimeout(resolve, 10))
+        moved = true
+        return next
+      },
+    }) as unknown as Job
+    let result: unknown
+    let movedWhenAnswered: boolean | undefined
+
+    try {
+      await expect(processor(job)).rejects.toBeInstanceOf(QueueException)
+      result = await job.moveToFailed(new Error('x'), 'token')
+      movedWhenAnswered = moved
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'zzPlantedAcrossTheMove')
+    }
+
+    expect(movedWhenAnswered).toBe(true)
+    expect(result).toBe(next)
+    expect(finished).toMatchObject([{ queue: 'email', outcome: 'retried' }])
   })
 })

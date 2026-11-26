@@ -1,23 +1,17 @@
 /**
- * @fileoverview How one attempt of a job ended, for an observer: done, failed for good, or failed and
- * to be run again. BullMQ moves a job on its own for the errors it throws to change the job's state
- * (a delay, a wait for children, a rate limit); those are not failures of the work, so they report
+ * @fileoverview How a failed attempt of a job ended, for an observer: to be run again, or failed for
+ * good. The answer is read from the move BullMQ makes after the processor threw, not from the job's
+ * options, which can promise a retry BullMQ never schedules (a backoff type with no strategy, or a
+ * delay of -1). BullMQ makes no such move for the errors it reads as a change of the job's state (a
+ * delay, a wait for children, a rate limit), nor for a thrown value it cannot read, so those report
  * nothing.
  * @layer server/observability
  */
 
 import type { Job, JobsOptions } from 'bullmq'
-import { handBackOf, memberOf } from '../../shared/hand-back'
+import { memberOf } from '../../shared/hand-back'
+import { hear, outcomeOf } from '../utils/bounded-wait'
 import type { JobOutcome } from './queue-observer'
-
-/**
- * Whether the error is BullMQ's `UnrecoverableError`, which fails the job whatever attempts remain.
- * BullMQ recognises it by `instanceof` or by name, and the name is what an error from another realm
- * or a second copy of the package carries, so the name alone is read here.
- */
-function isUnrecoverable(error: unknown): boolean {
-  return memberOf(error, 'name') === 'UnrecoverableError'
-}
 
 /**
  * The options of a job, typed as possibly absent: a job a host built by hand, to call a handler in
@@ -30,42 +24,62 @@ export function optionsOf(job: Job): JobsOptions | undefined {
 }
 
 /**
- * Whether BullMQ can read what the processor threw. Before it moves a job it reads the `message`, the
- * prototype (for `instanceof`) and the `name` of the error, unguarded, so a `null`, an `undefined`, or
- * a value one of whose reads throws ends in BullMQ's own handling, which emits `error`, leaves the job
- * active and schedules no retry: the attempt has neither been retried nor failed.
+ * Whether BullMQ calls the move again after this error: it retries a lost connection for as long as
+ * it lasts, and gives up on any other.
  */
-function isReadableByBullMq(error: unknown): boolean {
-  const read = error as { message?: unknown; name?: unknown }
-  return [
-    unreadableAs(() => read.message),
-    unreadableAs(() => Object.getPrototypeOf(error)),
-    unreadableAs(() => read.name),
-  ].every((value) => value !== UNREADABLE)
-}
-
-/** What a read of the error answers when it throws, which no value of the error can be. */
-const UNREADABLE = Symbol('unreadable')
-
-/** The value `read` answers, or {@link UNREADABLE} when it throws; a `null` or an `undefined` throws. */
-function unreadableAs(read: () => unknown): unknown {
-  try {
-    return read()
-  } catch {
-    return UNREADABLE
-  }
+function isConnectionError(error: unknown): boolean {
+  const message = memberOf(error, 'message')
+  return (
+    memberOf(error, 'name') === 'ConnectionClosedError' ||
+    message === 'Connection is closed.' ||
+    String(message).includes('ECONNREFUSED') ||
+    memberOf(error, 'code') === 'ECONNREFUSED'
+  )
 }
 
 /**
- * Classify the end of one attempt that threw.
- *
- * @param job - The job, as the processor received it; `attemptsMade` counts the attempts before this one.
- * @param error - What the processor threw.
- * @returns `retried` when BullMQ runs the job again, `failed` when it does not, `undefined` for an
- *   error that moves the job instead of failing it, and for one BullMQ cannot read.
+ * Wait for a move BullMQ already started, and say how it went. The library's prototype guard does not
+ * run here: the move is running, so a refusal could only report an outcome it has not had yet. The
+ * promise was given the intrinsic `constructor`, so awaiting it reads nothing a host can replace.
  */
-export function failureOutcome(job: Job, error: unknown): JobOutcome | undefined {
-  if (handBackOf(error) !== undefined || !isReadableByBullMq(error)) return undefined
-  if (isUnrecoverable(error)) return 'failed'
-  return job.attemptsMade + 1 < (optionsOf(job)?.attempts ?? 1) ? 'retried' : 'failed'
+async function readMove(
+  moving: Promise<unknown>,
+  job: Job,
+  report: (outcome: JobOutcome) => void,
+): Promise<void> {
+  try {
+    await moving
+  } catch (error) {
+    if (!isConnectionError(error)) report('failed')
+    return
+  }
+  report(job.finishedOn === undefined ? 'retried' : 'failed')
+}
+
+/**
+ * Report how BullMQ moves a job whose attempt threw. Call it before the error reaches BullMQ: it
+ * gives this job object its own `moveToFailed`, which hands back the promise of BullMQ's move as it
+ * is and reads what that move did.
+ *
+ * @param job - The job, as the processor received it, which BullMQ then moves.
+ * @param report - Called at most once: `retried` when the move leaves the job unfinished, to be run
+ *   again; `failed` when it finishes the job, or when BullMQ gives up on the move and leaves the job
+ *   active. Not called when BullMQ makes no move.
+ */
+export function reportFailedMove(job: Job, report: (outcome: JobOutcome) => void): void {
+  const move = Reflect.get<Job, 'moveToFailed'>(job, 'moveToFailed')
+  let reported = false
+  const once = (outcome: JobOutcome): void => {
+    if (reported) return
+    reported = true
+    report(outcome)
+  }
+  job.moveToFailed = (...args) => {
+    const moving = Reflect.apply(move, job, args)
+    // Gives the move the intrinsic constructor before `readMove` awaits it. That await comes before
+    // BullMQ's own, so the observers hear the outcome before BullMQ acts on it.
+    hear(moving)
+    void outcomeOf(() => readMove(moving, job, once))
+    return moving
+  }
 }
