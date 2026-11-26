@@ -516,19 +516,20 @@ A job that already carries metadata keeps it, and `queue.process` continues the 
 
 Every operational log line is an object handed to the Nest `Logger`, `{ event, message, ...fields }`, with fields of closed or numeric values only, so `@bymax-one/nest-logger` writes them as data and Nest's console logger prints them readably. `message` holds the library's own text only. When an error caused the event, it is carried as the error itself under `err`, where a logger that knows errors serialises and redacts it, and never as text in `message`. A logger you set with `app.useLogger` that throws is absorbed, so it does not end the process or fail the code that was reporting. A promise that your logger returns is not: Nest's `Logger` does not hand it to the library, so the rejection of an asynchronous transport is dropped, becomes an unhandled rejection and ends the process with exit code 1 unless your application handles `unhandledRejection`.
 
-| Code                          | Level | When                                                                                                                                   | Fields                          |
-| ----------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `QUEUE_SHUTDOWN_COMPLETE`     | log   | The module finished closing its workers, queues, flow producer and connection                                                          | `durationMs`, `forcedWorkers`   |
-| `QUEUE_WORKER_DRAIN_TIMEOUT`  | warn  | A worker did not drain within the shutdown budget and was stopped                                                                      | `queue`, `drainTimeoutMs`       |
-| `QUEUE_WORKER_CLOSE_FAILED`   | warn  | A worker failed to close and was stopped                                                                                               | `queue`, `err`                  |
-| `QUEUE_DRAIN_FAILED`          | warn  | A queue could not be drained on shutdown (`drainOnShutdown`)                                                                           | `queue`, `err`                  |
-| `QUEUE_OBSERVER_FAILED`       | warn  | An observer threw or rejected from a hook; it is ignored and the job is not affected                                                   | `hook`                          |
-| `QUEUE_CLIENT_ERROR`          | error | A Redis connection the module uses emitted an error                                                                                    | `role`, `err`                   |
-| `QUEUE_EMITTER_ERROR`         | error | A `Queue`, `Worker`, `QueueEvents` or `FlowProducer` emitted an error                                                                  | `kind`, `queue`, `err`          |
-| `QUEUE_EVENT_HANDLER_FAILED`  | error | An `@OnWorkerEvent` or `@OnQueueEvent` handler threw or rejected                                                                       | `decorator`, `eventName`, `err` |
-| `QUEUE_CONCURRENCY_DEFAULTED` | warn  | A `@Processor` that gave no concurrency got the default                                                                                | `queue`, `concurrency`          |
-| `QUEUE_UNBOUNDED_RETRIES`     | warn  | The shared client has `maxRetriesPerRequest: null`, so a command waits for as long as an outage lasts                                  | none                            |
-| `QUEUE_GUARD_REFUSED`         | error | The prototype guard refused on a path that cannot throw (a readiness ping, the teardown), so it failed closed: `down`, or a disconnect | `site`, `err`                   |
+| Code                               | Level | When                                                                                                                                       | Fields                          |
+| ---------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| `QUEUE_SHUTDOWN_COMPLETE`          | log   | The module finished closing its workers, queues, flow producer and connection                                                              | `durationMs`, `forcedWorkers`   |
+| `QUEUE_WORKER_DRAIN_TIMEOUT`       | warn  | A worker did not drain within the shutdown budget and was stopped                                                                          | `queue`, `drainTimeoutMs`       |
+| `QUEUE_WORKER_CLOSE_FAILED`        | warn  | A worker failed to close and was stopped                                                                                                   | `queue`, `err`                  |
+| `QUEUE_SANDBOX_SHUTDOWN_UNGUARDED` | warn  | A sandboxed worker was registered on a BullMQ whose `Worker` the library cannot wrap, so a job's outcome after the shutdown is not dropped | `queue`                         |
+| `QUEUE_DRAIN_FAILED`               | warn  | A queue could not be drained on shutdown (`drainOnShutdown`)                                                                               | `queue`, `err`                  |
+| `QUEUE_OBSERVER_FAILED`            | warn  | An observer threw or rejected from a hook; it is ignored and the job is not affected                                                       | `hook`                          |
+| `QUEUE_CLIENT_ERROR`               | error | A Redis connection the module uses emitted an error                                                                                        | `role`, `err`                   |
+| `QUEUE_EMITTER_ERROR`              | error | A `Queue`, `Worker`, `QueueEvents` or `FlowProducer` emitted an error                                                                      | `kind`, `queue`, `err`          |
+| `QUEUE_EVENT_HANDLER_FAILED`       | error | An `@OnWorkerEvent` or `@OnQueueEvent` handler threw or rejected                                                                           | `decorator`, `eventName`, `err` |
+| `QUEUE_CONCURRENCY_DEFAULTED`      | warn  | A `@Processor` that gave no concurrency got the default                                                                                    | `queue`, `concurrency`          |
+| `QUEUE_UNBOUNDED_RETRIES`          | warn  | The shared client has `maxRetriesPerRequest: null`, so a command waits for as long as an outage lasts                                      | none                            |
+| `QUEUE_GUARD_REFUSED`              | error | The prototype guard refused on a path that cannot throw (a readiness ping, the teardown), so it failed closed: `down`, or a disconnect     | `site`, `err`                   |
 
 ### Your own observer
 
@@ -564,9 +565,8 @@ It implements a **bounded drain protocol** with at-least-once semantics:
    wait for the job and its lock renewal ends; the lock expires and the job stalls and is retried
    by the next instance. What the abandoned handler produces afterwards, a result or a failure, is
    dropped, so the stopped worker cannot restart its connection. The handler's own promise keeps
-   running, because user code cannot be cancelled. A sandboxed (file-based) worker is the
-   exception: its job runs in a child process the registry cannot wrap, and in a measured run the
-   host process did not exit by itself after the budget ended with such a job still running.
+   running, because user code cannot be cancelled. The same holds for a sandboxed (file-based)
+   worker: what its job produces after the stop is dropped, and the job is left to stall.
 4. Queue-events and the connections the library opened for workers and queue-events are closed,
    each within what is left of the budget; a connection that has not quit by then is disconnected.
 5. Once NestJS has stopped the HTTP server (`onApplicationShutdown`), the flow producer, the
@@ -580,6 +580,29 @@ It implements a **bounded drain protocol** with at-least-once semantics:
    client if you want the same exit time. NestJS runs
    `onModuleDestroy` before it stops the HTTP server, so a request that is still being served can
    enqueue a job after step 4; those resources stay open until the server is down.
+
+**Sandboxed jobs still running at the deadline.** The library does not kill the child process or
+the worker thread; that is left to BullMQ. In measured runs with the processor file already loaded:
+
+- A child process was sent a stop signal and allowed to finish its job: the host process exited
+  when the child did, or when BullMQ killed the child about 30 s after the close, whichever came
+  first. `drainTimeoutMs` does not bound that wait, so give the process manager's kill timeout
+  room for it.
+- A worker thread (`useWorkerThreads: true`) was terminated at the close, and the host exited.
+
+Known limit: until the child process ends, its job's code keeps running, side effects included,
+although its outcome is dropped.
+
+Known limit: a host process that is itself killed with `SIGKILL` leaves its forked child running;
+in a measured run the child finished a 20 s job after the host was gone.
+
+Known limit: once the stopped worker no longer renews the lock, a `lockDuration` shorter than what
+is left of the child's job lets another instance start the same job while the old child still runs;
+measured with a 3 s lock.
+
+Known limit: a sandboxed processor still loading its file when the drain budget ends keeps the
+host process alive, because BullMQ does not signal that child or thread. Use a drain budget longer
+than the processor takes to load, and keep the process manager's own stop timeout.
 
 **Handlers must be idempotent.** Use `jobId`, `deduplication`, or application-level
 idempotency keys to guard against reprocessing a job that was partially handled before

@@ -26,13 +26,16 @@ Against 1.2.29 the declarations gain one optional worker option; the runtime of 
 ### Fixed
 
 - A provider value without a `@Processor` class's prototype in its chain is no longer registered as that processor because its `constructor` property names the class. Beside a real instance of the class, such a value failed the bootstrap with `DUPLICATE_PROCESSOR`.
+- A sandboxed (file-based) job that is still running when the shutdown stops its worker has its outcome dropped, and the job is left to stall and be run again. Measured before the fix with `redis:7` and BullMQ 6.3.4: a job that succeeded afterwards kept the host process alive, and a job in a worker thread was recorded as failed. The README's shutdown section states what BullMQ does with the child process. A processor still loading its file when the drain budget ends keeps the host process alive; that was measured with this release and not with 1.2.29. On a BullMQ whose `Worker` has no sandbox function to wrap, nothing is dropped and the registration logs `QUEUE_SANDBOX_SHUTDOWN_UNGUARDED`.
 
 ### Changed
 
 - An internal function takes its extra option names as separate arguments, with nothing a caller can observe.
-- **The main entry bundle is larger.** The brotli budgets of `dist/server/index.mjs` and `dist/server/index.cjs` were raised to 22,354 B and 22,453 B.
+- **The main entry bundle is larger.** The brotli budgets of `dist/server/index.mjs` and `dist/server/index.cjs` were raised to 22,547 B and 22,628 B.
 
 #### Apply to a derived backend
+
+- A sandboxed job that outlasts `drainTimeoutMs` is no longer recorded by the instance that is shutting down, as completed or as failed: it stalls and is run again, up to `maxStalledCount`. Make its processor idempotent, and size the process manager's kill timeout for BullMQ's wait of about 30 s on a child process.
 
 - The declarations add the optional `WorkerOptions.maxStalledCount`. A host that already passed a `maxStalledCount` in the worker `options` had it ignored; it now reaches BullMQ, and a value that is not a whole number of `0` or more refuses the registration with `WORKER_REGISTRATION_FAILED`.
 - A host that registered a processor through a value without the class's prototype in its chain, such as a hand-built `{ constructor: EmailProcessor, ... }` in a `useValue` provider, gets no worker for it now, and nothing is logged. Provide the class or an instance of it, or register the worker with `WorkerRegistry.register()`.
