@@ -26,7 +26,7 @@ Against 1.2.32 the signatures are unchanged; the runtime of the main entry chang
 
 ### Changed
 
-- A failed attempt is reported once BullMQ has moved its job, not when the processor threw. An attempt BullMQ does not try to move, such as one a shutdown stopped waiting for, is reported to no observer. The duration is still the time the processor ran.
+- A failed attempt is reported once BullMQ has moved its job, not when the processor threw. A failure BullMQ does not try to move, such as one a shutdown stopped waiting for, is reported to no observer. The duration is still the time the processor ran.
 
 #### Apply to a derived backend
 

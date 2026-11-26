@@ -506,7 +506,7 @@ Known limit: `bymax_queue_jobs_total` has no `dead_lettered` outcome. A dead-let
 
 `bymax_queue_depth` has four series per queue. Refreshing its cached snapshot reads Redis for every queue the library has opened, about seven commands per queue (measured with BullMQ 6.3.4 and Redis 7), so 100 queues are 400 series and about 700 commands per refresh. A scrape inside `metrics.cacheTtlMs` costs no read, so with many queues raise `metrics.cacheTtlMs` to spread the reads, or leave `metrics.enabled` off to have no depth samples at all.
 
-A failed attempt is counted once BullMQ has moved its job. It is `failed` on the last attempt, on an `UnrecoverableError`, when the backoff strategy answers `-1`, and when BullMQ gives up on the move, as it does for a lost lock, or for a backoff type with no strategy, which leaves the job `active` until the stalled-job check takes it. An attempt BullMQ does not try to move is not counted, such as one that a shutdown stopped waiting for, or one whose handler threw a value BullMQ cannot read, like `null`.
+A failed attempt is counted once BullMQ has moved its job. It is `failed` too when BullMQ gives up on the move, as it does for a lost lock, or for a backoff type with no strategy, which leaves the job `active` until the stalled-job check takes it. A failure BullMQ does not try to move is not counted, such as one that a shutdown stopped waiting for, or one whose handler threw a value BullMQ cannot read, like `null`.
 
 A job that a worker hands back to BullMQ with `DelayedError`, `WaitingError`, `WaitingChildrenError` or `RateLimitError` is not counted: it did not fail. A sandboxed worker runs in another process and is not observed.
 
