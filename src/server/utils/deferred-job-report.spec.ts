@@ -31,4 +31,19 @@ describe('deferredJobReport', () => {
     expect(logger.log).not.toHaveBeenCalled()
     expect(logger.error).not.toHaveBeenCalled()
   })
+
+  // A line that waited for the window to close would leave a loop silent for its first minute, or
+  // for ever when it stops sooner: the first deferral of each window writes before it returns.
+  it('writes inside the call that opens each window', () => {
+    const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() }
+    let at = 0
+    const deferred = deferredJobReport(logger, 'email', () => at)
+
+    deferred()
+    expect(logger.warn).toHaveBeenCalledTimes(1)
+
+    at = 60_000
+    deferred()
+    expect(logger.warn).toHaveBeenCalledTimes(2)
+  })
 })
