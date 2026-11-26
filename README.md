@@ -606,9 +606,10 @@ Known limit: once the stopped worker no longer renews the lock, a `lockDuration`
 is left of the job lets another instance start the same job while the old child process, or from
 BullMQ 6.6.1 the old worker thread, still runs it; measured with a 3 s lock.
 
-Known limit: a sandboxed processor still loading its file when the drain budget ends keeps the
-host process alive, because BullMQ does not signal that child or thread. Use a drain budget longer
-than the processor takes to load, and keep the process manager's own stop timeout.
+Known limit: a sandboxed processor still loading its file when the drain budget ends runs the job
+once loaded and keeps the host process alive, because BullMQ does not signal that child or thread.
+Use a drain budget longer than the processor takes to load, and keep the process manager's own stop
+timeout.
 
 **Handlers must be idempotent.** Use `jobId`, `deduplication`, or application-level
 idempotency keys to guard against reprocessing a job that was partially handled before
