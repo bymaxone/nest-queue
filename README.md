@@ -500,6 +500,10 @@ export class AppModule {}
 
 Known limit: `bymax_queue_jobs_total` has no `dead_lettered` outcome. A dead-letter queue is a recipe in this README, not something the library knows, so count its jobs from that queue.
 
+- The `failed` outcome counts an attempt that ran in this process and ended the job. It does not say whether your listener moved that job to a dead-letter queue.
+- BullMQ fails some jobs without running the processor: one that stalled more often than `maxStalledCount` allows, or a flow parent whose child failed with `failParentOnFailure`. The `failed` event fires, so the dead-letter recipe can move them, and the counter does not change. A sandboxed worker's jobs are not counted either.
+- With the `metrics` option on, `bymax_queue_depth` has series for the dead-letter queue in a process that has opened it, as the recipe's `enqueue` does. They show its `waiting`, `active`, `delayed` and `failed` counts from the cached snapshot, not how many jobs were ever moved there.
+
 `bymax_queue_depth` has four series per queue. Refreshing its cached snapshot reads Redis for every queue the library has opened, about seven commands per queue (measured with BullMQ 6.3.4 and Redis 7), so 100 queues are 400 series and about 700 commands per refresh. A scrape inside `metrics.cacheTtlMs` costs no read, so with many queues raise `metrics.cacheTtlMs` to spread the reads, or leave `metrics.enabled` off to have no depth samples at all.
 
 A job that a worker hands back to BullMQ with `DelayedError`, `WaitingError`, `WaitingChildrenError` or `RateLimitError` is not counted: it did not fail. A sandboxed worker runs in another process and is not observed.

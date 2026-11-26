@@ -15,6 +15,16 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
+## [1.2.32] — 2026-11-26
+
+Documentation only. Against 1.2.31 the built `dist/` is unchanged.
+
+### Changed
+
+- The README says what `bymax_queue_jobs_total` does and does not tell about dead-lettered jobs: its `failed` outcome does not say that a job was moved to a dead-letter queue, and a job BullMQ fails without running the processor (stalled past `maxStalledCount`, or a flow parent failed by its child) does not change the counter.
+
+---
+
 ## [1.2.31] — 2026-11-26
 
 Against 1.2.30 the declarations are unchanged; the runtime of the main entry changes.
@@ -1379,7 +1389,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.31...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.32...HEAD
+[1.2.32]: https://github.com/bymaxone/nest-queue/compare/v1.2.31...v1.2.32
 [1.2.31]: https://github.com/bymaxone/nest-queue/compare/v1.2.30...v1.2.31
 [1.2.30]: https://github.com/bymaxone/nest-queue/compare/v1.2.29...v1.2.30
 [1.2.29]: https://github.com/bymaxone/nest-queue/compare/v1.2.28...v1.2.29
