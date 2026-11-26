@@ -582,23 +582,29 @@ It implements a **bounded drain protocol** with at-least-once semantics:
    enqueue a job after step 4; those resources stay open until the server is down.
 
 **Sandboxed jobs still running at the deadline.** The library does not kill the child process or
-the worker thread; that is left to BullMQ. In measured runs with the processor file already loaded:
+the worker thread; that is left to BullMQ, and what BullMQ does with a worker thread changed in
+6.6.1. Measured on BullMQ 6.0.0, 6.3.4, 6.6.0, 6.6.1 and 6.7.10, with the processor file already
+loaded:
 
-- A child process was sent a stop signal and allowed to finish its job: the host process exited
-  when the child did, or when BullMQ killed the child about 30 s after the close, whichever came
-  first. `drainTimeoutMs` does not bound that wait, so give the process manager's kill timeout
-  room for it.
-- A worker thread (`useWorkerThreads: true`) was terminated at the close, and the host exited.
+- A child process, on every measured version, was sent a stop signal and allowed to finish its job:
+  the host process exited when the child did, or when BullMQ killed the child about 30 s after the
+  drain budget ran out, whichever came first. `drainTimeoutMs` does not bound that wait, so give
+  the process manager's kill timeout room for it.
+- A worker thread (`useWorkerThreads: true`) on 6.6.1 and 6.7.10 was treated the same way: it was
+  allowed to finish its job, and was terminated about 30 s after the drain budget ran out if it had
+  not. Give the process manager's kill timeout the same room.
+- A worker thread on 6.0.0, 6.3.4 and 6.6.0, before that change, was terminated when the drain
+  budget ran out, and the host exited.
 
-Known limit: until the child process ends, its job's code keeps running, side effects included,
-although its outcome is dropped.
+Known limit: until the child process, or from BullMQ 6.6.1 the worker thread, ends, its job's code
+keeps running, side effects included, although its outcome is dropped.
 
 Known limit: a host process that is itself killed with `SIGKILL` leaves its forked child running;
-in a measured run the child finished a 20 s job after the host was gone.
+in a measured run the child finished its job after the host was gone.
 
 Known limit: once the stopped worker no longer renews the lock, a `lockDuration` shorter than what
-is left of the child's job lets another instance start the same job while the old child still runs;
-measured with a 3 s lock.
+is left of the job lets another instance start the same job while the old child process, or from
+BullMQ 6.6.1 the old worker thread, still runs it; measured with a 3 s lock.
 
 Known limit: a sandboxed processor still loading its file when the drain budget ends keeps the
 host process alive, because BullMQ does not signal that child or thread. Use a drain budget longer
