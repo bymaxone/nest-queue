@@ -309,6 +309,7 @@ export type _PingDetailsNameTheMode = Expect<Equal<keyof PingAnswer['details'], 
 // Worker options
 // ---------------------------------------------------------------------------
 
+/** `maxStalledCount` is published as an optional `number`. */
 export type _MaxStalledCountIsAnOptionalNumber = Expect<
   Equal<Pick<WorkerOptions, 'maxStalledCount'>, { maxStalledCount?: number }>
 >
