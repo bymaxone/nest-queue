@@ -340,9 +340,9 @@ command connection is unnamed.
 
 Marks a class as a worker bound to `queueName`. The class must be an `@Injectable()` registered as a NestJS provider.
 
-Known limit: discovery finds a processor by the `constructor` of each provider instance, so a `useValue` provider whose value has an own `constructor` property naming a `@Processor` class is registered as that processor, as an instance of the class would be.
+Discovery finds a processor by the `constructor` of each provider instance and registers it only when the class's prototype is in the provider's prototype chain: a `useValue` value without it is ignored, even when its `constructor` property names a `@Processor` class.
 
-Known limit: the same instance reached through several tokens, such as a `useExisting` alias, is one processor. A provider whose factory returns a wrapper object whose `constructor` is not the `@Processor` class is not registered, and nothing is logged, because no other signal on the wrapper says which class it stands for; provide the class itself, or register the worker with `WorkerRegistry.register()`.
+Known limit: the same instance reached through several tokens, such as a `useExisting` alias, is one processor. A provider whose factory returns a wrapper object without the `@Processor` class's prototype in its chain is not registered, and nothing is logged, because its `constructor` property alone does not say which class it stands for; provide the class itself, or register the worker with `WorkerRegistry.register()`.
 
 ### `@Process(jobName?)`
 

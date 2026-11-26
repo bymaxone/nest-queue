@@ -29,6 +29,14 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { DEFAULT_WORKER_CONCURRENCY } from '../constants/default-options'
 import { logEvent, logFailure, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
 
+// Captured when the module is loaded, so a later write to either global does not decide who is
+// registered.
+const apply = Reflect.apply
+const isPrototypeOf = Object.getOwnPropertyDescriptor(Object.prototype, 'isPrototypeOf')?.value as (
+  this: object,
+  value: unknown,
+) => boolean
+
 /** Stable code in the log line of a failing `@OnWorkerEvent` / `@OnQueueEvent` handler. */
 const EVENT_HANDLER_FAILED = 'queue.event_handler_failed'
 
@@ -94,14 +102,17 @@ export class ProcessorDiscoveryService implements OnModuleInit {
 
       const processorMeta = Reflect.getOwnMetadata(PROCESSOR_METADATA_KEY, ctor) as
         ProcessorMetadata | undefined
-      if (!processorMeta) continue
+      // A value can carry a `constructor` of its own naming a class whose prototype it lacks.
+      // The chain is asked, not `instanceof`, which the class can answer through `Symbol.hasInstance`.
+      // Asked only once the metadata is found: an arrow function has no prototype to ask.
+      if (!processorMeta || !apply(isPrototypeOf, ctor.prototype, [instance])) continue
 
       // Nest keeps one wrapper per token, so a `useExisting` alias lists the same instance again: one
       // object is one processor however many tokens name it. Two instances of one queue still refuse.
       if (wired.has(instance)) continue
       wired.add(instance)
 
-      this.wireProcessor(instance as Record<string | symbol, unknown>, processorMeta)
+      this.wireProcessor(instance as Record<string | symbol, unknown>, ctor, processorMeta)
     }
   }
 
@@ -151,14 +162,15 @@ export class ProcessorDiscoveryService implements OnModuleInit {
    * Worker, bind worker-local and queue-global event listeners.
    *
    * @param instance - The resolved provider instance.
+   * @param ctor - The class the instance was found to be.
    * @param processorMeta - Metadata written by `@Processor`.
    */
   private wireProcessor(
     instance: Record<string | symbol, unknown>,
+    ctor: object,
     processorMeta: ProcessorMetadata,
   ): void {
     const { queueName, workerOptions } = processorMeta
-    const ctor = (instance as WithConstructor).constructor
     this.claimQueue(processorMeta)
 
     const handlers = (Reflect.getOwnMetadata(PROCESS_HANDLERS_METADATA_KEY, ctor) ??
