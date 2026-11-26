@@ -1118,6 +1118,11 @@ export interface WorkerOptions {
    * Stalled job check interval. Default: 30_000 (30s).
    */
   stalledInterval?: number
+
+  /**
+   * Times a stalled job is re-queued before it fails. Whole number >= 0. Default: 1.
+   */
+  maxStalledCount?: number
 }
 ```
 

@@ -29,6 +29,12 @@ export interface WorkerOptions {
   /** Interval between stalled-job checks, in milliseconds. Default: 30_000. */
   stalledInterval?: number
   /**
+   * How many times a stalled job is put back to wait before it fails with "job stalled more than
+   * allowable limit". With `0` the first stall fails it. A job of a job scheduler is not failed by
+   * this limit. A whole number, `0` or more. Default: 1, BullMQ's own.
+   */
+  maxStalledCount?: number
+  /**
    * Fail a job whose handler has not settled after this many milliseconds, so it retries under the
    * job's `attempts` and `backoff` and its concurrency slot is freed. The handler's `signal` aborts
    * at that moment; a handler that ignores it keeps running in the background. There is no default:

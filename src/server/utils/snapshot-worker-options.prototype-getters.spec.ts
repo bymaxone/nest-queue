@@ -21,6 +21,7 @@ describe('the options of a worker that are getters on a class prototype', () => 
     ['autorun', false],
     ['lockDuration', 45_000],
     ['stalledInterval', 20_000],
+    ['maxStalledCount', 3],
     ['jobTimeoutMs', 9000],
   ])('reads %s', (name, value) => {
     const copy: Record<string, unknown> = snapshotWorkerOptions(hostWith(name, value))
