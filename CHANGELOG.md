@@ -26,7 +26,7 @@ Against 1.2.29 the declarations are unchanged; the runtime of the main entry cha
 ### Changed
 
 - An internal function takes its extra option names as separate arguments, with nothing a caller can observe.
-- The declarations are unchanged and no size budget moves.
+- **The main entry bundle is larger.** The brotli budgets of `dist/server/index.mjs` and `dist/server/index.cjs` were raised to 22,325 B and 22,396 B. The declarations are unchanged.
 
 #### Apply to a derived backend
 

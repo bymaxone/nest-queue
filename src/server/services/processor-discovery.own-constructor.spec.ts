@@ -86,6 +86,21 @@ describe('ProcessorDiscoveryService — a value naming a @Processor class as its
     await moduleRef.close()
   })
 
+  it.each([
+    ['Object.prototype.isPrototypeOf', Object.prototype, 'isPrototypeOf'],
+    ['Reflect.apply', Reflect, 'apply'],
+  ])('keeps its answer when %s is replaced after load', (_name, holder, key) => {
+    const original = Object.getOwnPropertyDescriptor(holder, key)!
+    Object.defineProperty(holder, key, { ...original, value: () => true })
+    let register: jest.Mock
+    try {
+      register = discover({ constructor: NamedProcessor })
+    } finally {
+      Object.defineProperty(holder, key, original)
+    }
+    expect(register).not.toHaveBeenCalled()
+  })
+
   it('ignores a constructor property that is a function with no prototype', () => {
     // Such a function has no prototype to ask, so only a class carrying @Processor may be tested.
     expect(discover({ constructor: (): void => undefined })).not.toHaveBeenCalled()

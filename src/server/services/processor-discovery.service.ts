@@ -29,6 +29,14 @@ import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { DEFAULT_WORKER_CONCURRENCY } from '../constants/default-options'
 import { logEvent, logFailure, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
 
+// Captured when the module is loaded, so a later write to either global does not decide who is
+// registered.
+const apply = Reflect.apply
+const isPrototypeOf = Object.getOwnPropertyDescriptor(Object.prototype, 'isPrototypeOf')?.value as (
+  this: object,
+  value: unknown,
+) => boolean
+
 /** Stable code in the log line of a failing `@OnWorkerEvent` / `@OnQueueEvent` handler. */
 const EVENT_HANDLER_FAILED = 'queue.event_handler_failed'
 
@@ -97,7 +105,7 @@ export class ProcessorDiscoveryService implements OnModuleInit {
       // A value can carry a `constructor` of its own naming a class whose prototype it lacks.
       // The chain is asked, not `instanceof`, which the class can answer through `Symbol.hasInstance`.
       // Asked only once the metadata is found: an arrow function has no prototype to ask.
-      if (!processorMeta || !Object.prototype.isPrototypeOf.call(ctor.prototype, instance)) continue
+      if (!processorMeta || !apply(isPrototypeOf, ctor.prototype, [instance])) continue
 
       // Nest keeps one wrapper per token, so a `useExisting` alias lists the same instance again: one
       // object is one processor however many tokens name it. Two instances of one queue still refuse.
