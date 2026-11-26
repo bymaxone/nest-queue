@@ -101,6 +101,15 @@ function planted<T>(body: () => T): T {
   }
 }
 
+async function plantedUntilSettled<T>(body: () => Promise<T>): Promise<T> {
+  ;(Object.prototype as Record<string, unknown>).zzPlanted = 'planted-value'
+  try {
+    return await body()
+  } finally {
+    Reflect.deleteProperty(Object.prototype, 'zzPlanted')
+  }
+}
+
 /** What a call was refused with: the code, or `undefined` when it was not refused. */
 async function refusedWith(run: () => Promise<unknown>): Promise<string | undefined> {
   try {
@@ -343,13 +352,17 @@ describe('the processor the worker registry gives BullMQ', () => {
   // A refused job is neither failed nor measured, so without this line a worker under a polluted
   // prototype moves its jobs back for as long as it lasts and nothing says so.
   it('logs a deferred job with its queue, and nothing of the job', async () => {
-    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
+    const plantedAtWrite: boolean[] = []
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {
+      plantedAtWrite.push(Object.hasOwn(Object.prototype, 'zzPlanted'))
+    })
     const processor = registered(jest.fn())
 
-    await planted(() =>
+    await plantedUntilSettled(() =>
       processor(jobWith(jest.fn().mockResolvedValue(undefined)), 'token').catch((e: unknown) => e),
     )
 
+    expect(plantedAtWrite).toEqual([true])
     expect(warn).toHaveBeenCalledWith({
       event: 'QUEUE_JOB_DEFERRED_GUARD_REFUSED',
       message: 'The prototype guard refused before a job ran; it went back to the delayed set',
@@ -429,15 +442,18 @@ describe('the processor the worker registry gives BullMQ', () => {
     expect(delay).toBe(5000)
   })
 
-  it('ends the attempt with the error of the move when the job cannot be moved', async () => {
+  it('ends the attempt with the error of the move, and logs no deferral, when the job cannot be moved', async () => {
     const boom = new Error('redis down')
     const processor = registered(jest.fn())
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined)
 
-    const outcome = await planted(() =>
+    const outcome = await plantedUntilSettled(() =>
       processor(jobWith(jest.fn().mockRejectedValue(boom))).catch((e: unknown) => e),
     )
 
     expect(outcome).toBe(boom)
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
   })
 
   it('runs the handler and returns its result when Object.prototype is clean', async () => {
