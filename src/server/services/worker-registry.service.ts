@@ -336,8 +336,8 @@ export class WorkerRegistry {
   /**
    * Validate tunable options before constructing a Worker.
    * Enforces whole-number `concurrency` in `[1, MAX_WORKER_CONCURRENCY]`, whole-number
-   * `limiter.max`/`limiter.duration` `>= 1`, and `lockDuration`/`stalledInterval` within
-   * 1000..2^31 - 1.
+   * `limiter.max`/`limiter.duration` `>= 1`, `lockDuration`/`stalledInterval` within
+   * 1000..2^31 - 1, and a whole-number `maxStalledCount` `>= 0`.
    *
    * @param opts - The caller-supplied options (may be undefined).
    * @throws {QueueException} `WORKER_REGISTRATION_FAILED` when values are out of range.
@@ -453,6 +453,7 @@ export class WorkerRegistry {
     if (opts?.limiter !== undefined) result.limiter = opts.limiter
     if (opts?.lockDuration !== undefined) result.lockDuration = opts.lockDuration
     if (opts?.stalledInterval !== undefined) result.stalledInterval = opts.stalledInterval
+    if (opts?.maxStalledCount !== undefined) result.maxStalledCount = opts.maxStalledCount
     // Propagate the configured telemetry instance so spans cross from enqueue()
     // into the worker; the key stays absent when telemetry is not configured.
     if (this.options.telemetry !== undefined) result.telemetry = this.options.telemetry

@@ -7,6 +7,7 @@
 
 import { EventEmitter } from 'node:events'
 import type { Redis } from 'ioredis'
+import { Worker, type WorkerOptions as BullWorkerOptions } from 'bullmq'
 import { WorkerRegistry } from './worker-registry.service'
 import type { QueueException } from '../errors/queue-exception'
 import type { ConnectionResolver } from './connection-resolver.service'
@@ -111,4 +112,50 @@ describe('WorkerRegistry — lockDuration and stalledInterval', () => {
       expect(refusal({ [key]: 2_147_483_647 })).toBeUndefined()
     },
   )
+})
+
+describe('WorkerRegistry — maxStalledCount', () => {
+  const built = (options: WorkerOptions): BullWorkerOptions | undefined => {
+    jest.mocked(Worker).mockClear()
+    new WorkerRegistry(fakeConnection(), resolved).register({
+      queueName: 'q',
+      handler: () => Promise.resolve(),
+      options,
+    })
+    return jest.mocked(Worker).mock.calls[0]?.[2]
+  }
+
+  it.each([
+    ['must be a whole number', 1.5],
+    ['must be a whole number', Number.NaN],
+    ['must be a whole number', Number.POSITIVE_INFINITY],
+    ['must be >= 0', -1],
+  ])('refuses a value that %s: %s', (rule, bad) => {
+    // BullMQ accepts NaN here, and its stall script then never finds the limit exceeded.
+    expect(refusal({ maxStalledCount: bad })).toStrictEqual({
+      reason: `maxStalledCount ${rule}`,
+      actual: bad,
+    })
+  })
+
+  it.each([0, 1, 5, Number.MAX_SAFE_INTEGER])('hands %s to the BullMQ worker', (value) => {
+    expect(built({ maxStalledCount: value })?.maxStalledCount).toBe(value)
+  })
+
+  it('leaves the BullMQ default in place when the option is not given', () => {
+    const options = built({})
+    expect(options).toBeDefined()
+    expect(options).not.toHaveProperty('maxStalledCount')
+  })
+
+  it('hands the value to a sandboxed worker too', () => {
+    jest.mocked(Worker).mockClear()
+    new WorkerRegistry(fakeConnection(), resolved).registerSandboxed({
+      queueName: 'sandboxed',
+      processorFile: '/srv/processor.js',
+      options: { maxStalledCount: 3 },
+    })
+    const options = jest.mocked(Worker).mock.calls[0]?.[2]
+    expect(options?.maxStalledCount).toBe(3)
+  })
 })

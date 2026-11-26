@@ -1110,9 +1110,10 @@ do not pick them up:
    limiter values must be whole numbers too) covers
    the handler execution time — a worker that runs longer than `lockDuration` will have its
    lock stolen, marking the job as stalled.
-3. BullMQ re-queues a stalled job up to its `maxStalledCount` times (default `1`) and then
-   fails it; this library does not expose that setting. A stalled re-run does not count against the
-   job's `attempts`.
+3. BullMQ re-queues a stalled job up to `maxStalledCount` times (a worker option; default `1`)
+   and then fails it; with `0` the first stall fails it. A job of a job scheduler is not failed by
+   this limit. The value must be a whole number, `0` or more. A stalled re-run does not count
+   against the job's `attempts`.
 
 ---
 

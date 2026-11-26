@@ -63,7 +63,7 @@ function timerProblem(name: string, value: number | undefined): OptionProblem | 
  */
 export function workerOptionProblem(opts?: WorkerOptions): OptionProblem | undefined {
   if (opts === undefined) return undefined
-  const { concurrency, limiter, lockDuration, stalledInterval, autorun } = opts
+  const { concurrency, limiter, lockDuration, stalledInterval, maxStalledCount, autorun } = opts
   return (
     autorunProblem(autorun) ??
     (concurrency === undefined
@@ -74,6 +74,9 @@ export function workerOptionProblem(opts?: WorkerOptions): OptionProblem | undef
       : (countProblem('limiter.max', limiter.max, 1, Number.POSITIVE_INFINITY) ??
         countProblem('limiter.duration', limiter.duration, 1, Number.POSITIVE_INFINITY))) ??
     timerProblem('lockDuration', lockDuration) ??
-    timerProblem('stalledInterval', stalledInterval)
+    timerProblem('stalledInterval', stalledInterval) ??
+    (maxStalledCount === undefined
+      ? undefined
+      : countProblem('maxStalledCount', maxStalledCount, 0, Number.POSITIVE_INFINITY))
   )
 }

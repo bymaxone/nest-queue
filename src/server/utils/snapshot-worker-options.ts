@@ -21,6 +21,7 @@ const WORKER_OPTION_TABLE = {
   autorun: true,
   lockDuration: true,
   stalledInterval: true,
+  maxStalledCount: true,
   jobTimeoutMs: true,
 } as const satisfies Record<keyof WorkerOptions, true>
 const WORKER_OPTION_KEYS: readonly string[] = Object.keys(WORKER_OPTION_TABLE)

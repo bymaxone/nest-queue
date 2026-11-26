@@ -40,6 +40,7 @@ import type {
   QueueService,
   QUEUE_ERROR_CODES,
   TraceCarrier,
+  WorkerOptions,
 } from '@bymax-one/nest-queue'
 import type {
   JobStatus as SharedJobStatus,
@@ -303,3 +304,12 @@ export type _HandBackOfAnswersTheClosedSet = Expect<
 type PingAnswer = Awaited<ReturnType<ConnectionResolver['ping']>>
 export type _PingStatusIsClosed = Expect<Equal<PingAnswer['status'], 'up' | 'down'>>
 export type _PingDetailsNameTheMode = Expect<Equal<keyof PingAnswer['details'], 'mode'>>
+
+// ---------------------------------------------------------------------------
+// Worker options
+// ---------------------------------------------------------------------------
+
+/** `maxStalledCount` is published as an optional `number`. */
+export type _MaxStalledCountIsAnOptionalNumber = Expect<
+  Equal<Pick<WorkerOptions, 'maxStalledCount'>, { maxStalledCount?: number }>
+>
