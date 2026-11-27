@@ -32,6 +32,12 @@ function chain(length: number, end: Error = new Error('end')): Error {
 }
 
 describe('redactRedisError', () => {
+  it('says in its replacement what is not kept', () => {
+    expect(redactRedisError(reply('ERR x'))).toMatchObject({
+      message: 'A Redis command failed; the reply text and the command are not kept',
+    })
+  })
+
   it.each([
     ['WRONGPASS invalid username-password pair', 'WRONGPASS'],
     [`ERR unknown command 'AUTH', with args beginning with: '${SECRET}' `, 'ERR'],
@@ -95,6 +101,19 @@ describe('redactRedisError', () => {
     expect(kept).not.toBe(value)
     expect(kept.message).toBe(REDIS_FAILURE_MESSAGE)
     expect(visible(kept)).not.toContain(SECRET)
+  })
+
+  it('reads no code from a `code` that is not text, however it would print', () => {
+    const coded = Object.assign(reply('wrong'), { code: { toString: () => 'DUMMYPAYLOAD7' } })
+
+    expect(Object.keys(redactRedisError(coded) as Error)).toEqual(['name'])
+  })
+
+  it('looks at no more than the errors a chain of sixteen holds when one ends in null', () => {
+    const end = Object.assign(new Error('end'), { lastNodeError: null })
+    const value = chain(16, end)
+
+    expect(redactRedisError(value)).toBe(value)
   })
 
   it('replaces an error that is its own cause', () => {
@@ -255,6 +274,10 @@ describe('redactRedisError, on an error built out of another error’s text', ()
       Object.assign(new Error('Failed'), { lastNodeError: new Error('Command timed out') }),
     ],
     ['a message that is not text', { message: 1 }],
+    [
+      'a message that only answers as text would',
+      { message: { startsWith: () => true, indexOf: () => 0, slice: () => 'ERR x' } },
+    ],
   ])('returns %s as it is', (_label, value) => {
     expect(redactRedisError(value)).toBe(value)
   })

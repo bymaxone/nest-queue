@@ -62,8 +62,8 @@ function codeOf(value: unknown): string | undefined {
     return leadingCode(code) ?? leadingCode(message)
   } catch {
     // A member that throws is read as no code.
-    return undefined
   }
+  return undefined
 }
 
 /** What replaces `value` when it is one of {@link WRAPPERS}: its message and the copied code. */
@@ -73,7 +73,7 @@ function wrapperOf(value: unknown): { message: string; code: string | undefined 
     if (typeof text !== 'string') return undefined
     for (const { opening, marker, message, coded } of WRAPPERS) {
       const at = text.startsWith(opening) ? text.indexOf(marker) : -1
-      if (at < 0) continue
+      if (at === -1) continue
       return { message, code: coded ? leadingCode(text.slice(at + marker.length)) : undefined }
     }
   } catch {
@@ -93,7 +93,7 @@ function wrapperOf(value: unknown): { message: string; code: string | undefined 
  */
 export function redisFailure(reply: unknown): Error {
   const key = typeof reply === 'object' && reply !== null ? reply : undefined
-  const known = key === undefined ? undefined : replacements.get(key)
+  const known = key && replacements.get(key)
   if (known !== undefined) return known
   const wrapper = wrapperOf(reply)
   const failure = new Error(wrapper?.message ?? REDIS_FAILURE_MESSAGE)
@@ -109,8 +109,9 @@ function isNamedReply(link: object): boolean {
   try {
     return (link as { name?: unknown }).name === 'ReplyError'
   } catch {
-    return false
+    // A name that throws on being read is no reply name.
   }
+  return false
 }
 
 /**
@@ -136,7 +137,7 @@ function holdsReply(root: unknown): boolean {
       lastNodeError?: unknown
     }
     if (cause !== undefined) links.push(cause)
-    if (lastNodeError !== undefined && lastNodeError !== null) links.push(lastNodeError)
+    if (lastNodeError) links.push(lastNodeError)
     if (Array.isArray(errors)) links.push(...(errors as unknown[]))
   }
   return false
