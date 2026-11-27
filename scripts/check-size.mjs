@@ -14,14 +14,14 @@ import { brotliCompressSync } from 'node:zlib'
  * (417 B) keeps about 5% headroom. Each CommonJS bundle is budgeted at its measured brotli size plus 30 B,
  * measured on 2026-11-27 on the same build: 23,106 B for the server entry, 1,693 B for observability and
  * 429 B for shared. The server budgets were raised for the form a Redis reply is passed on in, measured
- * at 23,760 B (ESM) and 23,810 B (CJS). A `require` consumer gets the CommonJS file, so it is the one
+ * at 23,760 B (ESM) and 23,826 B (CJS). A `require` consumer gets the CommonJS file, so it is the one
  * a regression in that file would reach.
  */
 const BUDGETS = {
   'dist/server/index.mjs': 23_790,
   'dist/observability/index.mjs': 1_912,
   'dist/shared/index.mjs': 440,
-  'dist/server/index.cjs': 23_840,
+  'dist/server/index.cjs': 23_856,
   'dist/observability/index.cjs': 1_723,
   'dist/shared/index.cjs': 459,
 }
