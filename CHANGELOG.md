@@ -23,7 +23,7 @@ Against 1.2.35 the runtime of the main entry changes.
 
 ### Changed
 
-- A Redis error reply, or an error carrying a command, is passed on as an `Error` named `RedisCommandError` with a fixed message and the reply code as `code`, when the reply has one. So is an error ioredis or BullMQ builds out of another error's message. This applies to the rejections of `QueueService`, `FlowService` and `WorkerRegistry.unregister`, the `cause` of the library's exceptions, `err` on its log lines and what a trace hook is shown. Other errors are passed on as before.
+- An error that is, or wraps, a Redis reply or an error carrying a command is passed on as an `Error` named `RedisCommandError` with a fixed message and a `code`, when one can be read. So is an error ioredis or BullMQ builds out of another error's message. This applies to the rejections of `QueueService`, `FlowService` and `WorkerRegistry.unregister`, the `cause` of the library's exceptions, `err` on its log lines and what a trace hook is shown. Other errors are passed on as before.
 
 ---
 

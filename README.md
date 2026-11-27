@@ -1087,7 +1087,7 @@ The HTTP status follows the cause at the throw site: **503** when Redis or an op
 
 ### Redis replies
 
-An error that is, or wraps, a Redis reply or an error carrying a command reaches you as an `Error` named `RedisCommandError`, with a fixed message and the outer error's code as `code` (`NOPERM`, `WRONGTYPE`, `OOM`, …) if any. So does an error ioredis or BullMQ builds out of another error's message, such as unreachable sentinels or a job scheduler iteration that was not added, whose message says which it was. It has no `cause`, `command` or `previousErrors`.
+An error that is, or wraps, a Redis reply or an error carrying a command reaches you as an `Error` named `RedisCommandError`, with a fixed message and a `code` (`NOPERM`, `WRONGTYPE`, `OOM`, …) if one can be read. So does an error ioredis or BullMQ builds out of another error's message, such as unreachable sentinels or a job scheduler iteration that was not added, whose message says which it was. It has no `cause`, `command` or `previousErrors`.
 
 This holds for the rejections of `QueueService`, `FlowService` and `WorkerRegistry.unregister`, for the `cause` of the library's exceptions, for `err` on its log lines and for what a trace hook is shown. Branch on `code`, not on the message. Other errors, such as a refused connection or one your own code threw, are passed on unchanged. The objects you take out of the library (`getOrCreateQueue`, `getProducer`, a `Job`, your processors and `@OnWorkerEvent` / `@OnQueueEvent` handlers) are BullMQ's, and give you its errors as BullMQ does.
 
