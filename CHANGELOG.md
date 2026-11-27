@@ -13,9 +13,16 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ## [Unreleased]
 
+---
+
+## [1.2.34] — 2026-11-27
+
+Documentation only. Against 1.2.33 the built `dist/` is unchanged.
+
 ### Changed
 
 - The README names public members it had left out, among them `ConnectionResolver.ping` and `QueueHealthIndicator.check`.
+- The README says that the module itself calls the members a host does not call, and that `awaitReady()` waits while the client is connecting or reconnecting.
 - The 1.2.26 section is shorter where it repeated details that the README holds.
 
 ---
@@ -1418,7 +1425,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.33...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.34...HEAD
+[1.2.34]: https://github.com/bymaxone/nest-queue/compare/v1.2.33...v1.2.34
 [1.2.33]: https://github.com/bymaxone/nest-queue/compare/v1.2.32...v1.2.33
 [1.2.32]: https://github.com/bymaxone/nest-queue/compare/v1.2.31...v1.2.32
 [1.2.31]: https://github.com/bymaxone/nest-queue/compare/v1.2.30...v1.2.31
