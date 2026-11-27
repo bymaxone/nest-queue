@@ -15,6 +15,18 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
+## [1.2.34] — 2026-11-27
+
+Documentation only. Against 1.2.33 the built `dist/` is unchanged.
+
+### Changed
+
+- The README names public members it had left out, among them `ConnectionResolver.ping` and `QueueHealthIndicator.check`.
+- The README says which members the module itself calls, and that `awaitReady()` waits while the client is connecting or reconnecting.
+- The 1.2.26 section is shorter where it repeated details that the README holds.
+
+---
+
 ## [1.2.33] — 2026-11-26
 
 Against 1.2.32 the signatures are unchanged; the runtime of the main entry changes.
@@ -169,7 +181,7 @@ Against 1.2.25 the declared types of the main entry gain the observer types and 
 
 ### Added
 
-- **Observability, as an optional subpath.** `@bymax-one/nest-queue/observability` exports `BymaxQueueObservabilityModule`, `QueueMetricsContributor`, `QueueHealthIndicator` (named `queue`, exported with `QUEUE_HEALTH_INDICATOR_NAME`) and `QueueTracingObserver`. Metrics: `bymax_queue_jobs_total{queue,outcome}` (`completed`, `failed`, `retried`; there is no `dead_lettered`, since a dead-letter queue is a README recipe and not something the library knows), `bymax_queue_job_duration_seconds{queue}` and `bymax_queue_depth{queue,state}` (read from the cached `MetricsService` snapshot, empty while `metrics.enabled` is off). Spans: `queue.enqueue` and `queue.process`, whose attributes are `bymax.queue.name` and, for an attempt the processor handed back to BullMQ (`DelayedError`, `WaitingChildrenError`, `RateLimitError`, `WaitingError`), `bymax.queue.outcome` (`delayed`, `waiting_children`, `rate_limited`, `waiting`), with no error status; the W3C trace context of the enqueue span is stored with the job in `opts.telemetry.metadata`, apart from its data, and the worker continues it, so a request, its job and the work the job does are one trace. With no OpenTelemetry SDK nothing is stored. BullMQ's own `telemetry` option, when set, keeps its metadata. The readiness indicator sends one `PING`, bounded at two seconds, and reports no error text. `@bymax-one/nest-core ^1.6.10`, `prom-client ^15` and `@opentelemetry/api ^1.9` are optional peers, needed only to import this subpath; the main entry imports none of them.
+- **Observability, as an optional subpath.** `@bymax-one/nest-queue/observability` exports `BymaxQueueObservabilityModule`, `QueueMetricsContributor`, `QueueHealthIndicator` (named `queue`, exported with `QUEUE_HEALTH_INDICATOR_NAME`) and `QueueTracingObserver`. Metrics: `bymax_queue_jobs_total{queue,outcome}` (`completed`, `failed`, `retried`; there is no `dead_lettered`, since a dead-letter queue is a README recipe and not something the library knows), `bymax_queue_job_duration_seconds{queue}` and `bymax_queue_depth{queue,state}` (read from the cached `MetricsService` snapshot, empty while `metrics.enabled` is off). Spans: `queue.enqueue` and `queue.process`, whose attributes are `bymax.queue.name` and, for an attempt the processor handed back to BullMQ, `bymax.queue.outcome`, with no error status; the W3C trace context of the enqueue span is stored with the job in `opts.telemetry.metadata`, apart from its data, and the worker continues it, so a request, its job and the work the job does are one trace. With no OpenTelemetry SDK nothing is stored. BullMQ's own `telemetry` option, when set, keeps its metadata. The readiness indicator sends one bounded `PING` and reports no error text. `@bymax-one/nest-core ^1.6.10`, `prom-client ^15` and `@opentelemetry/api ^1.9` are optional peers, needed only to import this subpath; the main entry imports none of them.
 - **`QueueObserverRegistry` and the observer types** (`QueueObserver`, `JobFinishedEvent`, `JobOutcome`, `QueueObserveInfo`, `TraceCarrier`) in the main entry, so a host can register its own observer: hooks wrap the enqueue and each attempt of a job and hear how an attempt ended.
 
 ### Fixed
@@ -184,7 +196,7 @@ Against 1.2.25 the declared types of the main entry gain the observer types and 
 
 ### Changed
 
-- **The library's log lines are objects.** Each operational log line is now `{ event, message, ...fields }` handed to the Nest `Logger`, with the library's own text in `message`, fields of closed or numeric values only, and, when an error caused the line, that error as the value under `err` instead of its text interpolated into the message (the README lists each event's code, level, trigger and fields). `@bymax-one/nest-logger` writes the fields as data and Nest's console logger prints the object readably.
+- **The library's log lines are objects.** Each operational log line is now `{ event, message, ...fields }` handed to the Nest `Logger`, with the library's own text in `message`, fields of closed or numeric values only, and, when an error caused the line, that error as the value under `err` instead of its text interpolated into the message.
 - A flow tree whose node is shared by several parents is checked and copied once, so a tree that reuses one child definition at every level costs the number of nodes, not the number of paths to them.
 - The README says that `enqueueBulk` is not atomic: when it rejects, for example with `STORAGE_FULL`, some of its jobs may already be stored, so retry it with stable `jobId`s.
 
@@ -1413,7 +1425,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.33...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.34...HEAD
+[1.2.34]: https://github.com/bymaxone/nest-queue/compare/v1.2.33...v1.2.34
 [1.2.33]: https://github.com/bymaxone/nest-queue/compare/v1.2.32...v1.2.33
 [1.2.32]: https://github.com/bymaxone/nest-queue/compare/v1.2.31...v1.2.32
 [1.2.31]: https://github.com/bymaxone/nest-queue/compare/v1.2.30...v1.2.31

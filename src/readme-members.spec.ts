@@ -1,8 +1,9 @@
 /**
  * @fileoverview Holds the README to the public members of the library's own classes: every public
- * method and property of a class that an entry exports is named in the README, so a member added to
- * the published declarations without a line of documentation fails here. The classes of BullMQ that
- * the main entry re-exports are BullMQ's to document and are left out.
+ * method and property of a class that an entry exports is named in the README as code, so a member
+ * added to the published declarations without a line of documentation fails here. The check goes by
+ * the member's name, not by its class. The classes of BullMQ that the main entry re-exports are
+ * BullMQ's to document and are left out.
  * @layer test
  */
 
@@ -23,12 +24,18 @@ function hasHiddenModifier(declaration: ts.Declaration): boolean {
 }
 
 /**
- * Whether `text` names the identifier `name`: it appears with no identifier character, a letter,
- * a digit, `_` or `$`, directly before or after it, so `enqueue` is not named by `enqueueBulk`.
+ * Whether the Markdown `text` names the member `name` as code. A word of prose does not count. In a
+ * fenced block or an inline code span the name counts after a dot or before `(` or `<`, and an
+ * inline span that is exactly the name counts too. A longer identifier does not name it, so
+ * `enqueue` is not named by `enqueueBulk`.
  */
 function names(text: string, name: string): boolean {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`(?<![\\w$])${escaped}(?![\\w$])`).test(text)
+  const member = new RegExp(`\\.${escaped}(?![\\w$])|(?<![\\w$])${escaped}[(<]`)
+  const fence = /^```[^\n]*\n([\s\S]*?)^```/gm
+  const blocks = [...text.matchAll(fence)].map(([, body = '']) => body)
+  const spans = [...text.replace(fence, '').matchAll(/`([^`\n]+)`/g)].map(([, span = '']) => span)
+  return spans.includes(name) || [...blocks, ...spans].some((code) => member.test(code))
 }
 
 /** `Class.member` for every public member of every class an entry file exports, from the sources. */
@@ -79,23 +86,41 @@ describe('README member coverage', () => {
   })
 })
 
-describe('naming an identifier in text', () => {
-  it('accepts the name as a word, in code or in prose', () => {
+describe('naming a member in Markdown', () => {
+  it('accepts the member form in an inline code span', () => {
     expect(names('call `queue.enqueue(job)` first', 'enqueue')).toBe(true)
-    expect(names('enqueue', 'enqueue')).toBe(true)
+    expect(names('read `service.isOwned` first', 'isOwned')).toBe(true)
+    expect(names('then `list()`', 'list')).toBe(true)
+    expect(names('then `get<Job>(id)`', 'get')).toBe(true)
+  })
+
+  it('accepts a span that is exactly the name', () => {
+    expect(names('read `state` here', 'state')).toBe(true)
+  })
+
+  it('accepts the member form in a fenced block', () => {
+    expect(names('```ts\nawait flows.close()\n```\n', 'close')).toBe(true)
+  })
+
+  it('does not accept a word of prose, or a bare word inside code', () => {
+    expect(names('close the list (ping) of queue.check here', 'close')).toBe(false)
+    expect(names('close the list (ping) of queue.check here', 'ping')).toBe(false)
+    expect(names('close the list (ping) of queue.check here', 'check')).toBe(false)
+    expect(names('run `pnpm run check` now', 'check')).toBe(false)
+    expect(names('```sh\npnpm run check\n```\n', 'check')).toBe(false)
   })
 
   it('does not accept the name inside a longer identifier', () => {
-    expect(names('call enqueueBulk', 'enqueue')).toBe(false)
-    expect(names('call reenqueue', 'enqueue')).toBe(false)
-    expect(names('call enqueue_all', 'enqueue')).toBe(false)
-    expect(names('call enqueue2', 'enqueue')).toBe(false)
-    expect(names('call $enqueue', 'enqueue')).toBe(false)
-    expect(names('call enqueue$', 'enqueue')).toBe(false)
+    expect(names('`enqueueBulk()`', 'enqueue')).toBe(false)
+    expect(names('`reenqueue()`', 'enqueue')).toBe(false)
+    expect(names('`queue.enqueue_all`', 'enqueue')).toBe(false)
+    expect(names('`queue.enqueue2`', 'enqueue')).toBe(false)
+    expect(names('`$enqueue()`', 'enqueue')).toBe(false)
+    expect(names('`queue.enqueue$`', 'enqueue')).toBe(false)
   })
 
   it('reads a name with a dollar sign as the literal it is', () => {
-    expect(names('read `$state` here', '$state')).toBe(true)
-    expect(names('read a state here', '$state')).toBe(false)
+    expect(names('read `this.$state` here', '$state')).toBe(true)
+    expect(names('read `this.state` here', '$state')).toBe(false)
   })
 })
