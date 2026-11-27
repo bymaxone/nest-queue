@@ -23,17 +23,18 @@ const WRAPPERS = [
     message: 'All sentinels are unreachable; the text of the last error is not kept',
     coded: true,
   },
-  {
-    opening: 'Command queue state error',
-    marker: ' Last error: ',
-    message: 'Command queue state error; the text of the last reply is not kept',
-    coded: true,
-  },
+  // Before the error form: a data reply is copied whole and may hold the other marker.
   {
     opening: 'Command queue state error',
     marker: ' Last reply: ',
     message: 'Command queue state error; the text of the last reply is not kept',
     coded: false,
+  },
+  {
+    opening: 'Command queue state error',
+    marker: ' Last error: ',
+    message: 'Command queue state error; the text of the last reply is not kept',
+    coded: true,
   },
   {
     opening: 'Failed to add repeatable job for next iteration: ',

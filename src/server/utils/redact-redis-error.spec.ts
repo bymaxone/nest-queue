@@ -205,6 +205,12 @@ describe('redactRedisError, on an error built out of another error’s text', ()
       undefined,
     ],
     [
+      'an unexpected data reply that quotes the other marker',
+      'Command queue state error. If you can reproduce this, please report it. Last reply: x Last error: DUMMYPAYLOAD7',
+      QUEUE_STATE,
+      undefined,
+    ],
+    [
       'a job scheduler iteration',
       `Failed to add repeatable job for next iteration: OOM ${SECRET}`,
       NEXT_ITERATION,
@@ -258,6 +264,7 @@ describe('redactRedisError, on an error built out of another error’s text', ()
     ['ioredis', 'built/connectors/SentinelConnector/index.js', ' Last error: ${lastError.message}'],
     ['ioredis', 'built/DataHandler.js', 'Command queue state error'],
     ['ioredis', 'built/DataHandler.js', ' Last error: ${reply.message}'],
+    ['ioredis', 'built/DataHandler.js', ' Last reply: ${reply.toString()}'],
     ['bullmq', 'dist/cjs/classes/worker.js', 'Failed to add repeatable job for next iteration: '],
     ['bullmq', 'dist/esm/classes/worker.js', 'Failed to add repeatable job for next iteration: '],
   ])('still finds in the installed %s %s the text it matches: %s', (name, file, text) => {
