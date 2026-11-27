@@ -21,7 +21,7 @@ Against 1.2.34 the main entry gains an option and a method, and the runtime of t
 
 ### Added
 
-- `metrics.collectTimeoutMs` (default `1000`) and `MetricsService.getAllWithinBound()`, which answers what `getAll()` does when Redis answers within the bound, and an empty list otherwise.
+- `metrics.collectTimeoutMs` (default `1000`) and `MetricsService.getAllWithinBound()`, which settles as `getAll()` does when that happens within the bound, and answers an empty list otherwise.
 - A failed attempt of a job is logged as a `QUEUE_JOB_FAILED` warning with the queue, the job's name and id, the attempt and the class of the error. It carries no payload and no error message. Jobs the processor handed back write nothing.
 
 ### Fixed
