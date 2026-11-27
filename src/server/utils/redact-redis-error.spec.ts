@@ -4,6 +4,8 @@
  * @layer server/utils
  */
 
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { ReplyError } from 'ioredis'
 import { REDIS_FAILURE_MESSAGE, redactRedisError, redisFailure } from './redact-redis-error'
 
@@ -159,4 +161,105 @@ describe('redactRedisError', () => {
       expect(redisFailure(value)).not.toBe(first)
     },
   )
+})
+
+const SENTINEL = 'All sentinels are unreachable; the text of the last error is not kept'
+const QUEUE_STATE = 'Command queue state error; the text of the last reply is not kept'
+const NEXT_ITERATION = 'A job scheduler iteration was not added; the text of the cause is not kept'
+
+/** A file of an installed package, found from its manifest. */
+function installed(name: string, file: string): string {
+  return readFileSync(join(dirname(require.resolve(`${name}/package.json`)), file), 'utf8')
+}
+
+describe('redactRedisError, on an error built out of another error’s text', () => {
+  it.each<[string, string, string, string | undefined]>([
+    [
+      'sentinels that retry',
+      `All sentinels are unreachable. Retrying from scratch after 10ms. Last error: ERR ${SECRET}`,
+      SENTINEL,
+      'ERR',
+    ],
+    [
+      'sentinels that gave up',
+      `All sentinels are unreachable and retry is disabled. Last error: WRONGPASS ${SECRET}`,
+      SENTINEL,
+      'WRONGPASS',
+    ],
+    [
+      'sentinels with text of no code',
+      `All sentinels are unreachable and retry is disabled. Last error: wrong ${SECRET}`,
+      SENTINEL,
+      undefined,
+    ],
+    [
+      'an unexpected error reply',
+      `Command queue state error. If you can reproduce this, please report it. Last error: ERR ${SECRET}`,
+      QUEUE_STATE,
+      'ERR',
+    ],
+    [
+      'an unexpected reply that is data',
+      `Command queue state error. If you can reproduce this, please report it. Last reply: ${SECRET.toUpperCase()}`,
+      QUEUE_STATE,
+      undefined,
+    ],
+    [
+      'a job scheduler iteration',
+      `Failed to add repeatable job for next iteration: OOM ${SECRET}`,
+      NEXT_ITERATION,
+      'OOM',
+    ],
+  ])('replaces the one of %s', (_label, text, message, code) => {
+    const kept = redactRedisError(new Error(text)) as Error & { code?: string }
+
+    expect(kept.name).toBe('RedisCommandError')
+    expect(kept.message).toBe(message)
+    expect(kept.code).toBe(code)
+    expect(visible(kept).toLowerCase()).not.toContain(SECRET)
+  })
+
+  it('replaces an error that has one in its cause', () => {
+    const inner = new Error(`Failed to add repeatable job for next iteration: ERR ${SECRET}`)
+    const kept = redactRedisError(new Error('outer', { cause: inner })) as Error
+
+    expect(kept.message).toBe(REDIS_FAILURE_MESSAGE)
+    expect(visible(kept)).not.toContain(SECRET)
+  })
+
+  it('replaces a cluster failure that holds a reply as its last node error', () => {
+    const failed = Object.assign(new Error('Failed to refresh slots cache.'), {
+      lastNodeError: reply(`ERR ${SECRET}`),
+    })
+    const kept = redactRedisError(failed) as Error
+
+    expect(kept.message).toBe(REDIS_FAILURE_MESSAGE)
+    expect(visible(kept)).not.toContain(SECRET)
+  })
+
+  it.each<[string, unknown]>([
+    [
+      'sentinels with no last error',
+      new Error('All sentinels are unreachable and retry is disabled.'),
+    ],
+    ['text that only quotes an opening', new Error('x: Command queue state error Last error: y')],
+    [
+      'a cluster failure with no reply',
+      Object.assign(new Error('Failed'), { lastNodeError: new Error('Command timed out') }),
+    ],
+    ['a message that is not text', { message: 1 }],
+  ])('returns %s as it is', (_label, value) => {
+    expect(redactRedisError(value)).toBe(value)
+  })
+
+  it.each<[string, string, string]>([
+    ['ioredis', 'built/connectors/SentinelConnector/index.js', 'All sentinels are unreachable'],
+    ['ioredis', 'built/connectors/SentinelConnector/index.js', ' Last error: ${lastError.message}'],
+    ['ioredis', 'built/DataHandler.js', 'Command queue state error'],
+    ['ioredis', 'built/DataHandler.js', ' Last error: ${reply.message}'],
+    ['bullmq', 'dist/cjs/classes/worker.js', 'Failed to add repeatable job for next iteration: '],
+    ['bullmq', 'dist/esm/classes/worker.js', 'Failed to add repeatable job for next iteration: '],
+  ])('still finds in the installed %s %s the text it matches: %s', (name, file, text) => {
+    expect(installed(name, file)).toContain(text)
+  })
 })
