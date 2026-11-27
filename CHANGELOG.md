@@ -15,7 +15,7 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ### Changed
 
-- The README names `ConnectionResolver.ping` and `QueueHealthIndicator.check`.
+- The README names public members it had left out, among them `ConnectionResolver.ping` and `QueueHealthIndicator.check`.
 - The 1.2.26 section is shorter where it repeated details that the README holds.
 
 ---
