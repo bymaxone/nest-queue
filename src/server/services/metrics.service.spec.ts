@@ -159,6 +159,83 @@ describe('MetricsService — invalidate', () => {
   })
 })
 
+describe('MetricsService — a read in flight when the cache is invalidated', () => {
+  /** A service whose reads settle in the order the test chooses. */
+  function deferred(): {
+    qs: MockQueueService
+    service: MetricsService
+    answer: (index: number, waiting: number) => void
+  } {
+    const reads: ((waiting: number) => void)[] = []
+    const qs = makeQueueService(['email'])
+    qs.getMetrics.mockImplementation(
+      (name: string) =>
+        new Promise<QueueMetrics>((resolve) => {
+          reads.push((waiting) => {
+            const base = snapshot(name)
+            resolve({ ...base, counts: { ...base.counts, waiting } })
+          })
+        }),
+    )
+    return {
+      qs,
+      service: makeService(qs),
+      answer: (index, waiting) => {
+        reads[index]?.(waiting)
+      },
+    }
+  }
+
+  it.each([
+    ['its queue', 'email'],
+    ['the whole cache', undefined],
+    ['another queue', 'reports'],
+  ])('answers its caller and caches nothing after an invalidate of %s', async (_label, target) => {
+    const { qs, service, answer } = deferred()
+    const early = service.get('email')
+
+    service.invalidate(target)
+    answer(0, 7)
+    await expect(early).resolves.toMatchObject({ counts: { waiting: 7 } })
+    const next = service.get('email')
+    answer(1, 0)
+
+    await expect(next).resolves.toMatchObject({ counts: { waiting: 0 } })
+    expect(qs.getMetrics).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not replace what a read begun after the invalidate cached', async () => {
+    const { qs, service, answer } = deferred()
+    const early = service.get('email')
+    service.invalidate('email')
+    const late = service.get('email')
+
+    answer(1, 0)
+    await late
+    answer(0, 7)
+    await early
+
+    await expect(service.get('email')).resolves.toMatchObject({ counts: { waiting: 0 } })
+    expect(qs.getMetrics).toHaveBeenCalledTimes(2)
+  })
+
+  it('caches nothing from a read of every queue that outlived its bound', async () => {
+    const { qs, service, answer } = deferred()
+    const bounded = service.getAllWithinBound()
+    await jest.advanceTimersByTimeAsync(1000)
+    await expect(bounded).resolves.toEqual([])
+
+    service.invalidate()
+    answer(0, 7)
+    await jest.advanceTimersByTimeAsync(0)
+    const next = service.get('email')
+    answer(1, 0)
+
+    await expect(next).resolves.toMatchObject({ counts: { waiting: 0 } })
+    expect(qs.getMetrics).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('MetricsService — disabled', () => {
   it('throws METRICS_DISABLED (503) from get', async () => {
     // A disabled service rejects reads with the typed error.

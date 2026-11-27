@@ -8,7 +8,7 @@
 import 'reflect-metadata'
 import { NestFactory } from '@nestjs/core'
 import { Logger, Module, type INestApplicationContext } from '@nestjs/common'
-import { DelayedError } from 'bullmq'
+import { DelayedError, WaitingChildrenError, WaitingError, Worker } from 'bullmq'
 import { BymaxQueueModule, QueueService, WorkerRegistry } from '@bymax-one/nest-queue'
 import { startRedisContainer, type RedisContainer } from './setup/testcontainers'
 
@@ -58,27 +58,48 @@ describe('E2E — the log of a failed job', () => {
       lines.push(message)
     })
     const queues = app.get(QueueService)
-    let handedBack = false
+    const handedBack = new Set<string>()
+    /** Whether this is the first run of a job of this name, which is the one that hands it back. */
+    const first = (name: string): boolean => {
+      if (handedBack.has(name)) return false
+      handedBack.add(name)
+      return true
+    }
     app.get(WorkerRegistry).register({
       queueName: 'payments',
+      options: { limiter: { max: 100, duration: 1000 } },
       handler: async (job) => {
-        if (job.name === 'later' && !handedBack) {
-          handedBack = true
+        if (job.name === 'charge') throw new PaymentDeclined(`card ${SECRET} was declined`)
+        if (job.name === 'child' || !first(job.name)) return
+        if (job.name === 'delayed') {
           await job.moveToDelayed(Date.now() + 100, job.token)
           throw new DelayedError()
         }
-        if (job.name === 'charge') throw new PaymentDeclined(`card ${SECRET} was declined`)
+        if (job.name === 'waiting') {
+          await job.moveToWait(job.token)
+          throw new WaitingError()
+        }
+        if (job.name === 'parent') {
+          const parent = { id: job.id!, queue: job.queueQualifiedName }
+          await queues.enqueue('payments', 'child', {}, { parent })
+          await job.moveToWaitingChildren(job.token!)
+          throw new WaitingChildrenError()
+        }
+        await queues.getOrCreateQueue('payments').rateLimit(100)
+        throw Worker.RateLimitError()
       },
     })
 
-    await queues.enqueue('payments', 'later', {}, { jobId: 'hand-back' })
+    for (const name of ['delayed', 'waiting', 'parent', 'limited']) {
+      await queues.enqueue('payments', name, {}, { jobId: `hand-back-${name}` })
+    }
     await queues.enqueue('payments', 'charge', { card: SECRET }, { jobId: 'c1', attempts: 2 })
     await waitFor(async () => {
       const { counts } = await queues.getMetrics('payments')
-      return counts.completed === 1 && counts.failed === 1
+      return counts.completed === 5 && counts.failed === 1
     })
 
-    expect(handedBack).toBe(true)
+    expect([...handedBack].sort()).toStrictEqual(['delayed', 'limited', 'parent', 'waiting'])
     const failed = lines.filter((line) => (line as { event?: string }).event === 'QUEUE_JOB_FAILED')
     expect(failed).toStrictEqual(
       [1, 2].map((attempt) => ({

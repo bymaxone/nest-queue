@@ -46,6 +46,8 @@ export class MetricsService {
   private readonly cache = new Map<string, CacheEntry>()
   /** The read of every queue that `getAllWithinBound` calls share while it is in flight. */
   private pending: Promise<readonly QueueMetrics[]> | undefined
+  /** Counts the calls to `invalidate`, so that a read begun before one is not cached after it. */
+  private generation = 0
 
   constructor(
     private readonly queueService: QueueService,
@@ -68,8 +70,11 @@ export class MetricsService {
     if (entry && entry.expiresAt > Date.now()) {
       return entry.metrics
     }
+    const begun = this.generation
     const metrics = await this.queueService.getMetrics(queueName)
-    this.cache.set(queueName, { metrics, expiresAt: Date.now() + this.ttlMs })
+    if (begun === this.generation) {
+      this.cache.set(queueName, { metrics, expiresAt: Date.now() + this.ttlMs })
+    }
     return metrics
   }
 
@@ -89,7 +94,8 @@ export class MetricsService {
    * Return what {@link MetricsService.getAll} returns if it answers within
    * `metrics.collectTimeoutMs`, and an empty list otherwise, for a caller with a deadline of its
    * own such as a metrics scrape. Calls made while a read is in flight wait for that read instead
-   * of starting another. A read that outlives the bound goes on and fills the cache.
+   * of starting another. A read that outlives the bound goes on and fills the cache, unless
+   * {@link MetricsService.invalidate} was called since it began.
    *
    * @returns Metrics for all known queues, or none when the bound passed first.
    * @throws {QueueException} `METRICS_DISABLED` (503) when metrics are disabled.
@@ -121,13 +127,15 @@ export class MetricsService {
   }
 
   /**
-   * Invalidate the cache for `queueName`, or the whole cache when omitted.
+   * Invalidate the cache for `queueName`, or the whole cache when omitted. A read in flight, of any
+   * queue, still answers whoever waits for it, and caches nothing.
    *
    * @param queueName - The queue entry to drop; omit to clear everything.
    * @throws {QueueException} `METRICS_DISABLED` (503) when metrics are disabled.
    */
   invalidate(queueName?: string): void {
     this.ensureEnabled()
+    this.generation += 1
     if (queueName === undefined) {
       this.cache.clear()
       return

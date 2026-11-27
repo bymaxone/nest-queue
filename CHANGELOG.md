@@ -15,6 +15,25 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
+## [1.2.36] — 2026-11-27
+
+Against 1.2.35 the public surface is unchanged and the runtime of the main entry changes.
+
+### Changed
+
+- The `QUEUE_JOB_FAILED` warning carries the job's name and id without line breaks, and each cut to 128 characters and an ellipsis when longer. It is written for each failed attempt, not once for each failed job.
+
+### Fixed
+
+- A depth read in flight when `MetricsService.invalidate` is called no longer caches what it reads.
+
+### Apply to a derived backend
+
+- If you match `QUEUE_JOB_FAILED` lines by job name or id, a value longer than 128 characters is now cut.
+- A job name and a custom `jobId` are written to that line: keep secrets and personal data out of both.
+
+---
+
 ## [1.2.35] — 2026-11-27
 
 Against 1.2.34 the main entry gains an option and a method, and the runtime of the main and observability entries changes.

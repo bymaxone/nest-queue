@@ -41,7 +41,7 @@ export const QUEUE_LOG_EVENTS = {
   GUARD_REFUSED: 'QUEUE_GUARD_REFUSED',
   /** The guard refused before a job ran, so the job went back to the delayed set. */
   JOB_DEFERRED_GUARD_REFUSED: 'QUEUE_JOB_DEFERRED_GUARD_REFUSED',
-  /** An attempt of a job failed. */
+  /** An attempt of a job failed; one line for each failed attempt, not one for each job. */
   JOB_FAILED: 'QUEUE_JOB_FAILED',
 } as const
 
@@ -65,8 +65,8 @@ export interface QueueLogMessage {
  *
  * @param event - The code of the event.
  * @param message - The text.
- * @param fields - Closed or numeric values, queue names, and for a failed job its name and id;
- * never a payload or the text of an error.
+ * @param fields - Closed or numeric values, queue names, and for a failed job its name and id,
+ * cut to a bound; never a payload or the text of an error.
  */
 export function logEvent(
   event: QueueLogEvent,
