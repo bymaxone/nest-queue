@@ -9,6 +9,7 @@ import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { assertPrototypeClean } from '../connection/prototype-guard'
 import { own } from './bounded-wait'
+import { redactRedisError, redisFailure } from './redact-redis-error'
 
 /**
  * Build the `CONNECTION_TIMEOUT` error a producer or inspection call reports when Redis does not
@@ -28,7 +29,7 @@ export function timeoutException(
     HttpStatus.SERVICE_UNAVAILABLE,
     { operation, timeoutMs },
   )
-  if (cause !== undefined) exception.cause = errorSummary(cause)
+  if (cause !== undefined) exception.cause = redactRedisError(cause)
   return exception
 }
 
@@ -52,7 +53,7 @@ export function unavailableException(
     HttpStatus.SERVICE_UNAVAILABLE,
     { operation, reason },
   )
-  exception.cause = errorSummary(cause)
+  exception.cause = redactRedisError(cause)
   return exception
 }
 
@@ -104,33 +105,13 @@ export function isOutOfMemory(err: unknown): boolean {
   )
 }
 
-/** A fresh error with the name and message of `reply` and nothing else. */
-function nameAndMessage(reply: Error): Error {
-  const summary = new Error(reply.message)
-  summary.name = reply.name
-  return summary
-}
-
-/**
- * What is kept of an error from Redis or BullMQ as the `cause` of a library error. An ioredis reply
- * error carries the command that failed, whose arguments hold the job's data, so keeping the error
- * itself would let `JSON.stringify` or a logger print a payload: only its name and message are kept.
- * An error with no command (a refused connection, a timeout) carries nothing of the job and is kept
- * as it is, so its code and address stay for diagnosis.
- *
- * @param reply - The error that ended the call.
- */
-export function errorSummary(reply: unknown): unknown {
-  return reply instanceof Error && 'command' in reply ? nameAndMessage(reply) : reply
-}
-
 /**
  * Build the `STORAGE_FULL` error a write reports when Redis has no memory left for it. The request
  * is valid and a retry can succeed once memory is freed, so it is a 503; the details carry the
  * operation and the reason only, never Redis's text, which names the server's setting and script.
  *
  * @param operation - The public call that was refused.
- * @param cause - The Redis reply; only its name and message are kept, as the `cause`.
+ * @param cause - The Redis reply; only its code is kept, in the `cause`.
  */
 export function storageFullException(operation: string, cause: unknown): QueueException {
   const exception = new QueueException(
@@ -138,14 +119,15 @@ export function storageFullException(operation: string, cause: unknown): QueueEx
     HttpStatus.SERVICE_UNAVAILABLE,
     { operation, reason: 'out_of_memory' },
   )
-  exception.cause = nameAndMessage(cause as Error)
+  exception.cause = redisFailure(cause)
   return exception
 }
 
 /**
  * Await `work`, reporting an ioredis command timeout, or a call refused because the connection is
  * down, as the documented `CONNECTION_TIMEOUT`, a write Redis refused for lack of memory as
- * `STORAGE_FULL`, and leaving every other outcome untouched.
+ * `STORAGE_FULL`. A success is left untouched, and so is any other rejection that holds no Redis
+ * reply; one that does is rethrown as {@link redisFailure}.
  *
  * @param operation - The public call being made.
  * @param commandTimeoutMs - Reads the command deadline in force on the connection, in milliseconds;
@@ -165,6 +147,6 @@ export async function withCommandTimeoutCode<T>(
   } catch (err) {
     if (isCommandTimeout(err)) throw timeoutException(operation, commandTimeoutMs(), err)
     if (isOutOfMemory(err)) throw storageFullException(operation, err)
-    throw isOfflineRejection(err) ? unavailableException(operation, err) : err
+    throw isOfflineRejection(err) ? unavailableException(operation, err) : redactRedisError(err)
   }
 }

@@ -35,7 +35,7 @@ export const EXCLUSIONS: readonly Exclusion[] = [
 export const EXPECTED = {
   entries: 3,
   includes: ['src/server/index.ts', 'src/shared/index.ts', 'src/observability/index.ts'],
-  shipped: 74,
+  shipped: 75,
 } as const
 
 /** Shipped files that are data rather than code: none, this package ships bundles only. */

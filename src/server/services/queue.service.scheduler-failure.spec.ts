@@ -72,20 +72,23 @@ describe('QueueService.upsertJobScheduler — failure classification', () => {
       "READONLY You can't write against a read only replica.",
     ],
     ['NOAUTH (the connection is not authenticated)', 'NOAUTH Authentication required.'],
-  ])('propagates a Redis reply error without a code untouched: %s', async (_label, message) => {
-    // A reply error carries no string `code`, so it used to be relabelled "invalid cron" (400)
-    // for a perfectly valid pattern, telling the caller not to retry a write Redis refused.
-    const service = makeService()
-    service.getOrCreateQueue('cleanup')
-    const refused = new RedisReplyError(message)
-    queueInstances[0]?.upsertJobScheduler.mockRejectedValue(refused)
+  ])(
+    'rejects a Redis reply by its code, not as an invalid pattern: %s',
+    async (_label, message) => {
+      // A reply error carries no string `code`, so it used to be relabelled "invalid cron" (400)
+      // for a perfectly valid pattern, telling the caller not to retry a write Redis refused.
+      const service = makeService()
+      service.getOrCreateQueue('cleanup')
+      const refused = new RedisReplyError(message)
+      queueInstances[0]?.upsertJobScheduler.mockRejectedValue(refused)
 
-    await expect(
-      service.upsertJobScheduler('cleanup', 'nightly', { pattern: '0 3 * * *' }),
-    ).rejects.toBe(refused)
-  })
+      await expect(
+        service.upsertJobScheduler('cleanup', 'nightly', { pattern: '0 3 * * *' }),
+      ).rejects.toMatchObject({ name: 'RedisCommandError', code: message.split(' ')[0] })
+    },
+  )
 
-  it('reports an out-of-memory refusal as STORAGE_FULL (503), keeping the reply as the cause', async () => {
+  it('reports an out-of-memory refusal as STORAGE_FULL (503), keeping the reply code in the cause', async () => {
     // Out of memory is the one reply error the library names: the request is valid and a retry can
     // succeed once Redis has room, which the caller learns from the code and the status.
     const service = makeService()
@@ -104,7 +107,7 @@ describe('QueueService.upsertJobScheduler — failure classification', () => {
     expect(err?.getResponse()).toMatchObject({
       error: { code: 'queue.storage_full', details: { operation: 'upsertJobScheduler' } },
     })
-    expect(err?.cause).toMatchObject({ name: refused.name, message: refused.message })
+    expect(err?.cause).toMatchObject({ name: 'RedisCommandError', code: 'OOM' })
     expect(err?.cause).not.toBe(refused)
   })
 

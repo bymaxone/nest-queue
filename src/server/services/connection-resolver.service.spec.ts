@@ -11,6 +11,7 @@ import type { Redis } from 'ioredis'
 import { GuardedConnector } from '../connection/guarded-connector'
 import { ConnectionResolver } from './connection-resolver.service'
 import { QueueException } from '../errors/queue-exception'
+import { redactRedisError } from '../utils/redact-redis-error'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import type { BymaxQueueModuleOptions } from '../interfaces/queue-module-options.interface'
 
@@ -470,7 +471,7 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
         QUEUE_ERROR_CODES.CONNECTION_INVALID,
       ],
     ] as const)(
-      'when %s: the status, the exact details, no code in the body, the error as cause',
+      'when %s: the status, the exact details, no code in the body, what the redaction leaves of the error as cause',
       async (_label, error, how, details, status, code) => {
         const err = await failure(error, how)
 
@@ -479,7 +480,7 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
         expect(response.error.code).toBe(code)
         expect(response.error.details).toStrictEqual(details)
         expect(JSON.stringify(response)).not.toMatch(CODES)
-        expect(err.cause).toBe(error)
+        expect(err.cause).toBe(redactRedisError(error))
       },
     )
   })

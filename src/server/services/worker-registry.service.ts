@@ -36,6 +36,7 @@ import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { DEFAULT_WORKER_CONCURRENCY } from '../constants/default-options'
 import { disconnectUnlessEnded } from '../utils/disconnect-unless-ended'
+import { redactRedisError } from '../utils/redact-redis-error'
 
 /**
  * Configuration for registering an in-process (NestJS-DI-backed) worker.
@@ -264,6 +265,8 @@ export class WorkerRegistry {
     if (!entry) return
     try {
       await ownPromise(entry.worker.close())
+    } catch (err) {
+      throw redactRedisError(err)
     } finally {
       // A close that throws must still release the connection and drop the entry: the worker is
       // gone either way, and keeping the entry would leak the socket and block re-registration.
