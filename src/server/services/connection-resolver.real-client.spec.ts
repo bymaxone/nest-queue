@@ -4,6 +4,8 @@
  */
 
 import { createServer, type Server } from 'node:net'
+import { inspect } from 'node:util'
+import { Logger } from '@nestjs/common'
 import { Worker } from 'bullmq'
 import { Redis } from 'ioredis'
 import type { RedisOptions } from 'ioredis'
@@ -221,7 +223,40 @@ describe('ConnectionResolver Mode B startup, with real ioredis', () => {
       },
     })
     expect(JSON.stringify(failure.getResponse())).not.toMatch(/WRONGPASS|s3cr3t|username/)
-    expect((failure.cause as Error).message).toContain('WRONGPASS')
+    expect(failure.cause).toMatchObject({ name: 'RedisCommandError', code: 'WRONGPASS' })
+  })
+
+  // Only the reply code may remain in the exception and in the log, whatever the reply text says.
+  it.each([
+    ['refuses the password', '-WRONGPASS invalid username-password pair\r\n', 'WRONGPASS'],
+    ['echoes the arguments', "-ERR unknown command, with args: 's3cr3t'\r\n", 'ERR'],
+  ])('reports a server that %s by the reply code alone', async (_l, answer, code) => {
+    const logged = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined)
+    const server = createServer((socket) => {
+      socket.on('error', () => undefined)
+      socket.on('data', () => socket.write(answer))
+    })
+    servers.push(server)
+    const port = await new Promise<number>((resolve) => {
+      server.listen(0, '127.0.0.1', () => {
+        resolve((server.address() as { port: number }).port)
+      })
+    })
+    const resolver = new ConnectionResolver({
+      connection: { url: `redis://:s3cr3t@127.0.0.1:${String(port)}`, options: ownedOptions },
+      connectionReadyTimeoutMs: 20_000,
+    })
+
+    const failure = (await resolver.init().then(
+      () => undefined,
+      (err: unknown) => err,
+    )) as QueueException
+
+    expect(failure.cause).toMatchObject({ name: 'RedisCommandError', code })
+    expect(inspect(failure, { depth: null })).not.toContain('s3cr3t')
+    expect(logged).toHaveBeenCalled()
+    expect(inspect(logged.mock.calls, { depth: null })).not.toContain('s3cr3t')
+    logged.mockRestore()
   })
 
   // A server that accepts the socket and never answers is what a frozen Redis looks like to the

@@ -8,12 +8,12 @@
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import {
-  errorSummary,
   isOutOfMemory,
   timeoutException,
   unavailableException,
   withCommandTimeoutCode,
 } from './command-timeout'
+import { REDIS_FAILURE_MESSAGE } from './redact-redis-error'
 import { runFlowBulk } from './add-flow-trees'
 
 /** A value standing for the job data ioredis keeps in the arguments of the failed command. */
@@ -79,7 +79,7 @@ describe('isOutOfMemory', () => {
 })
 
 describe('withCommandTimeoutCode — out of memory', () => {
-  it('reports it as STORAGE_FULL (503) with only the operation and the reason, keeping the cause', async () => {
+  it('reports it as STORAGE_FULL (503) with only the operation and the reason, keeping the reply code', async () => {
     const cause = replyError(OOM_TEXT, { command: { name: 'evalsha', args: [SENTINEL] } })
 
     const err = (await rejection(Promise.reject(cause))) as QueueException
@@ -94,13 +94,13 @@ describe('withCommandTimeoutCode — out of memory', () => {
       },
     })
     expect(JSON.stringify(err.getResponse())).not.toMatch(/maxmemory|script|user_script/)
-    // Only the reply's name and message survive: ioredis hangs the command, with the job data in its
-    // arguments, on the error, and a serialised exception must not carry it.
+    // Only the reply's code survives: ioredis hangs the command, with the job data in its
+    // arguments, on the error, and the reply text can echo them.
     expect(err.cause).toBeInstanceOf(Error)
-    expect((err.cause as Error).name).toBe(cause.name)
-    expect((err.cause as Error).message).toBe(cause.message)
+    expect((err.cause as Error).name).toBe('RedisCommandError')
+    expect((err.cause as Error).message).toBe(REDIS_FAILURE_MESSAGE)
     expect(JSON.stringify(err)).not.toContain(SENTINEL)
-    expect(Object.keys(err.cause as object)).toEqual(['name'])
+    expect(Object.keys(err.cause as object)).toEqual(['name', 'code'])
   })
 
   it('does not report a transaction abort that carries another reply', async () => {
@@ -108,7 +108,10 @@ describe('withCommandTimeoutCode — out of memory', () => {
       previousErrors: [replyError('ERR syntax error')],
     })
 
-    await expect(rejection(Promise.reject(abort))).resolves.toBe(abort)
+    await expect(rejection(Promise.reject(abort))).resolves.toMatchObject({
+      name: 'RedisCommandError',
+      code: 'EXECABORT',
+    })
   })
 })
 
@@ -118,37 +121,13 @@ describe('the cause of a library error never carries the command of a job', () =
     return replyError(message, { command: { name: 'evalsha', args: [SENTINEL] } })
   }
 
-  it.each([
-    ["READONLY You can't write against a read only replica."],
-    ['WRONGTYPE Operation against a key holding the wrong kind of value'],
-  ])('keeps only the name and the message of %s', (message) => {
-    const reply = replyWithCommand(message)
-
-    const summary = errorSummary(reply) as Error
-
-    expect(summary).not.toBe(reply)
-    expect(summary).toBeInstanceOf(Error)
-    expect(summary.name).toBe('ReplyError')
-    expect(summary.message).toBe(message)
-    expect(JSON.stringify(summary)).not.toContain(SENTINEL)
-    expect(Object.keys(summary)).not.toContain('command')
-  })
-
-  it('keeps an error with no command as it is, and what is not an error as it is', () => {
-    const refused = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' })
-
-    expect(errorSummary(refused)).toBe(refused)
-    expect(errorSummary('text')).toBe('text')
-    expect(errorSummary(undefined)).toBeUndefined()
-  })
-
   it('applies to the cause of a timeout and of a connection that is down', () => {
     const reply = replyWithCommand('Command timed out')
 
     expect(JSON.stringify(timeoutException('enqueue', 100, reply).cause)).not.toContain(SENTINEL)
     expect(JSON.stringify(unavailableException('enqueue', reply).cause)).not.toContain(SENTINEL)
     expect((timeoutException('enqueue', 100, reply).cause as Error).message).toBe(
-      'Command timed out',
+      REDIS_FAILURE_MESSAGE,
     )
   })
 

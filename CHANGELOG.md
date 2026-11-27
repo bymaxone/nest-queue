@@ -15,6 +15,18 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
+## [1.2.36] — 2026-11-27
+
+Against 1.2.35 the runtime of the main entry changes.
+
+**Apply to a derived backend:** where code reads the message, the name, `command` or `previousErrors` of an error Redis replied with, read its `code` instead.
+
+### Changed
+
+- A Redis error reply, or a command ioredis gave up on, is passed on as an `Error` named `RedisCommandError` with a fixed message and the reply code as `code`, when the reply has one. This applies to the rejections of `QueueService`, `FlowService` and `WorkerRegistry.unregister`, the `cause` of the library's exceptions, `err` on its log lines and what a trace hook is shown. Errors that hold no reply are passed on as before.
+
+---
+
 ## [1.2.35] — 2026-11-27
 
 Against 1.2.34 the main entry gains an option and a method, and the runtime of the main and observability entries changes.
@@ -1445,7 +1457,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.35...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.36...HEAD
+[1.2.36]: https://github.com/bymaxone/nest-queue/compare/v1.2.35...v1.2.36
 [1.2.35]: https://github.com/bymaxone/nest-queue/compare/v1.2.34...v1.2.35
 [1.2.34]: https://github.com/bymaxone/nest-queue/compare/v1.2.33...v1.2.34
 [1.2.33]: https://github.com/bymaxone/nest-queue/compare/v1.2.32...v1.2.33

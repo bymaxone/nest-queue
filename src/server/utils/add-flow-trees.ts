@@ -12,7 +12,8 @@ import { assertPrototypeClean } from '../connection/prototype-guard'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
 import { QueueException } from '../errors/queue-exception'
 import { joinAll, own } from './bounded-wait'
-import { errorSummary, timeoutException } from './command-timeout'
+import { timeoutException } from './command-timeout'
+import { redactRedisError } from './redact-redis-error'
 
 /** What became of every tree of a batch, as indexes into the batch; the four lists partition it. */
 export interface FlowBulkOutcome {
@@ -59,7 +60,7 @@ function batchFailure(operation: string, first: unknown, outcome: FlowBulkOutcom
         operation,
         ...outcome,
       })
-  exception.cause = first instanceof QueueException ? first : errorSummary(first)
+  exception.cause = first instanceof QueueException ? first : redactRedisError(first)
   return exception
 }
 

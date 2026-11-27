@@ -11,6 +11,7 @@ import { assertPrototypeClean, NativePromise } from '../connection/prototype-gua
 import { hear, outcomeOf, own, type Ended } from '../utils/bounded-wait'
 import { Injectable, Logger } from '@nestjs/common'
 import { logEvent, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
+import { redactRedisError } from '../utils/redact-redis-error'
 
 /** How one attempt of a job ended. `retried` means BullMQ moved the job to be run again. */
 export type JobOutcome = 'completed' | 'failed' | 'retried'
@@ -85,11 +86,12 @@ export interface QueueObserver {
 function mirror<T>(outcome: Promise<Ended<T>>): Promise<T> {
   let give!: (ended: Ended<T>) => void
   const view = new NativePromise<T>((resolve, reject) => {
-    // What the operation rejected with, whatever its type, reaches the host unchanged.
+    // What the operation rejected with, whatever its type, reaches the host, a Redis reply excepted.
     const fail: (reason: unknown) => void = reject
     give = (ended) => {
       if (ended.state === 'done') resolve(ended.v)
-      else fail(ended.v)
+      // The host's hook is shown no Redis reply; the caller of the operation is dealt with apart.
+      else fail(redactRedisError(ended.v))
     }
   })
   hear(view)
@@ -236,7 +238,8 @@ export class QueueObserverRegistry {
    * Run one observer's trace hook so that a failure of the observer never fails the operation. The
    * operation runs once however the observer behaves: when the hook throws or rejects without calling
    * `once`, or returns without calling it, the operation runs afterwards in its place. What the
-   * operation itself rejects with reaches the caller untouched, and an observer that fails is logged.
+   * operation itself rejects with reaches the caller, and an observer that fails is logged; the hook
+   * is shown it through {@link redactRedisError}.
    * The operation is followed by a private promise that never leaves this class, and the host is
    * handed a separate one that mirrors it, so what a host does to the promise it holds cannot change
    * what is awaited here. An observer that starts the operation and does not await it can never leave
@@ -286,7 +289,7 @@ export class QueueObserverRegistry {
     const outcome = await own(begin().tracked)
     if (outcome.state === 'failed') {
       // An observer that rethrew the error of the operation is only passing it on.
-      if (failure?.error !== outcome.v) this.#failed(hook)
+      if (failure?.error !== redactRedisError(outcome.v)) this.#failed(hook)
       throw outcome.v
     }
     this.#failed(hook)

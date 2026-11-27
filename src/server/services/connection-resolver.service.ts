@@ -30,6 +30,7 @@ import { disconnectUnlessEnded } from '../utils/disconnect-unless-ended'
 import { quitWithin } from '../utils/quit-within'
 import { isCommandTimeout, unavailableException } from '../utils/command-timeout'
 import { logEvent, QUEUE_LOG_EVENTS, reportRefusal, writeLog } from '../utils/log-event'
+import { redactRedisError } from '../utils/redact-redis-error'
 
 /**
  * The exact options shape ioredis 6's `Redis` constructor accepts.
@@ -300,7 +301,7 @@ export class ConnectionResolver {
       const fail = (code: string, status: HttpStatus, extra: Record<string, unknown>): void => {
         cleanup()
         const exception = new QueueException(code, status, extra)
-        if (lastError !== undefined) exception.cause = lastError
+        if (lastError !== undefined) exception.cause = redactRedisError(lastError)
         reject(exception)
       }
       const onReady = (): void => {

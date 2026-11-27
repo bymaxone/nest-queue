@@ -35,7 +35,8 @@ import { isReservedJobId } from '../utils/reserved-job-ids'
 import { withDeadline } from '../utils/with-deadline'
 import { QueueObserverRegistry, type TraceCarrier } from '../observability/queue-observer'
 import { withTraceMetadata } from '../observability/trace-carrier'
-import { errorSummary, timeoutException, withCommandTimeoutCode } from '../utils/command-timeout'
+import { timeoutException, withCommandTimeoutCode } from '../utils/command-timeout'
+import { redactRedisError } from '../utils/redact-redis-error'
 import { own } from '../utils/bounded-wait'
 
 /** A typed job in the library's public shape. */
@@ -51,7 +52,7 @@ type CleanableStatus = 'completed' | 'failed' | 'delayed' | 'wait' | 'active' | 
  * reply error (`READONLY`, `OOM`, `NOAUTH`, a script error), so the two cannot be told apart
  * after the write is attempted. The check therefore runs BullMQ's own repeat strategy, the
  * pure function `upsertJobScheduler` calls for a pattern, where any throw can only be the
- * pattern; the write that follows reports every failure as it is. A consumer-supplied repeat
+ * pattern; no failure of the write that follows is relabelled as one. A consumer-supplied repeat
  * strategy replaces the parser, so the pattern is theirs to define and is not checked here.
  *
  * @param repeat - The pattern schedule being upserted.
@@ -326,7 +327,7 @@ export class QueueService {
             operation: 'enqueueBulk',
           },
         ),
-        { cause: errorSummary(err) },
+        { cause: redactRedisError(err) },
       )
     }
   }
@@ -395,7 +396,7 @@ export class QueueService {
    *
    * The schedule is validated first, and a cron pattern BullMQ's parser rejects
    * is `INVALID_REPEAT_OPTIONS` (400) before Redis is asked; any other failure
-   * propagates as it is.
+   * is not relabelled as one.
    *
    * @param queueName - Target queue.
    * @param schedulerId - Stable, unique scheduler identifier (the upsert key).
