@@ -94,11 +94,22 @@ describe('reportFailedMove', () => {
   })
 
   it('gives the move the intrinsic constructor, so no await of it reads the prototype', () => {
+    let reads = 0
     const moving = Promise.resolve(undefined)
+    const counted: unknown = Object.create(Promise.prototype, {
+      constructor: {
+        get: () => {
+          reads += 1
+          return Promise
+        },
+      },
+    })
+    Object.setPrototypeOf(moving, counted as object)
     const { run } = hooked(() => moving)
     void run()
 
     expect(Object.getOwnPropertyDescriptor(moving, 'constructor')?.value).toBe(Promise)
+    expect(reads).toBe(0)
   })
 
   it('leaves no rejection unheard when the report throws', async () => {
@@ -134,10 +145,10 @@ describe('reportFailedMove', () => {
   })
 
   it.each([
-    new Error('Connection is closed.'),
-    new Error('connect ECONNREFUSED 127.0.0.1:6379'),
-    Object.assign(new Error('x'), { code: 'ECONNREFUSED' }),
-  ])('reads %s as BullMQ does', (error) => {
+    ['a closed connection in the message', new Error('Connection is closed.')],
+    ['a refused connection in the message', new Error('connect ECONNREFUSED 127.0.0.1:6379')],
+    ['a refused connection in the code', Object.assign(new Error('x'), { code: 'ECONNREFUSED' })],
+  ])('reads %s as BullMQ does', (_label, error) => {
     expect(isNotConnectionError(error)).toBe(false)
   })
 
