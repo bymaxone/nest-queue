@@ -74,8 +74,10 @@ describe('redactRedisError', () => {
   it.each<[string, unknown]>([
     ['a reply with no command', new Reply(`ERR ${SECRET}`)],
     [
-      'a command ioredis gave up on',
-      Object.assign(new Error('Command timed out'), { command: { name: 'set', args: [SECRET] } }),
+      'a command aborted with the connection',
+      Object.assign(new Error('Command aborted due to connection close'), {
+        command: { name: 'set', args: [SECRET] },
+      }),
     ],
     [
       'an aborted transaction',

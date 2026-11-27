@@ -87,8 +87,8 @@ function holdsReply(root: unknown): boolean {
 
 /**
  * What may leave the library of an error: a log line, the `cause` of a library error, the rejection
- * of a call, the rejection an observer sees. An error that is, or wraps, a Redis reply or a command
- * ioredis gave up on is replaced by {@link redisFailure}; any other value (a refused connection, a
+ * of a call, the rejection an observer sees. An error that is, or wraps, a Redis reply or an error
+ * carrying a command is replaced by {@link redisFailure}; any other value (a refused connection, a
  * timeout, the host's own error) is returned as it is. A value that cannot be read is replaced.
  *
  * @param err - What was thrown, rejected or emitted.
