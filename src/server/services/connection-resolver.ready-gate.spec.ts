@@ -48,7 +48,8 @@ describe('ConnectionResolver.awaitReady', () => {
     const { resolver, client } = await resolverFor(status)
     const before = client.listenerCount('ready')
 
-    await expect(resolver.awaitReady()).resolves.toBeUndefined()
+    const turn = new Promise((resolve) => setImmediate(resolve, 'still pending'))
+    await expect(Promise.race([resolver.awaitReady(), turn])).resolves.toBeUndefined()
 
     expect(client.listenerCount('ready')).toBe(before)
   })

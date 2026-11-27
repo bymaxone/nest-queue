@@ -87,13 +87,19 @@ async function planted<T>(name: string, value: unknown, run: () => Promise<T>): 
   }
 }
 
-/** What `connect()` settles to: the stream, or the error it was refused with. */
+/**
+ * What `connect()` settles to: the stream, or the error it was refused with. It settles on the next
+ * tick, so one still pending after a turn of the event loop fails here as an assertion.
+ */
 async function settle(connector: GuardedConnector): Promise<{ stream?: Socket; error?: unknown }> {
-  try {
-    return { stream: await connector.connect() }
-  } catch (error) {
-    return { error }
-  }
+  const outcome = connector.connect().then(
+    (stream): { stream?: Socket; error?: unknown } => ({ stream }),
+    (error: unknown): { stream?: Socket; error?: unknown } => ({ error }),
+  )
+  const turn = new Promise<'still pending'>((resolve) => setImmediate(resolve, 'still pending'))
+  const first = await Promise.race([outcome, turn])
+  expect(first).not.toBe('still pending')
+  return outcome
 }
 
 /** The options object a spied call was handed. */
