@@ -200,7 +200,7 @@ describe('redactRedisError, on an error built out of another error’s text', ()
     ],
     [
       'an unexpected reply that is data',
-      `Command queue state error. If you can reproduce this, please report it. Last reply: ${SECRET.toUpperCase()}`,
+      `Command queue state error. If you can reproduce this, please report it. Last reply: DUMMYPAYLOAD7`,
       QUEUE_STATE,
       undefined,
     ],
@@ -216,7 +216,8 @@ describe('redactRedisError, on an error built out of another error’s text', ()
     expect(kept.name).toBe('RedisCommandError')
     expect(kept.message).toBe(message)
     expect(kept.code).toBe(code)
-    expect(visible(kept).toLowerCase()).not.toContain(SECRET)
+    expect(visible(kept)).not.toContain(SECRET)
+    expect(visible(kept)).not.toContain('DUMMYPAYLOAD7')
   })
 
   it('replaces an error that has one in its cause', () => {
