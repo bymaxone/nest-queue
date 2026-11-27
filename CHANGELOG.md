@@ -22,7 +22,7 @@ Documentation only. Against 1.2.33 the built `dist/` is unchanged.
 ### Changed
 
 - The README names public members it had left out, among them `ConnectionResolver.ping` and `QueueHealthIndicator.check`.
-- The README says that the module itself calls the members a host does not call, and that `awaitReady()` waits while the client is connecting or reconnecting.
+- The README says which members the module itself calls, and that `awaitReady()` waits while the client is connecting or reconnecting.
 - The 1.2.26 section is shorter where it repeated details that the README holds.
 
 ---
