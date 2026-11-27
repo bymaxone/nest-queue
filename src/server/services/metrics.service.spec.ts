@@ -362,4 +362,16 @@ describe('MetricsService — getAllWithinBound', () => {
     await expect(service.getAllWithinBound()).rejects.toBeInstanceOf(QueueException)
     expect(qs.getCachedQueues).not.toHaveBeenCalled()
   })
+
+  it('arms no timer for a call it refuses because metrics are disabled', async () => {
+    const service = makeService(makeQueueService(['email']), false)
+    const armed = jest.spyOn(globalThis, 'setTimeout')
+
+    await expect(service.getAllWithinBound()).rejects.toMatchObject({
+      response: { error: { code: QUEUE_ERROR_CODES.METRICS_DISABLED } },
+    })
+
+    expect(armed).not.toHaveBeenCalled()
+    armed.mockRestore()
+  })
 })
