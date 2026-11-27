@@ -522,8 +522,10 @@ describe('ConnectionResolver — Mode B (library-owned)', () => {
       (err: unknown) => err,
     )
     client.emit('end')
-    const err = await failure
+    const turn = new Promise((resolve) => setImmediate(resolve, 'still pending'))
+    const err = await Promise.race([failure, turn])
 
+    expect(err).not.toBe('still pending')
     expect(err).toBeInstanceOf(QueueException)
     expect((err as QueueException).getResponse()).toMatchObject({
       error: { code: QUEUE_ERROR_CODES.CONNECTION_INVALID },
