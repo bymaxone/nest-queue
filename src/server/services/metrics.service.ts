@@ -128,7 +128,9 @@ export class MetricsService {
 
   /**
    * Invalidate the cache for `queueName`, or the whole cache when omitted. A read in flight, of any
-   * queue, still answers whoever waits for it, and caches nothing.
+   * queue, still answers whoever waits for it, and caches nothing. A
+   * {@link MetricsService.getAllWithinBound} call made afterwards may wait for a shared read begun
+   * before this one, and answer with what it read.
    *
    * @param queueName - The queue entry to drop; omit to clear everything.
    * @throws {QueueException} `METRICS_DISABLED` (503) when metrics are disabled.
