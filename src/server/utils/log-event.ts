@@ -1,9 +1,9 @@
 /**
  * @fileoverview The operational log events of the library. Every one is an object message handed to
- * the plain Nest `Logger`: `{ event, message, ...fields }`, with fields of closed or numeric values
- * only, so a logger that writes objects as fields (`@bymax-one/nest-logger`) keeps them as data and
- * Nest's default console logger still prints them readably. `message` holds the library's own text,
- * and the error that caused an event travels as its own value under `err`.
+ * the plain Nest `Logger`: `{ event, message, ...fields }`, so a logger that writes objects as
+ * fields (`@bymax-one/nest-logger`) keeps them as data and Nest's default console logger still
+ * prints them readably. `message` holds the library's own text, and the error that caused an event
+ * travels as its own value under `err`.
  * @layer server/utils
  */
 
@@ -41,12 +41,14 @@ export const QUEUE_LOG_EVENTS = {
   GUARD_REFUSED: 'QUEUE_GUARD_REFUSED',
   /** The guard refused before a job ran, so the job went back to the delayed set. */
   JOB_DEFERRED_GUARD_REFUSED: 'QUEUE_JOB_DEFERRED_GUARD_REFUSED',
+  /** An attempt of a job failed. */
+  JOB_FAILED: 'QUEUE_JOB_FAILED',
 } as const
 
 /** A code of {@link QUEUE_LOG_EVENTS}. */
 export type QueueLogEvent = (typeof QUEUE_LOG_EVENTS)[keyof typeof QUEUE_LOG_EVENTS]
 
-/** One log event: its code, the text, and fields of closed or numeric values. */
+/** One log event: its code, the text, and its fields. */
 export interface QueueLogMessage {
   /** The code of the event. */
   readonly event: QueueLogEvent
@@ -63,7 +65,8 @@ export interface QueueLogMessage {
  *
  * @param event - The code of the event.
  * @param message - The text.
- * @param fields - Fields of closed or numeric values; never a value the host supplied.
+ * @param fields - Closed or numeric values, queue names, and for a failed job its name and id;
+ * never a payload or the text of an error.
  */
 export function logEvent(
   event: QueueLogEvent,

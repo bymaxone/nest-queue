@@ -1,6 +1,6 @@
 {
   "name": "@bymax-one/nest-queue",
-  "version": "1.2.34",
+  "version": "1.2.35",
   "description": "NestJS dynamic module wrapping BullMQ — typed jobs, flows, job schedulers, deduplication, OpenTelemetry, graceful shutdown",
   "author": "Bymax One <support@bymax.one>",
   "license": "MIT",
@@ -132,6 +132,7 @@
     "@eslint/js": "^10.0.1",
     "@nestjs/common": "^11.1.28",
     "@nestjs/core": "^11.1.28",
+    "@nestjs/platform-fastify": "^11.2.11",
     "@nestjs/testing": "^11.1.28",
     "@opentelemetry/api": "1.10.0",
     "@opentelemetry/context-async-hooks": "2.12.1",

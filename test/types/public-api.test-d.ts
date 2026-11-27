@@ -33,6 +33,7 @@ import type {
   JobSchedulerRepeatOptions,
   JobStatus,
   JOB_STATUS,
+  MetricsService,
   QueueErrorCode,
   QueueMetrics,
   QueueObserver,
@@ -138,6 +139,18 @@ export type _BulkJobShape = Expect<
 // force consumers into `?? 0` at every read site.
 export type _MetricsCounts = Expect<Equal<QueueMetrics['counts'], Record<JobStatus, number>>>
 export type _MetricsCollectedAt = Expect<Equal<QueueMetrics['collectedAt'], string>>
+
+// The depth bound is an option of `metrics`, and the bounded read takes nothing and answers the
+// same list as `getAll`.
+export type _MetricsOptions = Expect<
+  Equal<
+    NonNullable<BymaxQueueModuleOptions['metrics']>,
+    { enabled?: boolean; cacheTtlMs?: number; collectTimeoutMs?: number }
+  >
+>
+export type _GetAllWithinBound = Expect<
+  Equal<MetricsService['getAllWithinBound'], MetricsService['getAll']>
+>
 
 // ---------------------------------------------------------------------------
 // Status constants

@@ -12,7 +12,7 @@ describe('mutation scope data', () => {
     expect(EXPECTED).toEqual({
       entries: 3,
       includes: ['src/server/index.ts', 'src/shared/index.ts', 'src/observability/index.ts'],
-      shipped: 73,
+      shipped: 74,
     })
   })
 })

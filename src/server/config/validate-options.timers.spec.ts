@@ -77,3 +77,18 @@ describe('validateOptions — metrics.cacheTtlMs', () => {
     expect(reasonOf({ ...base, metrics: { cacheTtlMs: ok } })).toBeUndefined()
   })
 })
+
+describe('validateOptions — metrics.collectTimeoutMs', () => {
+  it.each([0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648])(
+    'refuses %s, which a timer would not honour',
+    (bad) => {
+      expect(reasonOf({ ...base, metrics: { collectTimeoutMs: bad } })).toBe(
+        'metrics.collectTimeoutMs must be a whole number from 1 to 2147483647',
+      )
+    },
+  )
+
+  it.each([1, 1000, 2_147_483_647])('accepts %s', (ok) => {
+    expect(reasonOf({ ...base, metrics: { collectTimeoutMs: ok } })).toBeUndefined()
+  })
+})

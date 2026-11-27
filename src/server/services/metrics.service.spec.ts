@@ -187,3 +187,191 @@ describe('MetricsService — disabled', () => {
     }).toThrow(QueueException)
   })
 })
+
+describe('MetricsService — getAllWithinBound', () => {
+  const BOUND_MS = 250
+
+  /** A service over queues whose reads settle only when the test settles them. */
+  function held(names: string[] = ['email']): {
+    qs: MockQueueService
+    service: MetricsService
+    answer: () => void
+    fail: (error: Error) => void
+  } {
+    const reads: { answer: () => void; fail: (error: Error) => void }[] = []
+    const qs = makeQueueService(names)
+    qs.getMetrics.mockImplementation(
+      (name: string) =>
+        new Promise<QueueMetrics>((resolve, reject) => {
+          reads.push({
+            answer: () => {
+              resolve(snapshot(name))
+            },
+            fail: reject,
+          })
+        }),
+    )
+    return {
+      qs,
+      service: new MetricsService(qs as unknown as QueueService, true, TTL_MS, BOUND_MS),
+      answer: () => {
+        for (const read of reads.splice(0)) read.answer()
+      },
+      fail: (error) => {
+        for (const read of reads.splice(0)) read.fail(error)
+      },
+    }
+  }
+
+  /** What `work` has settled to so far, or `'pending'`. */
+  function watch(work: Promise<unknown>): () => unknown {
+    let seen: unknown = 'pending'
+    void work.then(
+      (value) => {
+        seen = value
+      },
+      (error: unknown) => {
+        seen = error
+      },
+    )
+    return () => seen
+  }
+
+  it('returns every snapshot of a read that answers within the bound, and arms no lasting timer', async () => {
+    const service = new MetricsService(
+      makeQueueService(['email', 'reports']) as unknown as QueueService,
+      true,
+      TTL_MS,
+      BOUND_MS,
+    )
+
+    const all = await service.getAllWithinBound()
+
+    expect(all.map((m) => m.queue)).toEqual(['email', 'reports'])
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it('returns none once the bound has passed, and not before it', async () => {
+    const { service } = held()
+    const seen = watch(service.getAllWithinBound())
+
+    await jest.advanceTimersByTimeAsync(BOUND_MS - 1)
+    expect(seen()).toBe('pending')
+    await jest.advanceTimersByTimeAsync(1)
+
+    expect(seen()).toEqual([])
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it('defaults to a bound of one second', async () => {
+    const { qs } = held()
+    const service = new MetricsService(qs as unknown as QueueService, true, TTL_MS)
+    const seen = watch(service.getAllWithinBound())
+
+    await jest.advanceTimersByTimeAsync(999)
+    expect(seen()).toBe('pending')
+    await jest.advanceTimersByTimeAsync(1)
+
+    expect(seen()).toEqual([])
+  })
+
+  it('does not let the timer of the bound hold the process open', async () => {
+    jest.useRealTimers()
+    const unref = jest.fn()
+    const armed = global.setTimeout
+    const spy = jest.spyOn(global, 'setTimeout').mockImplementation(((
+      run: () => void,
+      ms: number,
+    ) => {
+      const timer = armed(run, ms)
+      if (ms === BOUND_MS) jest.spyOn(timer, 'unref').mockImplementation(unref)
+      return timer
+    }) as typeof setTimeout)
+    const { service, answer } = held()
+
+    const result = service.getAllWithinBound()
+    answer()
+    await result
+    spy.mockRestore()
+
+    expect(unref).toHaveBeenCalledTimes(1)
+  })
+
+  it('shares the read in flight between calls, so a stuck Redis does not collect reads', async () => {
+    const { qs, service } = held()
+
+    const first = service.getAllWithinBound()
+    await jest.advanceTimersByTimeAsync(BOUND_MS)
+    const second = service.getAllWithinBound()
+    await jest.advanceTimersByTimeAsync(BOUND_MS)
+
+    expect([await first, await second]).toEqual([[], []])
+    expect(qs.getMetrics).toHaveBeenCalledTimes(1)
+  })
+
+  it('fills the cache from a read that outlived the bound, and then reads again', async () => {
+    const { qs, service, answer } = held()
+    const first = service.getAllWithinBound()
+    await jest.advanceTimersByTimeAsync(BOUND_MS)
+    await first
+
+    answer()
+    await jest.advanceTimersByTimeAsync(0)
+    const cached = await service.getAllWithinBound()
+
+    expect(cached.map((m) => m.queue)).toEqual(['email'])
+    expect(qs.getMetrics).toHaveBeenCalledTimes(1)
+
+    await jest.advanceTimersByTimeAsync(TTL_MS)
+    const third = service.getAllWithinBound()
+    answer()
+    await third
+    expect(qs.getMetrics).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects with the error of a read that fails within the bound, and reads again next time', async () => {
+    const { qs, service, fail } = held()
+    const failure = new Error('connection is closed')
+    const first = watch(service.getAllWithinBound())
+
+    fail(failure)
+    await jest.advanceTimersByTimeAsync(0)
+
+    expect(first()).toBe(failure)
+    const second = service.getAllWithinBound()
+    await jest.advanceTimersByTimeAsync(BOUND_MS)
+    await second
+    expect(qs.getMetrics).toHaveBeenCalledTimes(2)
+  })
+
+  it('stays quiet about a read that fails after the bound', async () => {
+    const { service, fail } = held()
+    const first = service.getAllWithinBound()
+    await jest.advanceTimersByTimeAsync(BOUND_MS)
+
+    fail(new Error('late'))
+    await jest.advanceTimersByTimeAsync(0)
+
+    await expect(first).resolves.toEqual([])
+  })
+
+  it('throws METRICS_DISABLED without reading', async () => {
+    const qs = makeQueueService(['email'])
+    const service = makeService(qs, false)
+
+    await expect(service.getAllWithinBound()).rejects.toBeInstanceOf(QueueException)
+    expect(qs.getCachedQueues).not.toHaveBeenCalled()
+  })
+
+  it('arms no timer for a call it refuses because metrics are disabled', async () => {
+    const service = makeService(makeQueueService(['email']), false)
+    const armed = jest.spyOn(globalThis, 'setTimeout')
+
+    await expect(service.getAllWithinBound()).rejects.toMatchObject({
+      response: { error: { code: QUEUE_ERROR_CODES.METRICS_DISABLED } },
+    })
+
+    expect(armed).not.toHaveBeenCalled()
+    armed.mockRestore()
+  })
+})

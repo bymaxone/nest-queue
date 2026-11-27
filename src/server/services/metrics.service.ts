@@ -11,6 +11,9 @@ import type { QueueMetrics } from '../../shared/types/queue-metrics.types'
 import type { QueueService } from './queue.service'
 import { QueueException } from '../errors/queue-exception'
 import { QUEUE_ERROR_CODES } from '../constants/error-codes'
+import { DEFAULT_METRICS_COLLECT_TIMEOUT_MS } from '../constants/default-options'
+import { assertPrototypeClean } from '../connection/prototype-guard'
+import { own, startWait } from '../utils/bounded-wait'
 
 /** A cached metrics snapshot together with its absolute expiry timestamp. */
 interface CacheEntry {
@@ -41,11 +44,14 @@ interface CacheEntry {
 @Injectable()
 export class MetricsService {
   private readonly cache = new Map<string, CacheEntry>()
+  /** The read of every queue that `getAllWithinBound` calls share while it is in flight. */
+  private pending: Promise<readonly QueueMetrics[]> | undefined
 
   constructor(
     private readonly queueService: QueueService,
     private readonly enabled: boolean,
     private readonly ttlMs: number,
+    private readonly collectTimeoutMs: number = DEFAULT_METRICS_COLLECT_TIMEOUT_MS,
   ) {}
 
   /**
@@ -77,6 +83,41 @@ export class MetricsService {
     this.ensureEnabled()
     const names = Array.from(this.queueService.getCachedQueues().keys())
     return Promise.all(names.map((name) => this.get(name)))
+  }
+
+  /**
+   * Return what {@link MetricsService.getAll} returns if it answers within
+   * `metrics.collectTimeoutMs`, and an empty list otherwise, for a caller with a deadline of its
+   * own such as a metrics scrape. Calls made while a read is in flight wait for that read instead
+   * of starting another. A read that outlives the bound goes on and fills the cache.
+   *
+   * @returns Metrics for all known queues, or none when the bound passed first.
+   * @throws {QueueException} `METRICS_DISABLED` (503) when metrics are disabled.
+   * @throws The error of the read, when it fails within the bound.
+   * @example
+   * const snapshots = await metrics.getAllWithinBound()
+   */
+  async getAllWithinBound(): Promise<readonly QueueMetrics[]> {
+    this.ensureEnabled()
+    this.pending ??= this.readAll()
+    const wait = startWait(this.pending, this.collectTimeoutMs, { unref: true })
+    try {
+      assertPrototypeClean()
+      const outcome = await wait.result
+      if (outcome.state === 'failed') throw outcome.v
+      return outcome.state === 'done' ? outcome.v : []
+    } finally {
+      wait.release()
+    }
+  }
+
+  /** Read every queue, and stop being the read in flight once it has ended. */
+  private async readAll(): Promise<readonly QueueMetrics[]> {
+    try {
+      return await own(this.getAll())
+    } finally {
+      this.pending = undefined
+    }
   }
 
   /**

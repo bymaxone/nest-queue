@@ -31,7 +31,7 @@ function makeResolved(shutdown?: Partial<ResolvedQueueOptions['shutdown']>): Res
     prefix: 'bull',
     queueOptions: {},
     flows: { enabled: false },
-    metrics: { enabled: false, cacheTtlMs: 5000 },
+    metrics: { enabled: false, cacheTtlMs: 5000, collectTimeoutMs: 1000 },
     shutdown: { drainTimeoutMs: 5000, drainOnShutdown: false, ...shutdown },
     connectionReadyTimeoutMs: 10000,
     commandTimeoutMs: 5000,

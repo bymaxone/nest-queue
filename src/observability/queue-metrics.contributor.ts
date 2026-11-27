@@ -19,7 +19,8 @@ const DEPTH_STATES = ['waiting', 'active', 'delayed', 'failed'] as const
  * Registers `bymax_queue_jobs_total`, `bymax_queue_job_duration_seconds` and `bymax_queue_depth`.
  * The first two are fed by the attempts this process runs; the depth is read from
  * {@link MetricsService}, whose cache bounds how often a scrape reaches Redis, and is empty while
- * the module's `metrics` option is off.
+ * the module's `metrics` option is off or Redis does not answer within
+ * `metrics.collectTimeoutMs`.
  *
  * @example
  * \@Module({
@@ -70,8 +71,9 @@ export class QueueMetricsContributor implements IMetricsContributor {
       labelNames: ['queue', 'state'],
       registers: [registry],
       async collect(): Promise<void> {
+        const snapshots = await metrics.getAllWithinBound().catch(() => [])
+        // After the read, so that a scrape taken while it waits does not see a half-built gauge.
         this.reset()
-        const snapshots = await metrics.getAll().catch(() => [])
         for (const { queue, counts } of snapshots) {
           for (const state of DEPTH_STATES) this.labels(queue, state).set(counts[state])
         }

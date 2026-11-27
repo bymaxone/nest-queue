@@ -384,7 +384,7 @@ describe('BymaxQueueModule.forRootAsync', () => {
     // not collapse to a no-op that returns undefined.
     const resolved = {
       flows: { enabled: true },
-      metrics: { enabled: true, cacheTtlMs: 5000 },
+      metrics: { enabled: true, cacheTtlMs: 5000, collectTimeoutMs: 1000 },
     } as unknown as ResolvedQueueOptions
     const resolverStub = { getClient: jest.fn() } as unknown as ConnectionResolver
     const queueServiceStub = {} as unknown as QueueService

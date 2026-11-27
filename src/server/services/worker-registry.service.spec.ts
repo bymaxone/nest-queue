@@ -68,7 +68,7 @@ function makeOptions(telemetry?: ResolvedQueueOptions['telemetry']): ResolvedQue
     prefix: 'bull',
     queueOptions: {},
     flows: { enabled: false },
-    metrics: { enabled: false, cacheTtlMs: 5000 },
+    metrics: { enabled: false, cacheTtlMs: 5000, collectTimeoutMs: 1000 },
     shutdown: { drainTimeoutMs: 30000, drainOnShutdown: false },
     connectionReadyTimeoutMs: 10000,
     commandTimeoutMs: 5000,

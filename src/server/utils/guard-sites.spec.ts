@@ -3,8 +3,9 @@
  * pinned by what it changes for the caller: the quit and the deadline are refused when the prototype
  * is polluted at entry, or polluted between the start of the wait and the await of its verdict and
  * clean again by the time the work answers, so only the guard before the await can see it; the
- * refusal is logged with the site that failed closed; and a bulk add is refused when the prototype
- * was polluted while its trees ran.
+ * refusal is logged with the site that failed closed; a bulk add is refused when the prototype was
+ * polluted while its trees ran; and the bounded depth read is refused when the prototype was
+ * polluted between the start of its wait and the await.
  * @layer test
  */
 
@@ -12,6 +13,8 @@ import type { FlowJob, JobNode } from 'bullmq'
 import type { Redis } from 'ioredis'
 import { assertPrototypeClean, NativePromise } from '../connection/prototype-guard'
 import { QueueException } from '../errors/queue-exception'
+import { MetricsService } from '../services/metrics.service'
+import type { QueueService } from '../services/queue.service'
 import { runFlowBulk } from './add-flow-trees'
 import { QUEUE_LOG_EVENTS, reportRefusal } from './log-event'
 import { loggedEvents } from './log-lines'
@@ -121,6 +124,22 @@ describe('withDeadline runs the guard before it waits', () => {
     expect(seen).not.toHaveProperty('value')
     expect(seen.error).toBeInstanceOf(QueueException)
     expect(seen.error).toMatchObject({ message: expect.not.stringContaining('deadline') as string })
+  })
+})
+
+describe('MetricsService.getAllWithinBound runs the guard before it waits', () => {
+  it('rejects with the refusal for a read that answered after the prototype was polluted and cleaned', async () => {
+    const queues = {
+      getCachedQueues: () => new Map([['email', {}]]),
+      getMetrics: () => answersCleanLater({ queue: 'email' }),
+    } as unknown as QueueService
+    const service = new MetricsService(queues, true, 0, 1000)
+    plantWhenTimerIsArmed()
+
+    const seen = await settled(service.getAllWithinBound())
+
+    expect(seen).not.toHaveProperty('value')
+    expect(seen.error).toBeInstanceOf(QueueException)
   })
 })
 
