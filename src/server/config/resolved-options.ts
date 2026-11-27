@@ -11,6 +11,7 @@ import { snapshotOptions } from './snapshot-options'
 import {
   DEFAULT_JOB_OPTIONS,
   DEFAULT_METRICS_CACHE_TTL_MS,
+  DEFAULT_METRICS_COLLECT_TIMEOUT_MS,
   DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS,
   DEFAULT_CONNECTION_READY_TIMEOUT_MS,
   DEFAULT_COMMAND_TIMEOUT_MS,
@@ -30,7 +31,7 @@ export interface ResolvedQueueOptions {
   /** Flow support configuration. */
   flows: { enabled: boolean }
   /** Metrics support configuration. */
-  metrics: { enabled: boolean; cacheTtlMs: number }
+  metrics: { enabled: boolean; cacheTtlMs: number; collectTimeoutMs: number }
   /** Shutdown behavior configuration. */
   shutdown: { drainTimeoutMs: number; drainOnShutdown: boolean }
   /** Optional OpenTelemetry instance, attached to every Queue/Worker when present. */
@@ -64,6 +65,7 @@ export function applyDefaults(given: BymaxQueueModuleOptions): Readonly<Resolved
     metrics: {
       enabled: opts.metrics?.enabled ?? false,
       cacheTtlMs: opts.metrics?.cacheTtlMs ?? DEFAULT_METRICS_CACHE_TTL_MS,
+      collectTimeoutMs: opts.metrics?.collectTimeoutMs ?? DEFAULT_METRICS_COLLECT_TIMEOUT_MS,
     },
     shutdown: {
       drainTimeoutMs: opts.shutdown?.drainTimeoutMs ?? DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS,

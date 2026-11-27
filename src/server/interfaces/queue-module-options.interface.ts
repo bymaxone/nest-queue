@@ -27,8 +27,11 @@ export interface BymaxQueueModuleOptions {
   queueOptions?: Partial<Omit<QueueOptions, 'connection' | 'defaultJobOptions' | 'prefix'>>
   /** Flow Producer configuration. Opt-in. */
   flows?: { enabled?: boolean }
-  /** Metrics collection configuration. Opt-in. */
-  metrics?: { enabled?: boolean; cacheTtlMs?: number }
+  /**
+   * Metrics collection configuration. Opt-in. `collectTimeoutMs` (default 1000) bounds how long
+   * `MetricsService.getAllWithinBound`, which the depth gauge reads, waits for Redis.
+   */
+  metrics?: { enabled?: boolean; cacheTtlMs?: number; collectTimeoutMs?: number }
   /**
    * Opt-in OpenTelemetry — a BullMQ `Telemetry` (typically `new BullMQOtel(...)`
    * from the optional peer `bullmq-otel`); attached to every Queue and Worker.

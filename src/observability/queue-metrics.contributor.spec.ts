@@ -22,16 +22,16 @@ function snapshot(queue: string, counts: Partial<QueueMetrics['counts']> = {}): 
   }
 }
 
-/** A contributor over a fresh registry, with the snapshots `getAll` answers. */
+/** A contributor over a fresh registry, with the snapshots `getAllWithinBound` answers. */
 function setup(getAll: () => Promise<readonly QueueMetrics[]>): {
   observers: QueueObserverRegistry
   registry: Registry
 } {
   const observers = new QueueObserverRegistry()
   const registry = new Registry()
-  new QueueMetricsContributor(observers, { getAll } as unknown as MetricsService).registerMetrics(
-    registry,
-  )
+  new QueueMetricsContributor(observers, {
+    getAllWithinBound: getAll,
+  } as unknown as MetricsService).registerMetrics(registry)
   return { observers, registry }
 }
 
@@ -100,6 +100,29 @@ describe('QueueMetricsContributor', () => {
     const lines = await samples(registry, 'bymax_queue_depth{')
     expect(lines.some((line) => line.includes('billing'))).toBe(false)
     expect(lines.some((line) => line.includes('email'))).toBe(true)
+  })
+
+  it('keeps the previous depth in place while the next read is still waited for', async () => {
+    let answer: (value: readonly QueueMetrics[]) => void = () => undefined
+    let reads = 0
+    const { registry } = setup(() => {
+      reads += 1
+      if (reads === 1) return Promise.resolve([snapshot('email', { waiting: 1 })])
+      return new Promise((resolve) => {
+        answer = resolve
+      })
+    })
+    await registry.metrics()
+    const gauge = registry.getSingleMetric('bymax_queue_depth') as unknown as {
+      hashMap: Record<string, unknown>
+    }
+
+    const second = registry.metrics()
+
+    expect(Object.keys(gauge.hashMap)).toHaveLength(4)
+    answer([])
+    await second
+    expect(Object.keys(gauge.hashMap)).toHaveLength(0)
   })
 
   it('reports no depth while metrics are off or Redis does not answer, and the scrape still works', async () => {

@@ -49,9 +49,11 @@ export const JOB_OPTION_KEYS: readonly string[] = Object.keys(JOB_OPTION_TABLE)
 const FLOWS_KEYS = ['enabled'] as const satisfies readonly (keyof NonNullable<
   BymaxQueueModuleOptions['flows']
 >)[]
-const METRICS_KEYS = ['enabled', 'cacheTtlMs'] as const satisfies readonly (keyof NonNullable<
-  BymaxQueueModuleOptions['metrics']
->)[]
+const METRICS_KEYS = [
+  'enabled',
+  'cacheTtlMs',
+  'collectTimeoutMs',
+] as const satisfies readonly (keyof NonNullable<BymaxQueueModuleOptions['metrics']>)[]
 const SHUTDOWN_KEYS = [
   'drainTimeoutMs',
   'drainOnShutdown',

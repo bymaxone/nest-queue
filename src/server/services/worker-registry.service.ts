@@ -19,7 +19,7 @@ import type { Job, WorkerOptions as BullWorkerOptions } from 'bullmq'
 import type { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
 import { duplicateConnection } from '../utils/duplicate-connection'
-import { attachDefaultErrorListener } from '../utils/attach-error-listener'
+import { attachWorkerListeners } from '../utils/attach-worker-listeners'
 import { withDeadline } from '../utils/with-deadline'
 import { observeAttempt } from '../observability/observe-attempt'
 import { QueueObserverRegistry } from '../observability/queue-observer'
@@ -185,7 +185,7 @@ export class WorkerRegistry {
       )
     }
 
-    attachDefaultErrorListener(worker, this.logger, 'Worker', queueName)
+    attachWorkerListeners(worker, this.logger, queueName)
     this.#entries.set(queueName, { worker, connection: conn })
     return worker
   }
@@ -247,7 +247,7 @@ export class WorkerRegistry {
       )
     }
 
-    attachDefaultErrorListener(worker, this.logger, 'Worker', queueName)
+    attachWorkerListeners(worker, this.logger, queueName)
     this.#entries.set(queueName, { worker, connection: conn })
     return worker
   }

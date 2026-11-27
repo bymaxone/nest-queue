@@ -15,6 +15,26 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
+## [1.2.35] — 2026-11-27
+
+Against 1.2.34 the main entry gains an option and a method, and the runtime of the main and observability entries changes.
+
+### Added
+
+- `metrics.collectTimeoutMs` (default `1000`) and `MetricsService.getAllWithinBound()`, which answers what `getAll()` does when Redis answers within the bound, and an empty list otherwise.
+- A failed attempt of a job is logged as a `QUEUE_JOB_FAILED` warning with the queue, the job's name and id, the attempt and the class of the error. It carries no payload and no error message. Jobs the processor handed back write nothing.
+
+### Fixed
+
+- `bymax_queue_depth` waits for Redis for at most `metrics.collectTimeoutMs`. It waited for as long as the command did, so with Redis frozen a `/metrics` endpoint with the same deadline answered 503 and lost every series, not only the depth.
+
+### Apply to a derived backend
+
+- Every failed attempt now writes a `warn` line that names the job. If your job names or custom job ids can hold personal data or secrets, change them before upgrading.
+- If a scrape needs more than 1000 ms to read the depth of all your queues, raise `metrics.collectTimeoutMs`.
+
+---
+
 ## [1.2.34] — 2026-11-27
 
 Documentation only. Against 1.2.33 the built `dist/` is unchanged.
@@ -1425,7 +1445,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.34...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.35...HEAD
+[1.2.35]: https://github.com/bymaxone/nest-queue/compare/v1.2.34...v1.2.35
 [1.2.34]: https://github.com/bymaxone/nest-queue/compare/v1.2.33...v1.2.34
 [1.2.33]: https://github.com/bymaxone/nest-queue/compare/v1.2.32...v1.2.33
 [1.2.32]: https://github.com/bymaxone/nest-queue/compare/v1.2.31...v1.2.32

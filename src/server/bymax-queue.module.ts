@@ -160,7 +160,12 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
         {
           provide: MetricsService,
           useFactory: (qs: QueueService): MetricsService =>
-            new MetricsService(qs, resolved.metrics.enabled, resolved.metrics.cacheTtlMs),
+            new MetricsService(
+              qs,
+              resolved.metrics.enabled,
+              resolved.metrics.cacheTtlMs,
+              resolved.metrics.collectTimeoutMs,
+            ),
           inject: [QueueService],
         },
         ...BymaxQueueModule.buildCoreProviders({
@@ -217,7 +222,12 @@ export class BymaxQueueModule extends ConfigurableModuleClass {
         {
           provide: MetricsService,
           useFactory: (qs: QueueService, resolved: ResolvedQueueOptions): MetricsService =>
-            new MetricsService(qs, resolved.metrics.enabled, resolved.metrics.cacheTtlMs),
+            new MetricsService(
+              qs,
+              resolved.metrics.enabled,
+              resolved.metrics.cacheTtlMs,
+              resolved.metrics.collectTimeoutMs,
+            ),
           inject: [QueueService, BYMAX_QUEUE_RESOLVED_OPTIONS],
         },
         ...BymaxQueueModule.buildCoreProviders(asyncOptionsProvider()),

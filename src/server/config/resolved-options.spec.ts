@@ -44,7 +44,11 @@ describe('applyDefaults', () => {
     expect(resolved.prefix).toBe('bull')
     expect(resolved.queueOptions).toEqual({})
     expect(resolved.flows).toEqual({ enabled: false })
-    expect(resolved.metrics).toEqual({ enabled: false, cacheTtlMs: DEFAULT_METRICS_CACHE_TTL_MS })
+    expect(resolved.metrics).toEqual({
+      enabled: false,
+      cacheTtlMs: DEFAULT_METRICS_CACHE_TTL_MS,
+      collectTimeoutMs: 1000,
+    })
     expect(resolved.shutdown).toEqual({
       drainTimeoutMs: DEFAULT_SHUTDOWN_DRAIN_TIMEOUT_MS,
       drainOnShutdown: false,
@@ -73,14 +77,14 @@ describe('applyDefaults', () => {
       prefix: 'tenant:foo',
       queueOptions: { streams: { events: { maxLen: 10 } } },
       flows: { enabled: true },
-      metrics: { enabled: true, cacheTtlMs: 1234 },
+      metrics: { enabled: true, cacheTtlMs: 1234, collectTimeoutMs: 250 },
       shutdown: { drainTimeoutMs: 5000, drainOnShutdown: true },
       connectionReadyTimeoutMs: 2500,
     })
 
     expect(resolved.prefix).toBe('tenant:foo')
     expect(resolved.flows.enabled).toBe(true)
-    expect(resolved.metrics).toEqual({ enabled: true, cacheTtlMs: 1234 })
+    expect(resolved.metrics).toEqual({ enabled: true, cacheTtlMs: 1234, collectTimeoutMs: 250 })
     expect(resolved.shutdown).toEqual({ drainTimeoutMs: 5000, drainOnShutdown: true })
     expect(resolved.connectionReadyTimeoutMs).toBe(2500)
   })

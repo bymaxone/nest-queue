@@ -55,7 +55,7 @@ describe('a key that holds undefined or null is not given', () => {
     )
 
     expect(resolved.flows).toEqual({ enabled: false })
-    expect(resolved.metrics).toEqual({ enabled: false, cacheTtlMs: 5000 })
+    expect(resolved.metrics).toEqual({ enabled: false, cacheTtlMs: 5000, collectTimeoutMs: 1000 })
     expect(resolved.shutdown).toEqual({ drainTimeoutMs: 30_000, drainOnShutdown: false })
     expect(resolved.prefix).toBe('bull')
     expect(resolved.commandTimeoutMs).toBe(5000)
