@@ -26,7 +26,9 @@ const config: Config = {
   },
   clearMocks: true,
   restoreMocks: true,
-  passWithNoTests: true,
+  // A filtered local run that matches nothing is not an error. In CI it is: a `roots` or
+  // `testMatch` that stops matching would otherwise pass having run no test.
+  passWithNoTests: process.env['CI'] !== 'true',
   maxWorkers: '50%',
   collectCoverageFrom: ['src/**/*.ts', '!src/**/*.spec.ts', '!src/**/index.ts'],
   coveragePathIgnorePatterns: ['/node_modules/', '/dist/'],
