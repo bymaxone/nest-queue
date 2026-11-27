@@ -8,7 +8,7 @@
 import 'reflect-metadata'
 import { NestFactory } from '@nestjs/core'
 import { Logger, Module, type INestApplicationContext } from '@nestjs/common'
-import { DelayedError, WaitingChildrenError, WaitingError, Worker } from 'bullmq'
+import { DelayedError, WaitingChildrenError, WaitingError, Worker, type Job } from 'bullmq'
 import { BymaxQueueModule, QueueService, WorkerRegistry } from '@bymax-one/nest-queue'
 import { startRedisContainer, type RedisContainer } from './setup/testcontainers'
 
@@ -52,6 +52,26 @@ afterAll(async () => {
   await redis.stop()
 })
 
+/** Hand `job` back to BullMQ in the way its name asks for. */
+async function handBack(job: Job, queues: QueueService): Promise<never> {
+  if (job.name === 'delayed') {
+    await job.moveToDelayed(Date.now() + 100, job.token)
+    throw new DelayedError()
+  }
+  if (job.name === 'waiting') {
+    await job.moveToWait(job.token)
+    throw new WaitingError()
+  }
+  if (job.name === 'parent') {
+    const parent = { id: job.id!, queue: job.queueQualifiedName }
+    await queues.enqueue('payments', 'child', {}, { parent })
+    await job.moveToWaitingChildren(job.token!)
+    throw new WaitingChildrenError()
+  }
+  await queues.getOrCreateQueue('payments').rateLimit(100)
+  throw Worker.RateLimitError()
+}
+
 describe('E2E — the log of a failed job', () => {
   it('writes one warning per failed attempt, none for a hand-back, and no payload or message', async () => {
     jest.spyOn(Logger.prototype, 'warn').mockImplementation((message: unknown) => {
@@ -59,34 +79,15 @@ describe('E2E — the log of a failed job', () => {
     })
     const queues = app.get(QueueService)
     const handedBack = new Set<string>()
-    /** Whether this is the first run of a job of this name, which is the one that hands it back. */
-    const first = (name: string): boolean => {
-      if (handedBack.has(name)) return false
-      handedBack.add(name)
-      return true
-    }
     app.get(WorkerRegistry).register({
       queueName: 'payments',
       options: { limiter: { max: 100, duration: 1000 } },
       handler: async (job) => {
         if (job.name === 'charge') throw new PaymentDeclined(`card ${SECRET} was declined`)
-        if (job.name === 'child' || !first(job.name)) return
-        if (job.name === 'delayed') {
-          await job.moveToDelayed(Date.now() + 100, job.token)
-          throw new DelayedError()
-        }
-        if (job.name === 'waiting') {
-          await job.moveToWait(job.token)
-          throw new WaitingError()
-        }
-        if (job.name === 'parent') {
-          const parent = { id: job.id!, queue: job.queueQualifiedName }
-          await queues.enqueue('payments', 'child', {}, { parent })
-          await job.moveToWaitingChildren(job.token!)
-          throw new WaitingChildrenError()
-        }
-        await queues.getOrCreateQueue('payments').rateLimit(100)
-        throw Worker.RateLimitError()
+        // The first run of each of the others hands its job back; the child has nothing to do.
+        if (job.name === 'child' || handedBack.has(job.name)) return
+        handedBack.add(job.name)
+        await handBack(job, queues)
       },
     })
 
