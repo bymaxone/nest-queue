@@ -2,9 +2,8 @@
  * @fileoverview The operational log events of the library. Every one is an object message handed to
  * the plain Nest `Logger`: `{ event, message, ...fields }`, so a logger that writes objects as
  * fields (`@bymax-one/nest-logger`) keeps them as data and Nest's default console logger still
- * prints them readably. Fields hold closed or numeric values and the host's queue names, and the
- * failed-job event also holds the job's name and id. `message` holds the library's own text, and the
- * error that caused an event travels as its own value under `err`.
+ * prints them readably. `message` holds the library's own text, and the error that caused an event
+ * travels as its own value under `err`.
  * @layer server/utils
  */
 
