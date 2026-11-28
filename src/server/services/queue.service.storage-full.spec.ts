@@ -95,7 +95,7 @@ describe('QueueService — Redis out of memory', () => {
       code: QUEUE_ERROR_CODES.STORAGE_FULL,
       details: { operation: 'enqueue', reason: 'out_of_memory' },
     })
-    expect(err.cause).toMatchObject({ name: OOM.name, message: OOM.message })
+    expect(err.cause).toMatchObject({ name: 'RedisCommandError', code: 'OOM' })
   })
 
   it('enqueueBulk reports STORAGE_FULL (503), not BULK_ENQUEUE_FAILED', async () => {
@@ -109,7 +109,7 @@ describe('QueueService — Redis out of memory', () => {
       code: QUEUE_ERROR_CODES.STORAGE_FULL,
       details: { operation: 'enqueueBulk', reason: 'out_of_memory' },
     })
-    expect(err.cause).toMatchObject({ name: OOM.name, message: OOM.message })
+    expect(err.cause).toMatchObject({ name: 'RedisCommandError', code: 'OOM' })
   })
 
   it('enqueueBulk still reports any other failure as BULK_ENQUEUE_FAILED (500)', async () => {

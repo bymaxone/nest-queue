@@ -15,9 +15,9 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
-## [1.2.36] — 2026-11-27
+## [1.2.37] — 2026-11-27
 
-Against 1.2.35 the public surface is unchanged and the runtime of the main entry changes.
+Against 1.2.36 the public surface is unchanged and the runtime of the main entry changes.
 
 ### Changed
 
@@ -31,6 +31,18 @@ Against 1.2.35 the public surface is unchanged and the runtime of the main entry
 
 - If you match `QUEUE_JOB_FAILED` lines by job name or id, a value longer than 128 characters is now cut.
 - A job name and a custom `jobId` are written to that line: keep secrets and personal data out of both.
+
+---
+
+## [1.2.36] — 2026-11-27
+
+Against 1.2.35 the runtime of the main entry changes.
+
+**Apply to a derived backend:** where code reads the message, the name, `command` or `previousErrors` of an error Redis replied with, read its `code` instead.
+
+### Changed
+
+- An error that is, or wraps, a Redis reply or an error carrying a command is passed on as an `Error` named `RedisCommandError` with a fixed message and a `code`, when one can be read. So is an error ioredis or BullMQ builds out of another error's message. This applies to the rejections of `QueueService`, `FlowService` and `WorkerRegistry.unregister`, the `cause` of the library's exceptions, `err` on its log lines and what a trace hook is shown. Other errors are passed on as before.
 
 ---
 
@@ -1464,7 +1476,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.36...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.37...HEAD
+[1.2.37]: https://github.com/bymaxone/nest-queue/compare/v1.2.36...v1.2.37
 [1.2.36]: https://github.com/bymaxone/nest-queue/compare/v1.2.35...v1.2.36
 [1.2.35]: https://github.com/bymaxone/nest-queue/compare/v1.2.34...v1.2.35
 [1.2.34]: https://github.com/bymaxone/nest-queue/compare/v1.2.33...v1.2.34

@@ -3,12 +3,13 @@
  * the plain Nest `Logger`: `{ event, message, ...fields }`, so a logger that writes objects as
  * fields (`@bymax-one/nest-logger`) keeps them as data and Nest's default console logger still
  * prints them readably. `message` holds the library's own text, and the error that caused an event
- * travels as its own value under `err`.
+ * travels under `err`, with a Redis reply cut to its code.
  * @layer server/utils
  */
 
 import type { Logger } from '@nestjs/common'
 import { isGuardRefusal } from '../connection/prototype-guard'
+import { redactRedisError } from './redact-redis-error'
 
 /** The logger methods the library writes through. */
 type EventLogger = Pick<Logger, 'log' | 'warn' | 'error'>
@@ -54,7 +55,7 @@ export interface QueueLogMessage {
   readonly event: QueueLogEvent
   /** The text a log reader sees. */
   readonly message: string
-  /** The error that caused the event, as the value itself and never as text in `message`. */
+  /** What caused the event, never as text in `message`; a Redis reply is replaced by its code. */
   readonly err?: unknown
   /** Closed or numeric fields of the event. */
   readonly [field: string]: unknown
@@ -77,9 +78,10 @@ export function logEvent(
 }
 
 /**
- * Build the log event of a failure. The error is carried as the value itself, under `err`, where a
- * logger that knows errors serialises and redacts it; it is never put in `message`, which holds the
- * library's own text only, because the text of an error can hold anything the failing code did.
+ * Build the log event of a failure. The error is carried under `err`, where a logger that knows
+ * errors serialises it; it is never put in `message`, which holds the library's own text only. An
+ * error that holds a Redis reply is carried as its code and a fixed message; any other is the value
+ * itself.
  *
  * @param event - The code of the event.
  * @param message - The text, with nothing of the error in it.
@@ -92,7 +94,7 @@ export function logFailure(
   err: unknown,
   fields: Readonly<Record<string, string | number | boolean>>,
 ): QueueLogMessage {
-  return { event, message, ...fields, err }
+  return { event, message, ...fields, err: redactRedisError(err) }
 }
 
 /**
