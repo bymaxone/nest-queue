@@ -102,6 +102,57 @@ describe('WorkerRegistry — the log of a failed job', () => {
     expect(loggedText(warn)).not.toContain(SECRET)
   })
 
+  /** The name and id written for a job whose name and id are both `value`. */
+  function written(value: string): unknown[] {
+    const { workers, warn } = setup()
+
+    workers.email.emit('failed', { id: value, name: value }, new SmtpRefused(), 'active')
+
+    return failures(warn).map((event) => {
+      const { jobName, jobId } = event as { jobName: unknown; jobId: unknown }
+      return [jobName, jobId]
+    })
+  }
+
+  it.each([
+    ['128 characters as they are', 'a'.repeat(128), 'a'.repeat(128)],
+    ['129 characters cut to 128 and an ellipsis', 'a'.repeat(129), `${'a'.repeat(128)}…`],
+    ['line breaks taken out', 'a\rb\nc d e\r\nf', 'abcdef'],
+    ['a long value with line breaks', `\n${'a'.repeat(200)}`, `${'a'.repeat(127)}…`],
+    ['no half of a character at the cut', `${'a'.repeat(127)}😀tail`, `${'a'.repeat(127)}…`],
+    ['a whole character that ends at the cut', `${'a'.repeat(126)}😀tail`, `${'a'.repeat(126)}😀…`],
+    ['a short value with its last character whole', 'done 😀', 'done 😀'],
+  ])('writes a job name and id with %s', (_label, value, expected) => {
+    expect(written(value)).toStrictEqual([[expected, expected]])
+  })
+
+  it('writes the class of an error a sandboxed processor failed with, and no member of it', () => {
+    // The error is built as the parent side of BullMQ's sandbox builds it. This pins what the library
+    // does with that value, not what BullMQ sends from the child process.
+    const { workers, warn } = setup()
+    const rebuilt = Object.assign(new Error(), {
+      name: SECRET,
+      message: SECRET,
+      stack: SECRET,
+      command: { name: 'set', args: [SECRET] },
+    })
+
+    workers.video.emit('failed', job(1), rebuilt, 'active')
+
+    expect(failures(warn)).toStrictEqual([
+      {
+        event: 'QUEUE_JOB_FAILED',
+        message: 'A job attempt failed',
+        queue: 'video',
+        jobName: 'send',
+        jobId: '42',
+        attempt: 1,
+        errorClass: 'Error',
+      },
+    ])
+    expect(loggedText(warn)).not.toContain(SECRET)
+  })
+
   it('writes the queue and the class when BullMQ has no job to give', () => {
     const { workers, warn } = setup()
 

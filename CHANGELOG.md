@@ -15,6 +15,25 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
+## [1.2.37] — 2026-11-27
+
+Against 1.2.36 the public surface is unchanged and the runtime of the main entry changes.
+
+### Changed
+
+- The `QUEUE_JOB_FAILED` warning carries the job's name and id without line breaks, and each cut to 128 characters and an ellipsis when longer.
+
+### Fixed
+
+- A depth read in flight when `MetricsService.invalidate` is called no longer caches what it reads.
+
+### Apply to a derived backend
+
+- If you match `QUEUE_JOB_FAILED` lines by job name or id, a value longer than 128 characters is now cut.
+- A job name and a custom `jobId` are written to that line: keep secrets and personal data out of both.
+
+---
+
 ## [1.2.36] — 2026-11-27
 
 Against 1.2.35 the runtime of the main entry changes.
@@ -1457,7 +1476,8 @@ v6 peer range.
 
 ---
 
-[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.36...HEAD
+[Unreleased]: https://github.com/bymaxone/nest-queue/compare/v1.2.37...HEAD
+[1.2.37]: https://github.com/bymaxone/nest-queue/compare/v1.2.36...v1.2.37
 [1.2.36]: https://github.com/bymaxone/nest-queue/compare/v1.2.35...v1.2.36
 [1.2.35]: https://github.com/bymaxone/nest-queue/compare/v1.2.34...v1.2.35
 [1.2.34]: https://github.com/bymaxone/nest-queue/compare/v1.2.33...v1.2.34

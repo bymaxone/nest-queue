@@ -29,9 +29,10 @@ function checkTimerDelay(name: string, value: number | undefined): void {
 }
 
 /**
- * Refuse a bound of the depth read that a timer would not honour, and a cache TTL that is not a whole number of milliseconds `>= 0`. `NaN` is neither
- * below 0 nor above anything, so a range check alone lets it through and silently turns the cache
- * off; a fraction or an infinite TTL is not a duration anyone meant.
+ * Refuse a bound of the depth read that a timer would not honour, and a cache TTL that is not a
+ * whole number of milliseconds `>= 0`. `NaN` is neither below 0 nor above anything, so a range
+ * check alone would let it through as a TTL and silently turn the cache off; a fraction or an
+ * infinite TTL is not a duration anyone meant.
  */
 function checkMetrics(metrics: BymaxQueueModuleOptions['metrics']): void {
   checkTimerDelay('metrics.collectTimeoutMs', metrics?.collectTimeoutMs)
