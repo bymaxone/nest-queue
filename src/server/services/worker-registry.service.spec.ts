@@ -794,3 +794,33 @@ describe('WorkerRegistry — validation boundaries and error details', () => {
     }
   })
 })
+
+// A Worker constructor can fail after it has built its blocking connection.
+describe('WorkerRegistry — a constructor that fails after duplicating its connection', () => {
+  it.each([
+    [
+      'register',
+      (r: WorkerRegistry) => r.register({ queueName: 'q', handler: () => Promise.resolve(1) }),
+    ],
+    [
+      'registerSandboxed',
+      (r: WorkerRegistry) => r.registerSandboxed({ queueName: 'q', processorFile: '/p.js' }),
+    ],
+  ])('%s ends that connection as well', (_name, start) => {
+    const blocking = { status: 'connecting', on: jest.fn(), disconnect: jest.fn() }
+    const own = { status: 'ready', on: jest.fn(), disconnect: jest.fn(), duplicate: () => blocking }
+    const redis = { duplicate: () => own } as unknown as Redis
+    const MockWorker = jest.requireMock<{ Worker: jest.Mock }>('bullmq').Worker
+    MockWorker.mockImplementationOnce((...args: unknown[]) => {
+      ;(args[2] as { connection: Redis }).connection.duplicate()
+      throw new Error('constructor failed')
+    })
+
+    expect(() => start(new WorkerRegistry(fakeConnection(redis), makeOptions()))).toThrow(
+      QueueException,
+    )
+
+    expect(blocking.disconnect).toHaveBeenCalledTimes(1)
+    expect(own.disconnect).toHaveBeenCalledTimes(1)
+  })
+})

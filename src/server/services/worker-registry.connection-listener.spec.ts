@@ -1,7 +1,8 @@
 /**
  * @fileoverview The connections the library duplicates keep an `error` listener after the BullMQ
  * object that used them closed. Real ioredis clients and real BullMQ classes run against a loopback
- * server that is taken away, because BullMQ removes its own listener when it closes.
+ * server that is taken away, because BullMQ removes its own listener when it closes. The blocking
+ * connection BullMQ duplicates from a worker's connection stays closed once the worker is released.
  * @layer server/services
  */
 
@@ -12,6 +13,9 @@ import { Logger } from '@nestjs/common'
 import { Redis } from 'ioredis'
 import { QueueEventsRegistry } from './queue-events-registry.service'
 import { WorkerRegistry } from './worker-registry.service'
+import { QueueLifecycle } from '../lifecycle/queue-lifecycle.service'
+import type { FlowService } from './flow.service'
+import type { QueueService } from './queue.service'
 import type { ConnectionResolver } from './connection-resolver.service'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 
@@ -147,5 +151,54 @@ describe('the connection of a closed worker', () => {
 
     expect(listeners).toHaveLength(3)
     for (const count of listeners) expect(count).toBeGreaterThan(0)
+  })
+})
+
+describe('the blocking connection of a released worker', () => {
+  /** The client BullMQ duplicated from the worker's connection, which is the blocking one. */
+  function blockingOf(workers: WorkerRegistry): Redis {
+    const duplicated = jest.spyOn(Redis.prototype, 'duplicate')
+    workers.register({
+      queueName: 'q',
+      handler: () => Promise.resolve(),
+      options: { autorun: false },
+    })
+    return duplicated.mock.results.at(-1)!.value as Redis
+  }
+
+  /** The lifecycle over the registries; consumption shutdown reads nothing else. */
+  function lifecycleOf(workers: WorkerRegistry, events: QueueEventsRegistry): QueueLifecycle {
+    const none = {} as unknown
+    const resolved = { shutdown: { drainTimeoutMs: 500 } } as unknown as ResolvedQueueOptions
+    return new QueueLifecycle(
+      workers,
+      events,
+      none as QueueService,
+      none as FlowService,
+      none as ConnectionResolver,
+      resolved,
+    )
+  }
+
+  it.each([
+    ['unregister', ({ workers }: ReturnType<typeof registries>) => workers.unregister('q')],
+    [
+      'the shutdown',
+      ({ workers, events }: ReturnType<typeof registries>) =>
+        lifecycleOf(workers, events).onModuleDestroy(),
+    ],
+  ])('stays closed after %s, whatever still asks it to connect', async (_name, release) => {
+    const made = registries()
+    const blocking = blockingOf(made.workers)
+    await until(() => made.workers.getConnections().get('q')!.status === 'ready')
+
+    await release(made)
+    await until(() => blocking.status === 'end' || blocking.status === 'wait')
+    const settled = blocking.status
+    // What a reconnect BullMQ still has pending does next.
+    await blocking.connect()
+
+    expect(blocking.status).toBe(settled)
+    expect(blocking.listenerCount('error')).toBeGreaterThan(0)
   })
 })

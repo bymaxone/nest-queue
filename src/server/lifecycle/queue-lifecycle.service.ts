@@ -35,6 +35,7 @@ import { QueueService } from '../services/queue.service'
 import { WorkerRegistry } from '../services/worker-registry.service'
 import { QueueEventsRegistry } from '../services/queue-events-registry.service'
 import { disconnectUnlessEnded } from '../utils/disconnect-unless-ended'
+import { retireDuplicates } from '../utils/duplicate-connection'
 import { logEvent, logFailure, QUEUE_LOG_EVENTS, writeLog } from '../utils/log-event'
 
 /** How long a worker's forced close may take, in milliseconds, once the drain budget has ended. */
@@ -180,7 +181,8 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
    * Close the duplicated worker/queue-events connections the library opened, in parallel. BullMQ
    * treats a passed-in client as shared and never closes it, so the library must release these
    * explicitly. A connection that does not quit within the budget is disconnected, which also
-   * releases anything still blocked on it. In Mode A the consumer's shared client is never among
+   * releases anything still blocked on it. What BullMQ duplicated from each is retired first, so
+   * no reconnect of a blocking connection outlives the shutdown. In Mode A the consumer's shared client is never among
    * them.
    */
   private async closeDuplicatedConnections(deadline: number): Promise<void> {
@@ -190,6 +192,7 @@ export class QueueLifecycle implements OnModuleDestroy, OnApplicationShutdown {
     ]
     await joinAll(
       connections.map(async (connection) => {
+        retireDuplicates(connection)
         await bounded(connection.quit(), deadline).catch(() => {
           disconnectUnlessEnded(connection)
         })
