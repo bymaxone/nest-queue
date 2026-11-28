@@ -451,6 +451,11 @@ export class WorkerRegistry {
     }
   }
 
+  /** The connection of one worker, logging its faults under the queue's name. */
+  private openConnection(queueName: string): Redis {
+    return duplicateConnection(this.connection.getClient(), this.logger, `worker: ${queueName}`)
+  }
+
   /**
    * Build a BullMQ `WorkerOptions` object from the library's `WorkerOptions`
    * shape. Only forwards optional fields that are explicitly set to preserve
@@ -461,11 +466,6 @@ export class WorkerRegistry {
    * @param conn - Pre-created duplicated Redis connection.
    * @returns A BullMQ-compatible options object.
    */
-  /** The connection of one worker, logging its faults under the queue's name. */
-  private openConnection(queueName: string): Redis {
-    return duplicateConnection(this.connection.getClient(), this.logger, `worker: ${queueName}`)
-  }
-
   private buildBullOptions(opts: WorkerOptions | undefined, conn: Redis): BullWorkerOptions {
     const result: BullWorkerOptions = {
       connection: conn,
