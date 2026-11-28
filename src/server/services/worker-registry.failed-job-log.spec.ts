@@ -126,6 +126,29 @@ describe('WorkerRegistry — the log of a failed job', () => {
     expect(written(value)).toStrictEqual([[expected, expected]])
   })
 
+  it.each([
+    ['a carriage return', '\r'],
+    ['a line feed', '\n'],
+    ['a line separator', '\u2028'],
+    ['a paragraph separator', '\u2029'],
+    ['a tab', '\t'],
+    ['a vertical tab', '\v'],
+    ['a form feed', '\f'],
+    ['a next line', '\u0085'],
+    ['an escape', '\u001b'],
+    ['a null', '\u0000'],
+    ['a delete', '\u007f'],
+    ['the last C1 control', '\u009f'],
+  ])('writes a job name and id without %s', (_label, control) => {
+    expect(written(`a${control}b${control}`)).toStrictEqual([['ab', 'ab']])
+  })
+
+  it('keeps the characters that border the control ranges', () => {
+    const value = ' ~\u00a0\u2027\u202a'
+
+    expect(written(value)).toStrictEqual([[value, value]])
+  })
+
   it('writes the class of an error a sandboxed processor failed with, and no member of it', () => {
     // The error is built as the parent side of BullMQ's sandbox builds it. This pins what the library
     // does with that value, not what BullMQ sends from the child process.

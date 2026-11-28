@@ -21,7 +21,7 @@ Against 1.2.36 the public surface is unchanged and the runtime of the main entry
 
 ### Changed
 
-- The `QUEUE_JOB_FAILED` warning carries the job's name and id without line breaks, and each cut to 128 characters and an ellipsis when longer.
+- The `QUEUE_JOB_FAILED` warning carries the job's name and id without control characters or line breaks, and each cut to 128 characters and an ellipsis when longer.
 
 ### Fixed
 
@@ -30,6 +30,7 @@ Against 1.2.36 the public surface is unchanged and the runtime of the main entry
 ### Apply to a derived backend
 
 - If you match `QUEUE_JOB_FAILED` lines by job name or id, a value longer than 128 characters is now cut.
+- On those lines, a job name or id that holds a control character or a line break is now altered.
 - A job name and a custom `jobId` are written to that line: keep secrets and personal data out of both.
 
 ---

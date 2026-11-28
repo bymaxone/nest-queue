@@ -34,13 +34,14 @@ function classOf(error: unknown): string {
 const MAX_NAMED_LENGTH = 128
 
 /**
- * `value` as the line carries it: without line breaks, and cut to {@link MAX_NAMED_LENGTH}
- * characters and an ellipsis when it is longer, never in the middle of a surrogate pair.
+ * `value` as the line carries it: without control characters or line breaks, and cut to
+ * {@link MAX_NAMED_LENGTH} characters and an ellipsis when it is longer, never in the middle of a
+ * surrogate pair.
  */
 function fit(value: string): string {
   const long = value.length > MAX_NAMED_LENGTH
   const kept = long ? value.slice(0, MAX_NAMED_LENGTH).replace(/[\uD800-\uDBFF]$/, '') : value
-  const oneLine = kept.replace(/[\r\n\u2028\u2029]/g, '')
+  const oneLine = kept.replace(/[\p{Cc}\u2028\u2029]/gu, '')
   return long ? `${oneLine}…` : oneLine
 }
 
