@@ -126,6 +126,33 @@ describe('WorkerRegistry — the log of a failed job', () => {
     expect(written(value)).toStrictEqual([[expected, expected]])
   })
 
+  it('writes the class of an error a sandboxed processor failed with, and no member of it', () => {
+    // The error is built as the parent side of BullMQ's sandbox builds it. This pins what the library
+    // does with that value, not what BullMQ sends from the child process.
+    const { workers, warn } = setup()
+    const rebuilt = Object.assign(new Error(), {
+      name: SECRET,
+      message: SECRET,
+      stack: SECRET,
+      command: { name: 'set', args: [SECRET] },
+    })
+
+    workers.video.emit('failed', job(1), rebuilt, 'active')
+
+    expect(failures(warn)).toStrictEqual([
+      {
+        event: 'QUEUE_JOB_FAILED',
+        message: 'A job attempt failed',
+        queue: 'video',
+        jobName: 'send',
+        jobId: '42',
+        attempt: 1,
+        errorClass: 'Error',
+      },
+    ])
+    expect(loggedText(warn)).not.toContain(SECRET)
+  })
+
   it('writes the queue and the class when BullMQ has no job to give', () => {
     const { workers, warn } = setup()
 

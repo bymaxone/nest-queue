@@ -46,8 +46,8 @@ export class MetricsService {
   private readonly cache = new Map<string, CacheEntry>()
   /** The read of every queue that `getAllWithinBound` calls share while it is in flight. */
   private pending: Promise<readonly QueueMetrics[]> | undefined
-  /** Counts the calls to `invalidate`, so that a read begun before one is not cached after it. */
-  private generation = 0
+  /** Replaced by each `invalidate`, so that a read begun before one is not cached after it. */
+  private generation = Symbol()
 
   constructor(
     private readonly queueService: QueueService,
@@ -137,7 +137,7 @@ export class MetricsService {
    */
   invalidate(queueName?: string): void {
     this.ensureEnabled()
-    this.generation += 1
+    this.generation = Symbol()
     if (queueName === undefined) {
       this.cache.clear()
       return
