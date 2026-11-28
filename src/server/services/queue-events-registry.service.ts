@@ -13,7 +13,7 @@ import type { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
-import { duplicateConnection } from '../utils/duplicate-connection'
+import { duplicateConnection, retireDuplicates } from '../utils/duplicate-connection'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { disconnectUnlessEnded } from '../utils/disconnect-unless-ended'
 
@@ -64,7 +64,8 @@ export class QueueEventsRegistry {
     try {
       qe = new QueueEvents(queueName, { connection: conn, prefix: this.options.prefix })
     } catch (err) {
-      // Disconnect the duplicated connection to prevent a Redis resource leak.
+      // BullMQ may have duplicated `conn` before the failure, so that client is released too.
+      retireDuplicates(conn)
       disconnectUnlessEnded(conn)
       throw err
     }

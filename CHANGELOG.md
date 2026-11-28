@@ -28,6 +28,7 @@ Against 1.2.36 the public surface is unchanged and the runtime of the main entry
 - A depth read in flight when `MetricsService.invalidate` is called no longer caches what it reads.
 - A worker's connection, and the blocking connection BullMQ duplicates from it, keep an error listener for their whole life, including after the worker closed.
 - A shutdown during a Redis outage no longer leaves a worker's blocking connection reconnecting, which kept the process from exiting.
+- A `QueueEvents` whose construction fails no longer leaves open a connection BullMQ had already duplicated for it.
 
 ### Apply to a derived backend
 
