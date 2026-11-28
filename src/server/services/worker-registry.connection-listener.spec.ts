@@ -202,3 +202,21 @@ describe('the blocking connection of a released worker', () => {
     expect(blocking.listenerCount('error')).toBeGreaterThan(0)
   })
 })
+
+// BullMQ duplicates the connection it is handed before it refuses a queue name.
+describe('a QueueEvents whose construction fails', () => {
+  it('ends the connection BullMQ had already duplicated, for good', async () => {
+    const duplicated = jest.spyOn(Redis.prototype, 'duplicate')
+    const { events } = registries()
+
+    expect(() => events.getOrCreate('a:b')).toThrow('Queue name cannot contain :')
+    const made = duplicated.mock.results.at(-1)!.value as Redis
+    await until(() => made.status === 'ready' || made.status === 'end')
+    // What a reconnect still pending on it would do next.
+    await made.connect()
+
+    expect(duplicated).toHaveBeenCalledTimes(2)
+    expect(made.status).toBe('end')
+    expect(made.listenerCount('error')).toBeGreaterThan(0)
+  })
+})
