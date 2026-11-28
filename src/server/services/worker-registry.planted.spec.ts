@@ -22,7 +22,9 @@ jest.mock('bullmq', () => ({
 function makeRegistry(): WorkerRegistry {
   const connection = {
     getClient: jest.fn().mockReturnValue({
-      duplicate: jest.fn().mockReturnValue({ status: 'ready', disconnect: jest.fn() }),
+      duplicate: jest
+        .fn()
+        .mockReturnValue({ status: 'ready', on: jest.fn(), disconnect: jest.fn() }),
     }),
   } as unknown as ConnectionResolver
   const options = {

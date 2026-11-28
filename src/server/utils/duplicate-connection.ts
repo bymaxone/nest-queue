@@ -3,7 +3,9 @@
  * @layer server/utils
  */
 
+import type { Logger } from '@nestjs/common'
 import type { Redis } from 'ioredis'
+import { attachClientErrorListener } from './attach-client-error-listener'
 import { guardSentinelConnector } from '../connection/guarded-connector'
 
 /**
@@ -17,10 +19,27 @@ import { guardSentinelConnector } from '../connection/guarded-connector'
  * the guard, so the duplicate is built lazy, its connector is guarded, and it connects on its first
  * command or `connect()`, as BullMQ does.
  *
+ * The duplicate gets the logging `error` listener here, so it has one for its whole life: BullMQ
+ * removes its own from a connection it was handed when it closes, before the library is done with it.
+ *
  * @param client - The source client (the Queue-role connection).
+ * @param logger - Logger that records the duplicate's faults.
+ * @param role - What the duplicate is for, used in the log line (e.g. `probe`).
  * @returns A duplicated client suitable for blocking commands.
  */
-export function duplicateConnection(client: Redis): Redis {
+export function duplicateConnection(client: Redis, logger: Logger, role: string): Redis {
+  const duplicate = copyClient(client)
+  attachClientErrorListener(duplicate, logger, role)
+  return duplicate
+}
+
+/**
+ * The duplicate itself, with the options the blocking roles need.
+ *
+ * @param client - The source client.
+ * @returns A new client; a sentinel one is lazy and has its connector guarded.
+ */
+function copyClient(client: Redis): Redis {
   // ioredis arms a command deadline only when `commandTimeout` is a number and merges the override
   // over the parent's options with a spread, so an explicit `undefined` clears it. `RedisOptions`
   // does not admit `undefined` under `exactOptionalPropertyTypes`, so the override is built as a

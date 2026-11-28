@@ -267,8 +267,7 @@ export class ConnectionResolver {
         ),
       )
     }
-    const probe = duplicateConnection(client)
-    attachClientErrorListener(probe, this.#logger, 'probe')
+    const probe = duplicateConnection(client, this.#logger, 'probe')
     try {
       assertBlockingConnection(probe)
     } finally {

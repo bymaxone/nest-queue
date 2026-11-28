@@ -26,12 +26,14 @@ Against 1.2.36 the public surface is unchanged and the runtime of the main entry
 ### Fixed
 
 - A depth read in flight when `MetricsService.invalidate` is called no longer caches what it reads.
+- A worker's connection keeps an error listener for its whole life, including after the worker closed.
 
 ### Apply to a derived backend
 
 - If you match `QUEUE_JOB_FAILED` lines by job name or id, a value longer than 128 characters is now cut.
 - On those lines, a job name or id that holds a control character or a line break is now altered.
 - A job name and a custom `jobId` are written to that line: keep secrets and personal data out of both.
+- A fault on a worker's connection also writes `QUEUE_CLIENT_ERROR`, with `role` `worker: <queue name>`.
 
 ---
 

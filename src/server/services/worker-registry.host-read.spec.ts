@@ -29,6 +29,7 @@ const duplicate = jest.fn()
 function makeRegistry(): WorkerRegistry {
   duplicate.mockImplementation(() => ({
     status: 'ready',
+    on: jest.fn(),
     disconnect: jest.fn(),
     quit: jest.fn().mockResolvedValue('OK'),
   }))

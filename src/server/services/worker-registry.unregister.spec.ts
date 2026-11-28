@@ -36,6 +36,7 @@ function fakeRedis(): Redis {
   return {
     duplicate: jest.fn().mockImplementation(() => ({
       status: 'ready',
+      on: jest.fn(),
       disconnect: jest.fn(),
       quit: jest.fn<Promise<string>, []>().mockResolvedValue('OK'),
     })),
@@ -92,6 +93,7 @@ describe('WorkerRegistry.unregister', () => {
     // A failed graceful quit must fall back to disconnect so a socket never leaks.
     const failingConn = {
       status: 'ready',
+      on: jest.fn(),
       quit: jest.fn<Promise<string>, []>().mockRejectedValue(new Error('quit failed')),
       disconnect: jest.fn(),
     }

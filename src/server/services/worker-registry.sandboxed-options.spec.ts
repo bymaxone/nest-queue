@@ -24,7 +24,9 @@ function makeRegistry(): WorkerRegistry {
   const connection = {
     getClient: jest.fn().mockReturnValue({
       options: {},
-      duplicate: jest.fn().mockReturnValue({ status: 'ready', disconnect: jest.fn() }),
+      duplicate: jest
+        .fn()
+        .mockReturnValue({ status: 'ready', on: jest.fn(), disconnect: jest.fn() }),
     }),
   } as unknown as ConnectionResolver
   return new WorkerRegistry(connection, {} as unknown as ResolvedQueueOptions)

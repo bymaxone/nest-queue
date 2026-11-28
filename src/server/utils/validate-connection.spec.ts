@@ -5,6 +5,7 @@
 
 import type { Redis } from 'ioredis'
 import { assertBlockingConnection, isClientUsable } from './validate-connection'
+import { Logger } from '@nestjs/common'
 import { duplicateConnection } from './duplicate-connection'
 import { QueueException } from '../errors/queue-exception'
 
@@ -81,11 +82,11 @@ describe('isClientUsable', () => {
 describe('duplicateConnection', () => {
   it('duplicates the client forcing maxRetriesPerRequest to null', () => {
     // The override is the contract that makes the duplicate safe for blocking commands.
-    const duplicate = makeClient({ options: { maxRetriesPerRequest: null } })
+    const duplicate = makeClient({ options: { maxRetriesPerRequest: null }, on: jest.fn() })
     const duplicateSpy: Redis['duplicate'] = jest.fn().mockReturnValue(duplicate)
     const source = makeClient({ duplicate: duplicateSpy })
 
-    const result = duplicateConnection(source)
+    const result = duplicateConnection(source, new Logger('test'), 'test')
 
     expect(duplicateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ maxRetriesPerRequest: null }),

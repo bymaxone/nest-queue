@@ -14,7 +14,6 @@ import { ConnectionResolver } from './connection-resolver.service'
 import { BYMAX_QUEUE_RESOLVED_OPTIONS } from '../bymax-queue.constants'
 import type { ResolvedQueueOptions } from '../config/resolved-options'
 import { duplicateConnection } from '../utils/duplicate-connection'
-import { attachClientErrorListener } from '../utils/attach-client-error-listener'
 import { attachDefaultErrorListener } from '../utils/attach-error-listener'
 import { disconnectUnlessEnded } from '../utils/disconnect-unless-ended'
 
@@ -56,10 +55,11 @@ export class QueueEventsRegistry {
   getOrCreate(queueName: string): QueueEvents {
     const existing = this.#events.get(queueName)
     if (existing) return existing
-    const conn = duplicateConnection(this.connection.getClient())
-    // BullMQ duplicates the connection it is given for its own subscriber and listens only on
-    // that copy, so this one would otherwise emit its faults to nobody.
-    attachClientErrorListener(conn, this.logger, `queue events: ${queueName}`)
+    const conn = duplicateConnection(
+      this.connection.getClient(),
+      this.logger,
+      `queue events: ${queueName}`,
+    )
     let qe: QueueEvents
     try {
       qe = new QueueEvents(queueName, { connection: conn, prefix: this.options.prefix })

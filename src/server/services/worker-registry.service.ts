@@ -156,7 +156,7 @@ export class WorkerRegistry {
     this.guardDuplicate(queueName)
     this.validateOptions(options)
 
-    const conn = duplicateConnection(this.connection.getClient())
+    const conn = this.openConnection(queueName)
     const bullOpts = this.buildBullOptions(options, conn)
 
     let worker: Worker<TData, TResult>
@@ -224,7 +224,7 @@ export class WorkerRegistry {
     this.guardDuplicate(queueName)
     this.validateOptions(options)
 
-    const conn = duplicateConnection(this.connection.getClient())
+    const conn = this.openConnection(queueName)
     const bullOpts = this.buildBullOptions(options, conn)
     if (options?.useWorkerThreads !== undefined) {
       bullOpts.useWorkerThreads = options.useWorkerThreads
@@ -449,6 +449,11 @@ export class WorkerRegistry {
         },
       )
     }
+  }
+
+  /** The connection of one worker, logging its faults under the queue's name. */
+  private openConnection(queueName: string): Redis {
+    return duplicateConnection(this.connection.getClient(), this.logger, `worker: ${queueName}`)
   }
 
   /**
