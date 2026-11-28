@@ -203,7 +203,7 @@ describe('the blocking connection of a released worker', () => {
   })
 })
 
-// BullMQ duplicates the connection it is handed before it refuses a queue name.
+// The installed BullMQ duplicates the connection it is handed before it refuses a queue name.
 describe('a QueueEvents whose construction fails', () => {
   it('ends the connection BullMQ had already duplicated, for good', async () => {
     const duplicated = jest.spyOn(Redis.prototype, 'duplicate')

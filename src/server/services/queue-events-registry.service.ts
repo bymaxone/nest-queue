@@ -64,7 +64,7 @@ export class QueueEventsRegistry {
     try {
       qe = new QueueEvents(queueName, { connection: conn, prefix: this.options.prefix })
     } catch (err) {
-      // BullMQ duplicates `conn` before it can refuse the name, so both are released.
+      // BullMQ may have duplicated `conn` before the failure, so that client is released too.
       retireDuplicates(conn)
       disconnectUnlessEnded(conn)
       throw err
