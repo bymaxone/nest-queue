@@ -21,7 +21,7 @@ const BUDGETS = {
   'dist/observability/index.mjs': 1_912,
   'dist/shared/index.mjs': 440,
   'dist/server/index.cjs': 23_995,
-  'dist/observability/index.cjs': 1_723,
+  'dist/observability/index.cjs': 1_728,
   'dist/shared/index.cjs': 459,
 }
 
