@@ -10,6 +10,7 @@ import net from 'node:net'
 import type { Server, Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Logger } from '@nestjs/common'
 import { Redis } from 'ioredis'
 import { GuardedConnector, guardSentinelConnector } from '../connection/guarded-connector'
 import { QueueException } from '../errors/queue-exception'
@@ -19,6 +20,9 @@ import { duplicateConnection } from './duplicate-connection'
 const STANDARD = new Set(Object.getOwnPropertyNames(Object.prototype))
 
 const closers: (() => void)[] = []
+
+/** `duplicateConnection` with the logger and role these tests do not look at. */
+const duplicate = (client: Redis): Redis => duplicateConnection(client, new Logger('test'), 'test')
 
 afterEach(() => {
   for (const close of closers.splice(0)) close()
@@ -56,7 +60,7 @@ interface IFake {
 function fakeClient(options: object | undefined): IFake {
   const connect = jest.fn()
   const copyDuplicate = jest.fn().mockReturnValue({ connector: { connect }, duplicate: jest.fn() })
-  const copy = { connector: { connect }, duplicate: copyDuplicate }
+  const copy = { connector: { connect }, duplicate: copyDuplicate, on: jest.fn() }
   const duplicate = jest.fn().mockReturnValue(copy)
   const client = (options === undefined ? { duplicate } : { options, duplicate }) as unknown
   return { client: client as Redis, duplicate, copy, connect, copyDuplicate }
@@ -73,7 +77,7 @@ describe('duplicateConnection on a client with sentinels', () => {
   it('duplicates lazy with the blocking-connection policy', () => {
     const fake = fakeClient({ sentinels })
 
-    const result = duplicateConnection(fake.client)
+    const result = duplicate(fake.client)
 
     expect(result).toBe(fake.copy)
     expect(fake.duplicate).toHaveBeenCalledTimes(1)
@@ -89,7 +93,7 @@ describe('duplicateConnection on a client with sentinels', () => {
 
   it('builds a duplicate of the duplicate lazy too, whatever override it is given', () => {
     const fake = fakeClient({ sentinels })
-    const copy = duplicateConnection(fake.client) as unknown as IFake['copy']
+    const copy = duplicate(fake.client) as unknown as IFake['copy']
 
     const second = copy.duplicate({ maxRetriesPerRequest: 3 })
 
@@ -101,7 +105,7 @@ describe('duplicateConnection on a client with sentinels', () => {
 
   it('guards the connector of the duplicate of the duplicate', async () => {
     const fake = fakeClient({ sentinels })
-    const copy = duplicateConnection(fake.client) as unknown as IFake['copy']
+    const copy = duplicate(fake.client) as unknown as IFake['copy']
     const second = copy.duplicate({}) as IFake['copy']
     plant('path', '/nowhere')
 
@@ -118,7 +122,7 @@ describe('duplicateConnection on a client with sentinels', () => {
 
   it('refuses a connect while a key is planted, before the original connect runs', async () => {
     const fake = fakeClient({ sentinels })
-    const copy = duplicateConnection(fake.client) as unknown as IFake['copy']
+    const copy = duplicate(fake.client) as unknown as IFake['copy']
     plant('path', '/nowhere')
 
     let error: unknown
@@ -136,7 +140,7 @@ describe('duplicateConnection on a client with sentinels', () => {
     const stream = { destroy: jest.fn() }
     const fake = fakeClient({ sentinels })
     fake.connect.mockResolvedValue(stream)
-    const copy = duplicateConnection(fake.client) as unknown as IFake['copy']
+    const copy = duplicate(fake.client) as unknown as IFake['copy']
 
     const result: unknown = await copy.connector.connect('emitter')
 
@@ -154,7 +158,7 @@ describe('duplicateConnection on a client without sentinels', () => {
   ])('duplicates as before, with no lazy override and no wrapping: %s', (_name, options) => {
     const fake = fakeClient(options)
 
-    const result = duplicateConnection(fake.client)
+    const result = duplicate(fake.client)
 
     expect(result).toBe(fake.copy)
     const override = overrideOf(fake)
@@ -295,7 +299,7 @@ async function connectedPair(): Promise<{ client: Redis; copy: Redis }> {
   const up = ready(client)
   await client.connect()
   await up
-  const copy = duplicateConnection(client)
+  const copy = duplicate(client)
   closers.push(() => {
     copy.disconnect()
   })

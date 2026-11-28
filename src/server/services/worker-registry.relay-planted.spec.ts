@@ -96,7 +96,9 @@ function plant(): void {
 describe('the outcome of a job is relayed through owned awaits', () => {
   it('tells BullMQ the job failed when its handler planted a constructor and then failed', (done) => {
     const redis = {
-      duplicate: jest.fn().mockReturnValue({ status: 'ready', disconnect: jest.fn() }),
+      duplicate: jest
+        .fn()
+        .mockReturnValue({ status: 'ready', on: jest.fn(), disconnect: jest.fn() }),
     } as unknown as Redis
     const resolver = {
       getClient: jest.fn().mockReturnValue(redis),

@@ -27,7 +27,7 @@ function fakeConnection(): ConnectionResolver {
   const redis = {
     duplicate: jest
       .fn()
-      .mockReturnValue({ status: 'ready', disconnect: jest.fn(), quit: jest.fn() }),
+      .mockReturnValue({ status: 'ready', on: jest.fn(), disconnect: jest.fn(), quit: jest.fn() }),
   } as unknown as Redis
   return { getClient: jest.fn().mockReturnValue(redis) } as unknown as ConnectionResolver
 }

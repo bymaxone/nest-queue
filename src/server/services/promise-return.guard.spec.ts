@@ -114,7 +114,7 @@ function read(promise: unknown, done: jest.DoneCallback, check: (r: unknown) => 
 /** A registry whose resolver hands out a duplicable stub client. */
 function workerRegistry(): WorkerRegistry {
   const redis = {
-    duplicate: jest.fn().mockReturnValue({ status: 'ready', disconnect: jest.fn() }),
+    duplicate: jest.fn().mockReturnValue({ status: 'ready', on: jest.fn(), disconnect: jest.fn() }),
   } as unknown as Redis
   const resolver = { getClient: jest.fn().mockReturnValue(redis) } as unknown as ConnectionResolver
   return new WorkerRegistry(resolver, options)

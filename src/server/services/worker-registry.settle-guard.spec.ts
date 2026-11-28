@@ -46,7 +46,7 @@ const options = {
 /** A connection stub whose client can be duplicated for a worker. */
 function connection(): ConnectionResolver {
   const redis = {
-    duplicate: jest.fn().mockReturnValue({ status: 'ready', disconnect: jest.fn() }),
+    duplicate: jest.fn().mockReturnValue({ status: 'ready', on: jest.fn(), disconnect: jest.fn() }),
   } as unknown as Redis
   return { getClient: jest.fn().mockReturnValue(redis) } as unknown as ConnectionResolver
 }

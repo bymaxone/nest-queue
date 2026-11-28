@@ -10,6 +10,7 @@
 import { createServer, type Server } from 'node:net'
 import { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
+import { Logger } from '@nestjs/common'
 import { duplicateConnection } from '../utils/duplicate-connection'
 
 const servers: Server[] = []
@@ -100,7 +101,7 @@ describe('duplicateConnection disconnectTimeout', () => {
   it('passes the short value of a library-opened client on to its duplicates', async () => {
     const resolver = await reconnectingResolver()
 
-    const duplicate = duplicateConnection(resolver.getClient())
+    const duplicate = duplicateConnection(resolver.getClient(), new Logger('test'), 'test')
     clients.push(duplicate)
 
     expect(duplicate.options.disconnectTimeout).toBe(1)
@@ -111,7 +112,7 @@ describe('duplicateConnection disconnectTimeout', () => {
     const host = new Redis({ ...base, disconnectTimeout: value })
     clients.push(host)
 
-    const duplicate = duplicateConnection(host)
+    const duplicate = duplicateConnection(host, new Logger('test'), 'test')
     clients.push(duplicate)
 
     expect(duplicate.options.disconnectTimeout).toBe(value)

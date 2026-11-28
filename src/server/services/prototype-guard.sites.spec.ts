@@ -75,7 +75,9 @@ function connection(): ConnectionResolver {
   return {
     getClient: jest.fn().mockReturnValue({
       options: { commandTimeout: 5000 },
-      duplicate: jest.fn().mockReturnValue({ status: 'ready', disconnect: jest.fn() }),
+      duplicate: jest
+        .fn()
+        .mockReturnValue({ status: 'ready', on: jest.fn(), disconnect: jest.fn() }),
     }),
     awaitReady: jest.fn().mockResolvedValue(undefined),
   } as unknown as ConnectionResolver
