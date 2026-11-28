@@ -30,6 +30,7 @@ Against 1.2.36 the public surface is unchanged and the runtime of the main entry
 ### Apply to a derived backend
 
 - If you match `QUEUE_JOB_FAILED` lines by job name or id, a value longer than 128 characters is now cut.
+- On those lines, a job name or id that holds a control character or a line break is now altered.
 - A job name and a custom `jobId` are written to that line: keep secrets and personal data out of both.
 
 ---
