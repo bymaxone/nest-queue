@@ -21,7 +21,7 @@ Against 1.2.36 the public surface is unchanged and the runtime of the main entry
 
 ### Changed
 
-- The `QUEUE_JOB_FAILED` warning carries the job's name and id without line breaks, and each cut to 128 characters and an ellipsis when longer.
+- The `QUEUE_JOB_FAILED` warning carries the job's name and id without control characters or line breaks, and each cut to 128 characters and an ellipsis when longer.
 
 ### Fixed
 
