@@ -166,10 +166,13 @@ describe('E2E — observability of the queue', () => {
     )
     await waitFor(async () => (await queues.getMetrics('orders')).counts.failed === 1)
     await waitFor(() => spansNamed('queue.process').length === 2)
+    // Redis can show the job as failed before the worker has reported the attempt.
+    const failed = 'bymax_queue_jobs_total{queue="orders",outcome="failed"} 1'
+    await waitFor(async () => (await scrape('bymax_queue_jobs_total')).includes(failed))
 
     const jobs = await scrape('bymax_queue_jobs_total')
     expect(jobs).toContain('bymax_queue_jobs_total{queue="orders",outcome="retried"} 1')
-    expect(jobs).toContain('bymax_queue_jobs_total{queue="orders",outcome="failed"} 1')
+    expect(jobs).toContain(failed)
     const seconds = await scrape('bymax_queue_job_duration_seconds_count')
     expect(Number(seconds[0]?.split(' ').at(-1))).toBeGreaterThanOrEqual(2)
     for (const span of spansNamed('queue.process')) {
