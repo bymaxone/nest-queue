@@ -85,6 +85,21 @@ describe('what a library duplicate duplicates in turn', () => {
     expect(disconnect).not.toHaveBeenCalled()
   })
 
+  // The source can be the host's own client, and a later registration duplicates it again.
+  it('leaves the source client and a later duplicate able to connect', () => {
+    const host = source()
+    const released = duplicateConnection(host, new Logger('test'), 'worker: q')
+    const blocking = released.duplicate()
+
+    retireDuplicates(released)
+    const next = duplicateConnection(host, new Logger('test'), 'worker: q').duplicate()
+
+    expect(blocking.connect).not.toBe(Redis.prototype.connect)
+    expect(host.connect).toBe(Redis.prototype.connect)
+    expect(host.duplicate).toBe(Redis.prototype.duplicate)
+    expect(next.connect).toBe(Redis.prototype.connect)
+  })
+
   it('is nothing for a client the library did not duplicate', () => {
     expect(() => {
       retireDuplicates(source())
