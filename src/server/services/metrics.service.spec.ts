@@ -204,6 +204,22 @@ describe('MetricsService — a read in flight when the cache is invalidated', ()
     expect(qs.getMetrics).toHaveBeenCalledTimes(2)
   })
 
+  it('caches nothing from a read begun between two invalidates', async () => {
+    // The second invalidate has to drop a read that the first one did not.
+    const { qs, service, answer } = deferred()
+    service.invalidate('email')
+    const between = service.get('email')
+
+    service.invalidate('email')
+    answer(0, 7)
+    await expect(between).resolves.toMatchObject({ counts: { waiting: 7 } })
+    const next = service.get('email')
+    answer(1, 0)
+
+    await expect(next).resolves.toMatchObject({ counts: { waiting: 0 } })
+    expect(qs.getMetrics).toHaveBeenCalledTimes(2)
+  })
+
   it('does not replace what a read begun after the invalidate cached', async () => {
     const { qs, service, answer } = deferred()
     const early = service.get('email')
