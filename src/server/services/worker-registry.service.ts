@@ -18,7 +18,7 @@ import { DelayedError, Worker } from 'bullmq'
 import type { Job, WorkerOptions as BullWorkerOptions } from 'bullmq'
 import type { Redis } from 'ioredis'
 import { ConnectionResolver } from './connection-resolver.service'
-import { duplicateConnection } from '../utils/duplicate-connection'
+import { duplicateConnection, retireDuplicates } from '../utils/duplicate-connection'
 import { attachWorkerListeners } from '../utils/attach-worker-listeners'
 import { withDeadline } from '../utils/with-deadline'
 import { observeAttempt } from '../observability/observe-attempt'
@@ -90,6 +90,12 @@ interface WorkerEntry {
   worker: Worker
   /** The duplicated ioredis connection the library created for this worker. */
   connection: Redis
+}
+
+/** Release the connection of a worker that was never built, with what BullMQ duplicated from it. */
+function discardConnection(connection: Redis): void {
+  retireDuplicates(connection)
+  disconnectUnlessEnded(connection)
 }
 
 /**
@@ -174,7 +180,7 @@ export class WorkerRegistry {
       )
     } catch (cause) {
       // Disconnect the duplicated connection to prevent a Redis resource leak.
-      disconnectUnlessEnded(conn)
+      discardConnection(conn)
       // The text of the failure can name the host or the server: it is the cause, never the response.
       throw Object.assign(
         new QueueException(
@@ -236,7 +242,7 @@ export class WorkerRegistry {
       if (!dropSandboxOutcomeOnceAbandoned(worker)) this.warnSandboxUnguarded(queueName)
     } catch (cause) {
       // Disconnect the duplicated connection to prevent a Redis resource leak.
-      disconnectUnlessEnded(conn)
+      discardConnection(conn)
       // The text of the failure can name the host or the server: it is the cause, never the response.
       throw Object.assign(
         new QueueException(
@@ -330,6 +336,7 @@ export class WorkerRegistry {
    * @param connection - The duplicated connection to release.
    */
   private async closeConnection(connection: Redis): Promise<void> {
+    retireDuplicates(connection)
     try {
       await ownPromise(connection.quit())
     } catch {

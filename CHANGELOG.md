@@ -15,7 +15,7 @@ entries that carry one, is the compatibility contract — read it, not the numbe
 
 ---
 
-## [1.2.37] — 2026-11-27
+## [1.2.37] — 2026-11-28
 
 Against 1.2.36 the public surface is unchanged and the runtime of the main entry changes.
 
@@ -26,7 +26,8 @@ Against 1.2.36 the public surface is unchanged and the runtime of the main entry
 ### Fixed
 
 - A depth read in flight when `MetricsService.invalidate` is called no longer caches what it reads.
-- A worker's connection keeps an error listener for its whole life, including after the worker closed.
+- A worker's connection, and the blocking connection BullMQ duplicates from it, keep an error listener for their whole life, including after the worker closed.
+- A shutdown during a Redis outage no longer leaves a worker's blocking connection reconnecting, which kept the process from exiting.
 
 ### Apply to a derived backend
 

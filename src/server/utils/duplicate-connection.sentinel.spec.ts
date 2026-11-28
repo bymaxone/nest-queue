@@ -59,7 +59,9 @@ interface IFake {
 /** A fake client whose `duplicate` hands back a fake duplicate with a mock connector. */
 function fakeClient(options: object | undefined): IFake {
   const connect = jest.fn()
-  const copyDuplicate = jest.fn().mockReturnValue({ connector: { connect }, duplicate: jest.fn() })
+  const copyDuplicate = jest
+    .fn()
+    .mockReturnValue({ connector: { connect }, duplicate: jest.fn(), on: jest.fn() })
   const copy = { connector: { connect }, duplicate: copyDuplicate, on: jest.fn() }
   const duplicate = jest.fn().mockReturnValue(copy)
   const client = (options === undefined ? { duplicate } : { options, duplicate }) as unknown
